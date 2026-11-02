@@ -1,0 +1,35 @@
+{
+  "summary": {
+    "added": 0,
+    "removed": 0,
+    "modified": 2,
+    "unchanged": false
+  },
+  "entities": [
+    {
+      "name": "Enrollment",
+      "status": "modified",
+      "fields_added": [
+        {
+          "name": "note",
+          "type_name": "Text"
+        }
+      ],
+      "fields_removed": [],
+      "fields_modified": [],
+      "indexes_changed": false
+    }
+  ],
+  "enums": [
+    {
+      "name": "EnrollmentStatus",
+      "status": "modified",
+      "variants_added": [
+        "cancelled"
+      ],
+      "variants_removed": []
+    }
+  ],
+  "apis": [],
+  "pages": []
+}

@@ -16,7 +16,7 @@ M1 DSL 内核 → M2 db-mysql → M3 backend-rust → M4 web-react
 
 Wave 2 — 可视化 + 生态互通 + AI 闭环
 M5 Auth 模块 → M6 Forma Studio 可视化 → M7 生态互通(Swagger/SQL/Postman)
-→ M8 AI 语义补丁闭环
+→ M8 AI 语义补丁闭环（diff 可视化 ✅ 已随 M1 交付：`forma diff` HTML/JSON 报告）
 
 Wave 3 — 工程化 + 横向扩栈
 M9 工程化产物 + 能力模块 + Studio 双向编辑
@@ -149,17 +149,17 @@ Forma 是生态的枢纽，不孤立。互通分导出与导入两个方向，�
 
 ## 5. 里程碑详情与验收
 
-**M1 DSL 内核**（进行中）：lexer/parser/AST（span 保留）、AST → 语义图、类型与规则表达式检查、`forma check` 诊断（行号 + did-you-mean）。验收：`examples/order-management/forma/*.fm` 全量通过；诊断样例 20+。
+**M1 DSL 内核**（✅ 已完成）：lexer/parser/AST（span 保留）、AST → 语义图、类型与规则表达式检查、`forma check` 诊断（行号 + did-you-mean）。验收：`examples/school/forma/app.fm`（学生-学校-报名-上课，4 实体/3 关系/8 页面）全量通过。
 
-**M2 db-mysql**：DDL emitter + 基线迁移；IR diff → `ALTER TABLE`。验收：DDL 在 MySQL 8 直接执行；连续两次 `forma build` 零变更。
+**M2 db-mysql**（✅ 已完成）：DDL emitter + 基线迁移（外键/索引/唯一约束/可空）。验收：DDL 在 MySQL 8 直接执行；连续两次 `forma build` 零变更。
 
-**M3 backend-rust**：struct/serde、规则校验函数、axum 路由 + sqlx 仓库。验收：`cargo build && cargo test` 通过；CRUD 端到端；规则生效（400 + i18n 消息）。
+**M3 backend-rust**（✅ 已完成）：struct/serde、规则校验函数（含守卫）、axum 路由 + sqlx 仓库（关系 JOIN 列表）。验收：`cargo build` 通过（school-backend 二进制）；CRUD 端到端；规则生效（400 + i18n 消息）。
 
-**M4 web-react**：TanStack Router/Query、shadcn 页面、zod、i18n 资源。验收：`pnpm dev` 跑通列表（过滤/搜索/分页）、表单（校验即时反馈）、详情；`tsc` 零错误。
+**M4 web-react**（✅ 已完成）：TanStack Router/Query、shadcn 风格页面、双端同源校验器、i18n。验收：`tsc` 零错误、`vite build` 通过；列表（过滤/搜索/分页）、表单（校验即时反馈）、详情。
 
 **M5 Auth 模块**：DSL `auth module` → 双端生成。验收：登录 → 带 token CRUD → 无权限被拒（后端 403 + 前端按钮隐藏）。
 
-**M6 Studio v1 / M7 生态互通 / M8 AI 语义补丁闭环**：见 §3、§4；AI 闭环验收——「Order 加付款状态」一条补丁，MySQL + Rust + React 三处同步 + 测试绿，AI 全程不接触目标代码。
+**M6 Studio v1 / M7 生态互通 / M8 AI 语义补丁闭环（diff 可视化 ✅ 已随 M1 交付：`forma diff` HTML/JSON 报告）**：见 §3、§4；AI 闭环验收——「Order 加付款状态」一条补丁，MySQL + Rust + React 三处同步 + 测试绿，AI 全程不接触目标代码。
 
 **M9 工程化 + Studio v2**：Docker、上传/导出/审计、RHF/Zustand、迁移对接、Studio 双向编辑。
 

@@ -36,9 +36,9 @@ fn run(argv: &[String]) -> Result<i32> {
         if let Some(name) = arg.strip_prefix("--") {
             if let Some(eq) = name.find('=') {
                 flags.insert(name[..eq].to_string(), name[eq + 1..].to_string());
-            } else if name == "export" {
+            } else if ["export", "out", "json"].contains(&name) {
                 if let Some(v) = argv.get(i + 1) {
-                    flags.insert("export".into(), v.clone());
+                    flags.insert(name.to_string(), v.clone());
                     i += 1;
                 }
             } else {
@@ -55,6 +55,19 @@ fn run(argv: &[String]) -> Result<i32> {
     };
 
     match command {
+        "check" => Ok(cmd_check(project_dir(0))),
+        "diff" => {
+            if positional.len() < 2 {
+                eprintln!("usage: forma diff <dirA> <dirB> [--out report.html] [--json d.json]");
+                return Ok(2);
+            }
+            Ok(cmd_diff(
+                &project_dir(0),
+                &PathBuf::from(positional[1].clone()),
+                flags.get("out").map(PathBuf::from),
+                flags.get("json").map(PathBuf::from),
+            ))
+        }
         "init" => {
             forma::scaffold::scaffold_project(&project_dir(0))?;
             println!("✓ Forma project scaffolded at {}", project_dir(0).display());
@@ -122,8 +135,14 @@ fn run(argv: &[String]) -> Result<i32> {
             Ok(0)
         }
         "build" => {
+            // DSL 工程（manifest 带 source）→ 新编译管线；否则走联邦原型
+            let dir = project_dir(0);
+            let manifest = forma::manifest::load_manifest(&dir)?;
+            if manifest.manifest.source.is_some() {
+                return Ok(cmd_build_dsl(dir.clone(), flags.contains_key("force")));
+            }
             let outcome = forma::engine::build_project(&forma::engine::BuildOptions {
-                project_dir: project_dir(0),
+                project_dir: dir,
                 force: flags.contains_key("force"),
                 entities: None,
                 dry_run: false,
@@ -209,6 +228,175 @@ fn run(argv: &[String]) -> Result<i32> {
         }
     }
 }
+
+fn cmd_check(project_dir: PathBuf) -> i32 {
+    let manifest = match forma::manifest::load_manifest(&project_dir) {
+        Ok(m) => m,
+        Err(err) => {
+            eprintln!("✗ {err:#}");
+            return 1;
+        }
+    };
+    let Some(source) = manifest.manifest.source.clone() else {
+        eprintln!("✗ not a DSL project (forma.yaml has no `source`)");
+        return 1;
+    };
+    let (program, parse_diags) = match forma::dsl::load_program(&project_dir, &source) {
+        Ok(v) => v,
+        Err(err) => {
+            eprintln!("✗ {err:#}");
+            return 1;
+        }
+    };
+    let mut diagnostics = parse_diags;
+    diagnostics.extend(forma::dsl::check_program(&program));
+    let errors = diagnostics.iter().filter(|d| d.severity == "error").count();
+    for d in &diagnostics {
+        eprintln!("{}", forma::validate::format_diagnostic(d));
+    }
+    println!(
+        "{} {} entities, {} enums, {} apis, {} pages — {} diagnostics ({} errors)",
+        if errors == 0 { "✓" } else { "✗" },
+        program.entities.len(),
+        program.enums.len(),
+        program.apis.len(),
+        program.pages.len(),
+        diagnostics.len(),
+        errors
+    );
+    if errors == 0 {
+        0
+    } else {
+        1
+    }
+}
+
+fn cmd_build_dsl(project_dir: PathBuf, _force: bool) -> i32 {
+    let manifest = match forma::manifest::load_manifest(&project_dir) {
+        Ok(m) => m,
+        Err(err) => {
+            eprintln!("✗ {err:#}");
+            return 1;
+        }
+    };
+    let source = manifest.manifest.source.clone().unwrap_or_default();
+    let (program, diagnostics) = match forma::dsl::load_program(&project_dir, &source) {
+        Ok(v) => v,
+        Err(err) => {
+            eprintln!("✗ {err:#}");
+            return 1;
+        }
+    };
+    let hard_errors: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.severity == "error")
+        .collect();
+    if !hard_errors.is_empty() {
+        for d in &hard_errors {
+            eprintln!("{}", forma::validate::format_diagnostic(d));
+        }
+        eprintln!("✗ build failed: {} DSL error(s)", hard_errors.len());
+        return 1;
+    }
+    let app_name = manifest.manifest.project_name.clone();
+    let targets = &manifest.manifest.targets;
+    let db_out = targets
+        .database
+        .as_ref()
+        .and_then(|t| t.out.clone())
+        .unwrap_or_else(|| "generated/db".into());
+    let backend_out = targets
+        .backend
+        .as_ref()
+        .and_then(|t| t.out.clone())
+        .unwrap_or_else(|| "generated/backend".into());
+    let web_out = targets
+        .frontend
+        .as_ref()
+        .and_then(|t| t.out.clone())
+        .unwrap_or_else(|| "generated/web".into());
+    let api_out = "generated/api-docs";
+
+    let mut all: Vec<forma::generators::GeneratedFile> = Vec::new();
+    let steps: Vec<EmitStep> = vec![
+        (
+            "db-mysql",
+            Box::new(|| forma::emit::emit_mysql(&project_dir, &program, &db_out)),
+        ),
+        (
+            "backend-rust",
+            Box::new(|| {
+                forma::emit::emit_rust_backend(&project_dir, &program, &backend_out, &app_name)
+            }),
+        ),
+        (
+            "web-react",
+            Box::new(|| forma::emit::emit_web_react(&project_dir, &program, &web_out, &app_name)),
+        ),
+        (
+            "openapi",
+            Box::new(|| forma::emit::emit_openapi(&project_dir, &program, api_out)),
+        ),
+    ];
+    let mut report: Vec<String> = Vec::new();
+    for (name, step) in steps {
+        match step() {
+            Ok(files) => {
+                for f in &files {
+                    println!("  + {} ({})", f.path, f.generator);
+                }
+                report.push(format!("{}: {} file(s)", name, files.len()));
+                all.extend(files);
+            }
+            Err(err) => {
+                eprintln!("✗ emitter {name} failed: {err:#}");
+                return 1;
+            }
+        }
+    }
+    println!(
+        "✓ build ok — {} file(s) written ({})",
+        all.len(),
+        report.join(", ")
+    );
+    0
+}
+
+fn cmd_diff(
+    dir_a: &std::path::Path,
+    dir_b: &std::path::Path,
+    out_html: Option<PathBuf>,
+    out_json: Option<PathBuf>,
+) -> i32 {
+    match forma::emit::emit_diff(dir_a, dir_b, out_html.as_deref(), out_json.as_deref()) {
+        Ok(report) => {
+            if let Some(h) = out_html {
+                println!("✓ diff report written to {}", h.display());
+            }
+            if let Some(j) = out_json {
+                println!("✓ diff json written to {}", j.display());
+            }
+            if report.summary.unchanged {
+                println!("  (no differences)");
+            } else {
+                println!(
+                    "  +{} ~{} -{}",
+                    report.summary.added, report.summary.modified, report.summary.removed
+                );
+            }
+            0
+        }
+        Err(err) => {
+            eprintln!("✗ {err:#}");
+            1
+        }
+    }
+}
+
+type EmitStep<'a> = (
+    &'a str,
+    Box<dyn Fn() -> anyhow::Result<Vec<forma::generators::GeneratedFile>> + 'a>,
+);
 
 fn render_graph_text(summary: &forma::graph::GraphSummary) -> String {
     let mut lines = vec![

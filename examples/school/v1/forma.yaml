@@ -1,0 +1,21 @@
+project:
+  name: school
+  version: 0.1.0
+
+source: ["forma/**/*.fm"]
+
+targets:
+  db:
+    engine: mysql
+    out: generated/db
+  backend:
+    language: rust
+    framework: axum
+    database: sqlx
+    out: generated/backend
+  web:
+    framework: react
+    router: tanstack
+    data: tanstack-query
+    ui: shadcn
+    out: generated/web

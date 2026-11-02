@@ -80,7 +80,9 @@ pub struct Targets {
 pub struct FormaManifest {
     pub project_name: String,
     pub project_version: String,
-    /// 以领域分组名（schemas/api/ui/database/workflows）为键
+    /// DSL 源文件 glob（v0.3：source 存在 = DSL 工程）
+    pub source: Option<Vec<String>>,
+    /// 以领域分组名（schemas/api/ui/database/workflows）为键（v0.2 联邦工程）
     pub specifications: Vec<(String, Vec<SpecEntry>)>,
     pub bindings: Vec<IdentityBinding>,
     pub targets: Targets,
@@ -188,6 +190,22 @@ fn normalize_manifest(
         }
     }
 
+    let mut source_globs: Option<Vec<String>> = None;
+    if let Some(list) = root
+        .get(serde_yaml::Value::String("source".into()))
+        .and_then(|v| v.as_sequence())
+    {
+        let mut globs = Vec::new();
+        for item in list {
+            if let Some(s) = item.as_str() {
+                globs.push(s.to_string());
+            }
+        }
+        if !globs.is_empty() {
+            source_globs = Some(globs);
+        }
+    }
+
     let mut bindings = Vec::new();
     if let Some(list) = root
         .get(serde_yaml::Value::String("bindings".into()))
@@ -250,6 +268,7 @@ fn normalize_manifest(
     Ok(FormaManifest {
         project_name,
         project_version,
+        source: source_globs,
         specifications,
         bindings,
         targets,
