@@ -1,0 +1,39 @@
+{
+  "$id": "Order",
+  "type": "object",
+  "required": [
+    "amount",
+    "status",
+    "customerEmail",
+    "createdAt"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique order identifier"
+    },
+    "amount": {
+      "type": "number",
+      "description": "Order total amount"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "approved",
+        "rejected"
+      ],
+      "description": "Order lifecycle status"
+    },
+    "customerEmail": {
+      "type": "string",
+      "format": "email",
+      "description": "Buyer contact email"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "x-forma-entity": "forma://project/order-management/entity/Order"
+}

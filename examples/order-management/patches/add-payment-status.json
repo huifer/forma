@@ -1,0 +1,15 @@
+{
+  "operations": [
+    {
+      "op": "add-entity-field",
+      "entity": "Order",
+      "field": {
+        "name": "paymentStatus",
+        "type": "string",
+        "enum": ["unpaid", "paid", "refunded"],
+        "required": false,
+        "description": "Payment lifecycle status"
+      }
+    }
+  ]
+}

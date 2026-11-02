@@ -1,0 +1,62 @@
+```text
+speccompiler/
+│
+├── apps/
+│   ├── cli/
+│   ├── mcp-server/
+│   └── playground/
+│
+├── crates/
+│   ├── core/
+│   ├── parser/
+│   ├── validator/
+│   ├── semantic/
+│   ├── ir/
+│   ├── graph/
+│   ├── compiler/
+│   ├── generator/
+│   ├── incremental/
+│   ├── build/
+│   ├── verify/
+│   ├── storage/
+│   └── protocol/
+│
+├── packages/
+│   ├── dsl-schemas/
+│   ├── runtime-ts/
+│   ├── mcp-types/
+│   └── sdk/
+│
+├── targets/
+│   └── web-fullstack/
+│       ├── frontend/
+│       ├── backend/
+│       ├── database/
+│       └── tests/
+│
+├── adapters/
+│   ├── generic/
+│   ├── codex/
+│   ├── claude-code/
+│   └── pi/
+│
+├── plugins/
+│
+├── examples/
+│   ├── task-manager/
+│   └── user-manager/
+│
+├── benchmarks/
+│   ├── scenarios/
+│   ├── traditional/
+│   ├── spec-first/
+│   └── speccompiler/
+│
+├── docs/
+│   ├── architecture/
+│   ├── protocol/
+│   ├── dsl/
+│   └── compiler/
+│
+└── Cargo.toml
+```

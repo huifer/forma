@@ -1,0 +1,44 @@
+app:
+  id: order-management
+  name: Order Management
+
+models:
+  Order:
+    fields:
+      id: uuid
+      amount: decimal
+      status:
+        type: enum
+        values: [pending, approved, rejected, cancelled]
+
+    transitions:
+      - from: pending
+        to: approved
+        event: approve
+        guard: amount <= approval_limit
+
+      - from: pending
+        to: rejected
+        event: reject
+
+      - from: pending
+        to: cancelled
+        event: cancel
+
+workflows:
+  order_approval:
+    trigger: Order.approved
+    steps:
+      - create: Shipment
+        values:
+          order_id: $event.order.id
+
+pages:
+  orders:
+    route: /orders
+    layout: table
+    source: Order
+    actions:
+      - approve
+      - reject
+      - cancel

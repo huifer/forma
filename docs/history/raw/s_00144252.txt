@@ -1,0 +1,39 @@
+我建议项目名定为：
+
+# **Forma**
+
+FORMA — AI-Native Software Compiler
+
+**Slogan：Describe software. Compile reality.**
+
+命名逻辑：
+
+- **Form**：软件规格、结构、形式化表达。
+- **Forma**：有形、有结构的设计，也有编程语言和编译器产品的科技感。
+- 简短、国际化，适合未来发展成 DSL、可视化编辑器和编译器生态。
+
+品牌架构可以这样设计：
+
+| 名称 | 产品模块 |
+|--------|--------|
+| Forma DSL | 核心规格语言 |
+| Forma Studio | 可视化规格编辑器 |
+| Forma AI | AI 规格生成引擎 |
+| Forma Compiler | 确定性编译器 |
+| Forma Runtime | 运行时 |
+| Forma CLI | 命令行工具 |
+
+其他值得考虑的名字：
+
+1. **Specra** — Specification + Spectrum
+2. **Structa** — Structure + Software
+3. **Sembl** — Semantic + Build
+4. **Proforma** — Program + Forma
+5. **Modl** — Model-driven Software
+6. **Synforma** — Syntax + Forma
+
+**我的最终选择是 Forma。**
+
+它不把产品限制在 AI Coding、Low-Code 或某一种 DSL 上，未来可以成为一套完整的软件规格与编译基础设施。
+
+正式注册或使用前，需要进一步核查商标、域名和同名软件项目。

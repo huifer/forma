@@ -1,0 +1,1 @@
+请给我制定一套完整方案。交付范围：全部一套；目标产品：通用 AI Coding（支持 Codex、Claude Code、Pi 等）。围绕 AI Specification Generation、DSL、AST/IR、Compiler、Runtime 和可靠性展开，给出最终决策。

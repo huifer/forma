@@ -1,0 +1,580 @@
+# 十三、MVP：第一版到底做什么？
+
+这里我会做一个比较激进的取舍。
+
+**第一版只做一种软件：标准 CRUD 型全栈 Web 应用。**
+
+不做通用 IDE，不做聊天界面，不做模型路由，不做云端 Agent 集群。
+
+你要证明的是一件事：
+
+> 同样的业务需求，使用 Spec Compiler，能否用更少的 AI Token、更少的代码修改、更高的可验证性，生产出同样可用的软件？
+
+如果这个问题没有得到肯定答案，做再多功能都没有意义。
+
+## 13.1 MVP 功能清单
+
+<badge color="success">P0 · 必须完成</badge>
+
+| 模块 | Feature | 验收标准 |
+|---|---|---|
+| CLI | 项目初始化 | 能创建标准工程 |
+| Spec | AppSpec | 能描述应用模块 |
+| Spec | DataSpec | 能描述实体和关系 |
+| Spec | UISpec | 能描述标准页面 |
+| Protocol | Patch API | 能增量修改节点 |
+| Validator | Schema | 能拦截无效规格 |
+| Validator | Semantic | 能检查引用和类型 |
+| IR | Canonical IR | 能生成统一 IR |
+| Compiler | React Generator | 能生成页面 |
+| Compiler | API Generator | 能生成 CRUD API |
+| Compiler | Database Generator | 能生成数据库结构 |
+| Build | Incremental Build | 能只处理受影响节点 |
+| Verify | Build & Test | 能自动构建和测试 |
+| Recovery | Rollback | 能恢复上一个成功版本 |
+| MCP | Generic MCP | 能被 AI Agent 调用 |
+
+<badge color="info">P1 · 第二阶段</badge>
+
+- Claude Code Adapter。
+- Codex Adapter。
+- Pi Extension。
+- 组件注册中心。
+- 自定义代码扩展。
+- Breaking Change 检查。
+- 生成差异预览。
+- 构建缓存。
+- 安全策略。
+- 可视化依赖图。
+
+<badge color="secondary">P2 · 后续扩展</badge>
+
+- Vue Target。
+- Rust Backend Target。
+- Kotlin Android Target。
+- Swift iOS Target。
+- Workflow DSL。
+- 插件市场。
+- 团队协作。
+- 远程构建。
+- 规格模板市场。
+
+## 13.2 第一版 Demo 必须完成的完整案例
+
+我建议做一个真实的 Task Manager。
+
+<AsyncImage query="modern minimal task management SaaS dashboard sidebar project tasks data table clean blue white UI desktop" aspectRatio="16:9" width="100%"/>
+
+功能：
+
+- 用户管理。
+- 项目管理。
+- 任务管理。
+- 任务状态。
+- 用户关联。
+- 任务列表。
+- 任务筛选。
+- 新增、编辑、删除。
+- 权限控制。
+
+然后完成以下连续操作：
+
+**测试 A：初始生成**
+
+输入：
+
+> 创建一个任务管理系统。
+
+Agent 生成 Spec，Compiler 生产应用。
+
+**测试 B：修改字段**
+
+输入：
+
+> 给任务增加 priority，支持 low、medium、high。
+
+只修改对应规格节点，完成增量编译。
+
+**测试 C：修改业务逻辑**
+
+输入：
+
+> 已完成的任务不允许删除。
+
+修改 LogicSpec，生成验证规则和服务端约束。
+
+**测试 D：修改页面**
+
+输入：
+
+> 任务列表增加优先级筛选。
+
+只修改 UISpec。
+
+**测试 E：故意制造错误**
+
+输入一个不存在的字段引用。
+
+验证器必须拒绝编译，并准确指出错误位置。
+
+**测试 F：回滚**
+
+撤销上一次变更，系统必须恢复到此前已验证的版本。
+
+这六个测试完成，才算真正做出了 MVP。
+
+## 13.3 最重要的 Token Benchmark
+
+这个项目必须有一套公开 Benchmark。
+
+不要仅凭感觉说节省了 90% Token。
+
+建议准备 20 个真实业务需求，覆盖：
+
+- 新建项目。
+- 增加字段。
+- 修改字段类型。
+- 增加页面。
+- 修改页面。
+- 增加 API。
+- 修改权限。
+- 增加关联关系。
+- 删除字段。
+- 复杂业务规则。
+
+分别用三种方式完成：
+
+| 实验组 | 开发方式 |
+|---|---|
+| A | 传统 AI Coding |
+| B | Spec-First，AI 仍生成代码 |
+| C | Spec Compiler，AI 生成 Patch |
+
+统一使用：
+
+- 相同模型。
+- 相同需求。
+- 相同初始代码。
+- 相同工具权限。
+- 相同测试用例。
+- 相同构建环境。
+
+记录：
+
+| 指标 | 说明 |
+|---|---|
+| Input Tokens | 输入 Token |
+| Output Tokens | 输出 Token |
+| Total Tokens | 总 Token |
+| Context Reload | 上下文重载 |
+| Files Changed | 修改文件数 |
+| Generated LOC | 生成代码行数 |
+| Build Success | 构建成功率 |
+| Test Pass | 测试通过率 |
+| Repair Attempts | 修复次数 |
+| Time to Verified Result | 到达验证成功的时间 |
+
+尤其要注意：
+
+不能只统计 AI 生成的 Token。
+
+还要统计编译错误后 AI 修复所消耗的 Token，以及为理解项目重新读取的 Token。
+
+另外，编译器自己消耗的 CPU、内存、时间也要记录。
+
+否则可能只是把 AI 的成本转移到了其他地方。
+
+### 我建议设定的 MVP 目标
+
+以下是研发目标，不是已经验证的性能数据。
+
+| 指标 | 目标 |
+|---|---:|
+| 标准 CRUD 初始生成成功率 | ≥95% |
+| Spec 结构验证成功率 | ≥99% |
+| 已支持操作的增量构建正确率 | 100% |
+| 生成结果可重复性 | 100% |
+| 变更可回滚率 | 100% |
+| AI Token 降低目标 | ≥50% |
+| 无关文件修改比例 | 尽可能接近 0 |
+| 未经授权的生成产物覆盖 | 0 |
+
+这里的 100% 只针对受支持的确定性测试场景，不代表系统可以保证所有任意软件永远正确。
+
+**我的核心商业指标是：Time to Verified Software，而不是代码生成速度。**
+
+---
+
+# 十四、完整工程目录设计
+
+我建议从第一天就采用 Monorepo。
+
+```text
+speccompiler/
+│
+├── apps/
+│   ├── cli/
+│   ├── mcp-server/
+│   └── playground/
+│
+├── crates/
+│   ├── core/
+│   ├── parser/
+│   ├── validator/
+│   ├── semantic/
+│   ├── ir/
+│   ├── graph/
+│   ├── compiler/
+│   ├── generator/
+│   ├── incremental/
+│   ├── build/
+│   ├── verify/
+│   ├── storage/
+│   └── protocol/
+│
+├── packages/
+│   ├── dsl-schemas/
+│   ├── runtime-ts/
+│   ├── mcp-types/
+│   └── sdk/
+│
+├── targets/
+│   └── web-fullstack/
+│       ├── frontend/
+│       ├── backend/
+│       ├── database/
+│       └── tests/
+│
+├── adapters/
+│   ├── generic/
+│   ├── codex/
+│   ├── claude-code/
+│   └── pi/
+│
+├── plugins/
+│
+├── examples/
+│   ├── task-manager/
+│   └── user-manager/
+│
+├── benchmarks/
+│   ├── scenarios/
+│   ├── traditional/
+│   ├── spec-first/
+│   └── speccompiler/
+│
+├── docs/
+│   ├── architecture/
+│   ├── protocol/
+│   ├── dsl/
+│   └── compiler/
+│
+└── Cargo.toml
+```
+
+不要一开始就把每个目录都拆成独立 Cargo Workspace Package。
+
+可以先保留一个 Workspace，将内部模块分开，等模块稳定后再细化依赖边界。
+
+## 14.1 CLI 命令设计
+
+最终希望用户可以这样使用：
+
+```bash
+# 安装
+speccompiler install
+
+# 初始化项目
+speccompiler init task-manager
+
+# 验证规格
+speccompiler validate
+
+# 查看 IR
+speccompiler ir inspect
+
+# 查看依赖
+speccompiler graph
+
+# 查看变更影响
+speccompiler preview
+
+# 编译
+speccompiler build
+
+# 增量编译
+speccompiler build --incremental
+
+# 测试
+speccompiler verify
+
+# 查看历史
+speccompiler history
+
+# 回滚
+speccompiler rollback chg_001
+
+# 启动 MCP
+speccompiler mcp
+```
+
+对于 AI Agent：
+
+```text
+User Request
+    |
+    v
+Agent
+    |
+    v
+speccompiler MCP
+    |
+    v
+Spec Patch
+    |
+    v
+Compiler
+    |
+    v
+Verified Application
+```
+
+---
+
+# 十五、12 周研发路线图
+
+这里按照一个有 Rust 和 TypeScript 经验的独立开发者来规划。
+
+<text color="secondary" size="xs">这是研发排期目标，不是对实际开发速度的保证。</text>
+
+<box border radius="lg" padding={3} gap={3}>
+  <title size="lg">Phase 1 · 建立编译基础</title>
+  <badge color="success">Week 1–3</badge>
+  **目标：Spec → IR → Validation**
+
+  - [ ] 创建 Rust Workspace。
+  - [ ] 设计 Spec Protocol v1。
+  - [ ] 实现 AppSpec。
+  - [ ] 实现 DataSpec。
+  - [ ] 实现 UISpec。
+  - [ ] 实现 JSON/YAML Parser。
+  - [ ] 实现 Schema Validator。
+  - [ ] 实现 Canonical IR。
+  - [ ] 实现 Semantic Validator。
+
+  <text color="secondary" size="xs">交付物：一个能够验证并输出 IR 的 CLI。</text>
+  <divider color="subtle"/>
+  <title size="lg">Phase 2 · 建立软件生产能力</title>
+  <badge color="info">Week 4–6</badge>
+  **目标：IR → Executable Software**
+
+  - [ ] 实现 React Generator。
+  - [ ] 实现 TypeScript Model Generator。
+  - [ ] 实现 CRUD API Generator。
+  - [ ] 实现 SQLite Schema Generator。
+  - [ ] 实现标准组件库。
+  - [ ] 实现 Build Pipeline。
+  - [ ] 完成 Task Manager Demo。
+
+  <text color="secondary" size="xs">交付物：通过规格生成可以运行的全栈应用。</text>
+  <divider color="subtle"/>
+  <title size="lg">Phase 3 · 可靠性和增量编译</title>
+  <badge color="info">Week 7–9</badge>
+  **目标：让系统真正可用于 Agent 开发**
+
+  - [ ] 实现 Spec Patch。
+  - [ ] 实现 Dependency Graph。
+  - [ ] 实现 Content Hash。
+  - [ ] 实现 Incremental Compiler。
+  - [ ] 实现 Transactional Build。
+  - [ ] 实现 Build History。
+  - [ ] 实现 Rollback。
+  - [ ] 实现 Breaking Change 检查。
+  - [ ] 实现独立测试验证。
+
+  <text color="secondary" size="xs">交付物：修改规格后只处理受影响节点，失败能够恢复。</text>
+  <divider color="subtle"/>
+  <title size="lg">Phase 4 · Agent 生态和发布</title>
+  <badge color="success">Week 10–12</badge>
+  **目标：真正进入 AI Coding 工作流**
+
+  - [ ] 实现 MCP Server。
+  - [ ] 实现通用 Agent Adapter。
+  - [ ] 实现 Claude Code 接入。
+  - [ ] 实现 Codex 接入。
+  - [ ] 实现 Pi 接入。
+  - [ ] 完成 20 个 Benchmark 场景。
+  - [ ] 发布开源版本。
+  - [ ] 发布架构文档。
+  - [ ] 制作完整演示视频。
+
+  <text color="secondary" size="xs">交付物：任何接入的 Agent 都可以使用 Compiler 生产软件。</text>
+</box>
+
+---
+
+# 十六、商业模式：先开源核心，再做商业化
+
+我不建议一开始就做订阅制 SaaS。
+
+这个产品首先是开发者基础设施，开发者必须信任它，才能把项目交给它处理。
+
+建议：
+
+**Open Core + Pro Developer Tools + Enterprise Infrastructure。**
+
+## 16.1 产品分层
+
+| 版本 | 内容 | 商业模式 |
+|---|---|---|
+| Community | Compiler、DSL、CLI、MCP | 免费开源 |
+| Pro | 可视化 Diff、高级调试、复杂历史管理 | 订阅 |
+| Team | 团队策略、共享插件、协作 | 按席位 |
+| Enterprise | 私有插件仓库、治理、审计、企业策略 | 商业授权 |
+
+## 16.2 付费点应该是什么？
+
+不要把最基础的编译能力锁起来。
+
+真正值得收费的是：
+
+- 多人协作。
+- 企业级权限。
+- 规格变更审批。
+- 私有 Generator Registry。
+- 企业插件市场。
+- 高级构建缓存。
+- 团队构建历史。
+- 合规审计。
+- 私有部署管理。
+- 复杂项目依赖分析。
+
+开发者本地使用 Compiler 不需要经过你的服务器。
+
+这会降低用户的使用门槛。
+
+## 16.3 初期定价实验
+
+以下是待验证的定价假设：
+
+| 产品 | 建议价格 |
+|---|---:|
+| Community | $0 |
+| Pro | $12–19/月 |
+| Team | $15–25/人/月 |
+| Enterprise | 定制报价 |
+
+但我建议前 100 个用户阶段，先不要过度关注收入。
+
+先确认他们是否愿意将真实项目中的部分开发流程交给 Spec Compiler。
+
+---
+
+# 十七、最大风险与应对策略
+
+这个方向不是没有问题。
+
+甚至有几个风险可能直接决定产品能不能成功。
+
+| 风险 | 严重程度 | 应对策略 |
+|---|---|---|
+| DSL 越做越复杂 | 极高 | 严格控制首版支持范围 |
+| 用户不愿改变开发习惯 | 高 | 只接管适合结构化的任务 |
+| Agent 不遵守协议 | 高 | MCP 工具、Hooks、权限拦截 |
+| 生成器覆盖人工代码 | 极高 | 文件所有权和事务式生成 |
+| 增量编译遗漏依赖 | 极高 | 依赖图 + 全量构建对照测试 |
+| 多 Target 维护困难 | 高 | Plugin API，先单 Target |
+| Spec 与源代码不一致 | 极高 | 明确 Source of Truth |
+| 规格错误导致错误软件 | 极高 | 独立验证器和测试 |
+| 现有 SDD 产品竞争 | 高 | 专注 Compiler 和 Reliability |
+| Token 节省不明显 | 高 | 用真实 Benchmark 验证 |
+
+## 17.1 一个必须提前解决的问题：Spec 和原生代码如何共存？
+
+我认为不能简单要求所有东西都由 Spec 管理。
+
+例如：
+
+一个复杂的图像处理算法。
+
+它可能需要大量数学计算、性能优化和特殊处理。
+
+没有必要为了它设计一个复杂的 JSON DSL。
+
+应该允许：
+
+```text
+spec/
+  user.data.yaml
+
+extensions/
+  image-processing/
+    processor.ts
+```
+
+IR 可以引用这个扩展：
+
+```yaml
+logic:
+  actions:
+    - id: process-image
+      implementation:
+        type: extension
+        ref: image-processing
+```
+
+编译器负责检查这个引用是否合法。
+
+扩展模块仍然由传统语言开发。
+
+这能保证系统有足够的表达能力，而不会变成一个封闭的低代码平台。
+
+---
+
+# 十八、项目真正的护城河是什么？
+
+我认为不是 JSON/YAML。
+
+不是 DSL。
+
+不是 React Generator。
+
+这些东西都可以被复制。
+
+真正的长期价值应该来自四个方面。
+
+## 18.1 Universal Spec Protocol
+
+让不同 Agent 共同使用一种软件操作协议。
+
+未来不管是 Codex、Claude Code、Pi，还是新的 Coding Agent，都可以接入。
+
+## 18.2 Semantic Dependency Graph
+
+理解软件的真实语义依赖。
+
+知道修改一个字段会影响哪些 API、组件、数据库、权限和测试。
+
+这比简单的文件级依赖分析更有价值。
+
+## 18.3 Verified Compilation
+
+每次变更都可以验证、追踪、审计、回滚。
+
+这意味着用户不再只是相信 AI 写出的代码，而是可以检查生产过程中的每一步。
+
+## 18.4 Generator Ecosystem
+
+未来用户可以安装：
+
+- SaaS Admin Generator。
+- E-commerce Generator。
+- Mobile App Generator。
+- API Generator。
+- Dashboard Generator。
+- Automation Generator。
+
+开发者可以贡献 Generator，企业可以开发私有 Generator。
+
+但要注意，插件生态是后期的增长杠杆，不是 MVP 的起点。
+

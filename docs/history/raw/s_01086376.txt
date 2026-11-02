@@ -1,0 +1,1 @@
+From MCU to Cloud: Lightweight Serialization with Nanopb | by Wadix Technologies | Embedded Systems Technologies | Medium

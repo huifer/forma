@@ -1,0 +1,37 @@
+project:
+  name: order-management
+  version: 0.1.0
+
+specifications:
+  database:
+    - path: specs/database/schema.sql
+      dialect: sqlite
+
+  schemas:
+    - path: specs/schemas/order.schema.json
+      format: json-schema
+      dialect: "2020-12"
+
+  api:
+    - path: specs/api/openapi.yaml
+      version: "3.1"
+
+  ui:
+    - path: specs/ui/order-form.ui.json
+      format: json-forms
+
+  workflows:
+    - path: specs/workflows/order-approval.bpmn
+      format: bpmn
+
+targets:
+  typescript: generated/types
+  backend:
+    framework: hono
+    out: generated/backend
+  database:
+    dialect: sqlite
+    out: generated/database
+  frontend:
+    framework: react
+    out: generated/frontend

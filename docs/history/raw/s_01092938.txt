@@ -1,0 +1,16 @@
+原始 Spec
+   |
+   +-- Data DSL
+   +-- UI DSL
+   +-- Logic DSL
+   +-- API DSL
+          |
+       AST Graph
+          |
+      Dependency Graph
+          |
+   修改 User.email
+          |
+    仅重新编译相关节点
+          |
+    仅重新构建受影响模块

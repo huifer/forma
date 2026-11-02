@@ -1,0 +1,101 @@
+我建议标题不要写成普通的技术分享，而是直接挑战 AI Coding 这个行业目前默认的工作方式。
+
+核心争议点：**AI 写代码，本身可能就是一种巨大的 Token 浪费。**
+
+## 标题候选
+
+### 第一梯队：观点激进，容易引发讨论
+
+1. **我认为 AI Coding 最大的骗局：让 AI 写代码**
+2. **100 万 Token，真正有用的可能只有 1 万：AI 写代码是不是走错了路？**
+3. **别再让 AI 写代码了！未来的软件应该由编译器生成**
+4. **程序员还在让 AI 写 div？这可能是 AI 编程最大的效率陷阱**
+5. **AI 写代码越多，软件开发效率反而可能越低**
+6. **为什么我要禁止 AI 直接写代码？**
+
+### 第二梯队：技术思考型
+
+7. AI Coding 的下一个阶段：从写代码转向生成 JSON
+8. 如果 AI 只负责写 YAML，编译器负责生成软件，会发生什么？
+9. 软件开发不应该让 AI 生成代码，而应该让 AI 生成规格
+10. 代码正在成为 AI 时代最昂贵的中间产物
+11. 未来的程序员，可能不再需要让 AI 写代码
+12. 我想重新设计 AI Coding：让 AI 只输出结构化数据
+
+### 第三梯队：流量型、反常识型
+
+13. 你以为 AI 在帮你写代码？其实它在疯狂制造垃圾 Token
+14. AI 写了 10 万行代码，但真正需要的业务逻辑只有几百行
+15. 为什么 AI Coding 总是需要消耗那么多 Token？
+16. 让 AI 写代码，可能是我们对大模型最大的误用
+17. 别让最贵的 AI，去干最机械的活。
+
+---
+
+## 我的最终推荐
+
+(首选标题)
+
+# 我认为 AI Coding 最大的骗局：让 AI 写代码
+image_group{"query":["minimalist dark editorial illustration artificial intelligence neural network generating endless programming code streams compiler structured blueprint futuristic computer terminal"],"aspect_ratio":"16:9","layout":"carousel","num_per_query":1}
+
+**副标题：**
+
+100 万 Token 可能只有极少部分真正创造了价值。与其让 AI 不断生成 HTML、CSS、React，不如让它只生产 JSON、YAML 和 DSL，再交给编译器生成完整软件。
+
+---
+
+**文章核心观点**
+
+- AI 不应该承担大量重复性的代码生成。
+- div、class、CRUD、表单等应该由编译器和模板引擎完成。
+- AI 应该负责业务理解、结构设计和规则表达。
+- 软件生产应该从 Code Generation 转向 Specification Generation。
+
+## 文章结构建议
+
+我建议写成一篇有技术深度、有个人观点、有未来判断的文章，而不是单纯介绍 JSON/YAML。
+
+1\. **一个荒谬的现象：100 万 Token，真正有价值的内容有多少？**
+
+- AI 生成大量重复代码。
+- HTML、CSS、类型定义、CRUD、组件反复出现。
+- Token 消耗和实际业务价值严重不匹配。
+
+2\. **我们是不是用错了 AI？**
+
+- AI 擅长理解需求、推理和抽象。
+- 却让它重复生产确定性的代码。
+- 编译器早就能做的事情，为什么还要让 AI 做？
+
+3\. **换一种思路：AI 只生产 JSON/YAML**
+
+- 结构化规格。
+- DSL。
+- AST / IR。
+- 编译器生成完整程序。
+
+4\. **真正的软件生产流水线**
+
+- AI Specification。
+- Schema Validation。
+- Semantic Analysis。
+- AST Compiler。
+- Code Generation。
+- Build &amp; Test。
+
+5\. **这会不会是 AI Coding 的下一次范式转移？**
+
+- Token 成本下降。
+- 代码一致性提高。
+- 可预测构建。
+- 增量编译。
+- 错误局部修复。
+
+6\. **最后一个问题：未来程序员究竟是在写代码，还是在设计软件？**
+
+**我的建议：选第一个标题。**
+
+它有冲突、有立场，也有足够大的讨论空间。文章不要把观点写成「AI 永远不应该写代码」，而应该提出一个更有价值的命题：
+
+**当代码已经可以被确定性地生成，我们为什么还要浪费昂贵的智能去重复生产代码？**

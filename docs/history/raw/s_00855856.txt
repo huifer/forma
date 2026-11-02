@@ -1,0 +1,2436 @@
+# AI Specification Compiler：下一代 AI Coding 软件生产引擎
+
+<text color="secondary" size="sm">产品战略 · 技术架构 · DSL 设计 · 编译器 · Agent 协议 · MVP · 商业化</text>
+
+<badge color="success">最终产品方向建议</badge>
+
+**不要再做一个普通的 AI Coding Agent。做一个让所有 AI Coding Agent 都能使用的确定性软件生产引擎。**
+
+我建议将这个项目定位为：
+
+# AI Specification Compiler（暂定名）
+
+**让 AI 负责思考，让规格负责表达，让编译器负责生产，让验证系统负责保证结果。**
+
+它不是 Claude Code、Codex、Pi 的替代品，而是它们之上的一层软件生产基础设施。
+
+它要解决的不是 AI 能不能写代码，而是：
+
+1. 为什么 AI 必须反复生成大量重复代码？
+2. 为什么修改一个字段需要触碰多个文件？
+3. 为什么不同 Agent 会生成不同的代码结构？
+4. 为什么 AI 写出的代码经常无法稳定构建？
+5. 为什么项目越大，Agent 越难保持对代码库的完整理解？
+6. 为什么 100 万 Token 的消耗，可能只有很少一部分真正创造业务价值？
+
+我建议采用一个明确的战略：
+
+**Agent-Agnostic + Spec-First + Compiler-Driven + Verification-First。**
+
+也就是不绑定任何模型，不绑定任何 Coding Agent，不让 AI 自由生成所有代码，而是建立统一的规格协议和确定性生产流水线。
+
+---
+
+# 一、产品战略：到底要做什么？
+
+## 1.1 产品形态
+
+<box border radius="lg" padding={3} gap={2}>
+  <title size="xl">AI Specification Compiler</title>
+  <text color="secondary" size="sm">A deterministic software production engine for AI agents.</text>
+  <AsyncImage query="minimalist futuristic software compiler architecture dark navy interface structured specification nodes transforming into application code technical editorial illustration" aspectRatio="16:9" width="100%"/>
+  **产品定义**
+
+  一个本地优先的 AI 软件生产引擎，将 AI Agent 输出的结构化规格转换为可构建、可测试、可追踪、可回滚的软件。
+  <divider color="subtle"/>
+  **输入**
+
+  - Codex
+  - Claude Code
+  - Pi
+  - 其他支持协议的 Agent
+  - 人工编写的 JSON/YAML
+
+  **输出**
+
+  - 可执行软件
+  - 源代码
+  - 数据库结构
+  - API
+  - UI
+  - 测试
+  - 构建产物
+</box>
+
+这里有一个非常重要的产品边界：
+
+你不是要禁止 Agent 写代码。
+
+你要让 Agent 在适合结构化描述的场景中，优先使用 Spec，而不是直接编辑生成产物。
+
+复杂算法、特殊交互、性能敏感代码，仍然允许传统代码开发。
+
+这叫混合式软件生产，而不是纯低代码。
+
+## 1.2 核心价值
+
+| 维度 | 传统 AI Coding | 新架构 |
+|---|---|---|
+| 主要输出 | 源代码 | 结构化规格 |
+| 修改方式 | 文件级修改 | 语义节点修改 |
+| 代码重复 | 容易重复 | 共享生成器 |
+| 类型检查 | 依赖语言工具链 | Spec 阶段提前检查 |
+| 依赖管理 | Agent 自行理解 | IR 依赖图 |
+| 错误修复 | 修改代码 | 定位规格节点 |
+| 回滚 | Git 文件回滚 | Spec 版本回滚 |
+| 跨 Agent | 各自理解代码 | 共享统一规格 |
+| 构建 | Agent 驱动 | Compiler 驱动 |
+
+## 1.3 目标客户
+
+第一阶段不要服务所有开发者。
+
+建议从三类用户切入：
+
+1. 高频使用 Codex、Claude Code、Pi 的个人开发者。
+2. 使用多个 Agent 并行开发的独立开发者。
+3. 需要大量重复生产 SaaS、管理后台、标准业务系统的开发团队。
+
+其中最重要的用户群体是第三类，但最容易获得早期反馈的是第一、第二类。
+
+---
+
+# 二、产品最重要的设计原则
+
+我建议把以下原则写进项目的架构规范。
+
+| 原则 | 具体要求 |
+|---|---|
+| Spec First | 优先修改规格，不直接修改生成产物 |
+| Deterministic | 相同输入和工具链版本得到相同构建结果 |
+| Agent Agnostic | 不依赖某个特定 Agent |
+| Incremental | 只重新编译发生变化的依赖节点 |
+| Verifiable | 每次变更必须能够验证 |
+| Reversible | 每次变更都可以回滚 |
+| Explainable | 每个生成文件都能追溯到规格来源 |
+| Extensible | 支持原生代码扩展 |
+| Local First | 默认本地运行，不强制依赖云服务 |
+| Human Controlled | 高风险操作必须经过人工授权 |
+
+特别强调两点：
+
+**第一，不要承诺完全不写代码。**
+
+因为现实中的软件复杂度远远超过通用 DSL 能覆盖的范围。
+
+**第二，不要承诺 AI 输出越少越好。**
+
+应该追求的是：
+
+\[
+\text{有效业务信息密度}
+=
+\frac{\text{有效业务语义}}{\text{AI输出Token}}
+\]
+
+减少无意义的输出，而不是压缩必要的业务信息。
+
+# 三、竞品研究：不能把已有的 Spec Kit 再做一遍
+
+这是产品立项时必须解决的问题。
+
+现在已经出现了 Specification-Driven Development（规格驱动开发）路线，也有很多工具试图让 Agent 先写规格，再执行开发任务。
+
+例如：
+
+- <Entity value="GitHub Spec Kit" category="software" disambig="Specification-driven development toolkit"/>：围绕规格、计划和任务组织 AI 开发。
+- <Entity value="OpenSpec" category="software" disambig="Spec-driven development framework"/>：管理变更规格与开发工作流。
+- <Entity value="Kiro" category="software" disambig="AI IDE with spec-driven development"/>：将需求、设计、任务和代码关联起来。
+- <Entity value="Tessl" category="software" disambig="Specification-driven software development platform"/>：探索规格作为软件工程核心资产。
+- <Entity value="Canlang" category="software" disambig="AI-oriented business software language and compiler"/>：已经在尝试为 AI 构建业务软件提供专用语言和编译器。
+
+规格驱动开发并不是一个空白市场。相关研究也已经开始系统讨论 Spec-first、Spec-anchored 和 Spec-as-source 三种不同成熟度。<Cite refs={["turn386377academia36","turn386377search15","turn386377search14"]}/>
+
+## 3.1 竞品定位矩阵
+
+| 产品 | 核心解决的问题 | 与我们的区别 |
+|---|---|---|
+| GitHub Spec Kit | 规格驱动开发流程 | 不以通用编译器为核心 |
+| OpenSpec | 变更规格管理 | 不以多目标软件生产为核心 |
+| Kiro | Spec 驱动的 AI IDE | IDE 产品形态 |
+| Tessl | 规格与代码关联 | 更偏规格驱动的软件工程 |
+| Terraform | 声明式基础设施生产 | 领域限定 |
+| OpenAPI | API 规格与代码生成 | API 领域限定 |
+| Protocol Buffers | 数据结构和 RPC 代码生成 | 接口描述领域限定 |
+
+## 3.2 真正的差异化在哪里？
+
+我不建议竞争：
+
+- 谁的 Prompt 更好。
+- 谁的任务拆解更完整。
+- 谁的 Agent 更多。
+- 谁的规格文档更漂亮。
+- 谁能生成更多代码。
+
+这些方向容易陷入同质化。
+
+我建议竞争以下五个领域：
+
+<box border radius="lg" padding={3} gap={3}>
+  <title size="lg">五个核心差异化</title>
+  <list connector="solid" marker="number" gap={3}>
+    <list-item>
+      **Universal Spec Protocol**
+
+      建立跨 Codex、Claude Code、Pi 的统一软件规格协议。
+    </list-item>
+    <list-item>
+      **Semantic Compiler**
+
+      不只是模板生成，而是有类型系统、语义检查、依赖图的真正编译器。
+    </list-item>
+    <list-item>
+      **Incremental Production**
+
+      一个业务节点改变，只重新生成真正受影响的部分。
+    </list-item>
+    <list-item>
+      **Verified Changes**
+
+      每次变更都有验证证据、依赖追踪、回滚和构建记录。
+    </list-item>
+    <list-item>
+      **Hybrid Code Generation**
+
+      结构化规格和人工原生代码共存，不强迫用户使用单一 DSL。
+    </list-item>
+  </list>
+</box>
+
+特别需要注意：Claude Code 已有 Hooks、Skills、MCP 和 Subagents，Codex 也有自己的扩展机制。这意味着不需要重新发明 Agent 的执行环境，而应该利用这些接口接入。<Cite refs={["turn386377search1","turn386377search3","turn386377search5"]}/>
+
+**最终竞争定位：不是 Spec 管理工具，而是跨 Agent 的软件编译与可靠性基础设施。**
+
+---
+
+# 四、核心技术架构：从 Agent 到可执行软件
+
+这是我建议采用的正式架构。
+
+<AsyncImage query="software compiler architecture diagram AI specification DSL parser semantic analysis intermediate representation dependency graph incremental code generation runtime verification dark technical blueprint" aspectRatio="16:9" width="100%"/>
+
+整个系统由九个核心模块组成。
+
+```text
+                AI CODING AGENTS
+       Codex / Claude Code / Pi / Other
+                       |
+                       v
+              1. Agent Adapter
+                       |
+                       v
+              2. Spec Protocol
+                       |
+                       v
+              3. Specification Store
+                       |
+                       v
+              4. Parser & Validator
+                       |
+                       v
+              5. Semantic Compiler
+                       |
+                       v
+                 6. AST / IR
+                       |
+              Dependency Graph
+                       |
+                       v
+              7. Incremental Engine
+                       |
+                       v
+              8. Code Generator
+                       |
+                       v
+              Native Source Code
+                       |
+                       v
+              9. Verification Runtime
+                       |
+                       v
+                Build / Test / Deploy
+```
+
+## 4.1 Agent Adapter
+
+负责连接不同 AI Coding Agent。
+
+不要让核心编译器直接依赖某个 Agent 的私有 API。
+
+建议采用 Adapter 模式：
+
+```text
+adapters/
+  codex/
+  claude-code/
+  pi/
+  generic-mcp/
+  cli/
+```
+
+每个 Adapter 只做四件事：
+
+1. 获取 Agent 的结构化输出。
+2. 将其转换成统一协议。
+3. 将编译错误和验证结果返回给 Agent。
+4. 控制 Agent 的写入权限和操作范围。
+
+建议第一阶段使用：
+
+- CLI：主要集成入口。
+- MCP：工具调用接口。
+- Claude Code Hooks：拦截与验证。
+- Codex Skills / Hooks：工作流接入。
+- Pi Extension：深度集成。
+
+不要第一天就做三个复杂的原生插件。
+
+先实现一个通用 CLI + MCP Server，再增加适配器。
+
+## 4.2 Spec Protocol
+
+这是整个项目的核心协议。
+
+AI 不应该每次自由生成一整份 YAML。
+
+而是通过一组标准操作修改规格。
+
+例如：
+
+```json
+{
+  "protocol": "spec.v1",
+  "operation": "node.update",
+  "target": "data.entities.User.fields.status",
+  "patch": {
+    "type": "enum",
+    "values": [
+      "active",
+      "disabled",
+      "pending"
+    ]
+  }
+}
+```
+
+我建议第一版协议只支持以下操作：
+
+| 操作 | 用途 |
+|---|---|
+| project.create | 创建项目 |
+| node.create | 创建节点 |
+| node.update | 修改节点 |
+| node.delete | 删除节点 |
+| node.move | 移动节点 |
+| node.connect | 建立依赖 |
+| spec.validate | 验证规格 |
+| build.preview | 预览变更 |
+| build.apply | 应用变更 |
+| build.rollback | 回滚变更 |
+| build.verify | 验证构建 |
+
+这里有个关键设计：
+
+**AI 不应该每次都重新输出全部 JSON。它应该提交最小化的结构化 Patch。**
+
+这比单纯要求模型输出短 YAML 更重要。
+
+因为真正浪费 Token 的不仅是生成，还有反复读取、重复解释和上下文重建。
+
+## 4.3 Specification Store
+
+建议把规格文件作为项目的一等资产。
+
+项目结构：
+
+```text
+my-app/
+├── spec/
+│   ├── manifest.yaml
+│   ├── app.yaml
+│   ├── data/
+│   │   ├── user.yaml
+│   │   └── order.yaml
+│   ├── ui/
+│   │   ├── dashboard.yaml
+│   │   └── users.yaml
+│   ├── logic/
+│   │   └── permissions.yaml
+│   └── api/
+│       └── users.yaml
+│
+├── extensions/
+│   └── custom/
+│
+├── generated/
+│
+├── runtime/
+│
+├── tests/
+│
+└── .speccompiler/
+    ├── state.db
+    ├── dependency.db
+    ├── build-cache/
+    └── build-history/
+```
+
+建议：
+
+- YAML 用于人类阅读和 Git Review。
+- JSON 用于 Agent 协议和机器交换。
+- SQLite 用于本地构建状态、依赖索引、缓存元数据。
+- Git 用于版本控制与协作。
+
+不要把所有数据塞进一个巨大的 JSON。
+
+也不要让 SQLite 成为规格的唯一真实来源。
+
+**Git 中的 Spec 是 Source of Truth，SQLite 是可重建的索引和缓存。**
+
+## 4.4 Parser & Validator
+
+这里需要建立严格的验证体系。
+
+例如：
+
+```text
+Input
+  |
+  v
+YAML Parser
+  |
+  v
+JSON Normalization
+  |
+  v
+Schema Validation
+  |
+  v
+Reference Validation
+  |
+  v
+Type Validation
+  |
+  v
+Semantic Validation
+  |
+  v
+AST
+```
+
+错误必须有稳定的错误代码。
+
+```json
+{
+  "code": "SPEC_FIELD_REFERENCE_NOT_FOUND",
+  "severity": "error",
+  "path": "ui.pages.users.columns[2]",
+  "message": "Referenced field does not exist",
+  "suggestions": [
+    "name",
+    "email",
+    "status"
+  ]
+}
+```
+
+这能让任何 Agent 都可以处理错误，而不需要理解某个编译器内部的日志格式。
+
+# 五、DSL 设计：不要一开始创造一门通用编程语言
+
+这里我想做一个重要的技术决策：
+
+**不要尝试用 JSON/YAML 描述整个世界。先做一套受约束的软件描述语言。**
+
+它应该像 OpenAPI 一样规范，像 Terraform 一样声明期望状态，像 Protobuf 一样可以编译，像 SQL 一样有清晰的语义。
+
+## 5.1 DSL 分层设计
+
+我建议采用一个核心协议 + 六个领域 DSL。
+
+| DSL | 文件后缀 | 描述范围 | 优先级 |
+|---|---|---|---|
+| AppSpec | `.app.yaml` | 应用、模块、导航 | P0 |
+| DataSpec | `.data.yaml` | 实体、字段、关系 | P0 |
+| UISpec | `.ui.yaml` | 页面、组件、交互 | P0 |
+| LogicSpec | `.logic.yaml` | 条件、规则、计算 | P1 |
+| APISpec | `.api.yaml` | 接口、请求、响应 | P1 |
+| WorkflowSpec | `.flow.yaml` | 事件、节点、执行流程 | P2 |
+
+第一版不要实现六个完整语言。
+
+建议先完成：
+
+- AppSpec
+- DataSpec
+- UISpec
+
+LogicSpec 第一阶段只支持简单规则。
+
+API 可以从 DataSpec 派生 CRUD 接口。
+
+Workflow 留到后续。
+
+这样可以避免 DSL 本身变成一个巨大项目。
+
+## 5.2 具体设计
+
+**AppSpec：应用描述**
+
+```yaml
+spec_version: "1"
+
+app:
+  id: task-manager
+  name: Task Manager
+  version: 1.0.0
+
+modules:
+  - id: users
+  - id: tasks
+
+navigation:
+  type: sidebar
+  items:
+    - module: users
+    - module: tasks
+
+targets:
+  frontend: react
+  backend: typescript
+  database: sqlite
+```
+
+**DataSpec：数据模型描述**
+
+```yaml
+spec_version: "1"
+
+entities:
+  User:
+    fields:
+      id:
+        type: uuid
+        primary: true
+
+      name:
+        type: string
+        required: true
+        max_length: 100
+
+      email:
+        type: email
+        required: true
+        unique: true
+
+      status:
+        type: enum
+        values:
+          - active
+          - disabled
+
+    indexes:
+      - fields:
+          - email
+```
+
+**UISpec：页面描述**
+
+```yaml
+spec_version: "1"
+
+pages:
+  users:
+    route: /users
+    title: Users
+
+    layout:
+      type: page
+
+    components:
+      - id: user-table
+        type: data-table
+
+        source:
+          entity: User
+
+        columns:
+          - field: name
+          - field: email
+          - field: status
+
+        actions:
+          - type: create
+          - type: edit
+          - type: delete
+
+      - id: user-form
+        type: form
+
+        entity: User
+
+        fields:
+          - name
+          - email
+          - status
+```
+
+这里有一个关键约束：
+
+`type: data-table` 是编译器认识的语义组件，而不是一个任意的 React 组件名称。
+
+编译器知道 DataTable 的完整实现。
+
+AI 只需要提供字段、数据源和操作。
+
+## 5.3 不允许自由创造组件
+
+建议建立组件注册中心。
+
+```text
+components/
+├── layout/
+│   ├── Page
+│   ├── Sidebar
+│   └── Header
+│
+├── data/
+│   ├── DataTable
+│   ├── DataGrid
+│   └── DataView
+│
+├── forms/
+│   ├── Form
+│   ├── Input
+│   ├── Select
+│   └── DatePicker
+│
+├── feedback/
+│   ├── Dialog
+│   ├── Toast
+│   └── EmptyState
+│
+└── charts/
+    ├── LineChart
+    ├── BarChart
+    └── PieChart
+```
+
+每个组件都有：
+
+- 唯一 ID。
+- 版本号。
+- 属性 Schema。
+- 默认行为。
+- 类型定义。
+- 生成规则。
+- 测试。
+- 依赖关系。
+
+例如：
+
+```json
+{
+  "component": "DataTable",
+  "version": "1.0",
+  "props": {
+    "entity": {
+      "type": "EntityRef",
+      "required": true
+    },
+    "columns": {
+      "type": "FieldRef[]",
+      "required": true
+    },
+    "pagination": {
+      "type": "PaginationConfig"
+    }
+  }
+}
+```
+
+这样，AI 无法随意编造一个 `DataTableV99`，也不能传递一个编译器不认识的属性。
+
+## 5.4 DSL 必须具备版本兼容性
+
+这点不能省略。
+
+假设以后 DataSpec 从 v1 升级到 v2。
+
+不能要求用户重新生成所有项目。
+
+需要：
+
+```text
+Spec v1
+   |
+   v
+Migration Engine
+   |
+   v
+Spec v2
+   |
+   v
+Validator
+   |
+   v
+Compiler
+```
+
+建议借鉴 Buf 的 Schema Lint、Breaking Change Detection 和版本兼容机制。它已经证明了结构化规格不仅可以生成代码，还可以对接口变化进行自动审查。<Cite refs={["turn167470search0","turn167470search2","turn167470search4"]}/>
+
+---
+
+# 六、AST / IR：真正决定技术上限的部分
+
+如果说 DSL 是 AI 和编译器之间的语言，那么 IR 就是编译器真正理解的软件模型。
+
+我的建议是：
+
+**一个 Canonical IR，不要为每个 Agent、每种 DSL 建立一套独立 AST。**
+
+## 6.1 IR 应该包含什么？
+
+```text
+IR
+├── Project
+│   ├── Modules
+│   └── Targets
+│
+├── Data
+│   ├── Entities
+│   ├── Fields
+│   ├── Relations
+│   └── Indexes
+│
+├── UI
+│   ├── Pages
+│   ├── Layouts
+│   ├── Components
+│   └── Events
+│
+├── Logic
+│   ├── Rules
+│   ├── Conditions
+│   └── Actions
+│
+├── API
+│   ├── Endpoints
+│   ├── Requests
+│   └── Responses
+│
+└── Dependencies
+    ├── References
+    ├── Imports
+    └── BuildGraph
+```
+
+每一个节点必须有稳定 ID。
+
+例如：
+
+```json
+{
+  "id": "field:user.status",
+  "kind": "DataField",
+  "type": "enum",
+  "owner": "entity:user",
+  "attributes": {
+    "values": [
+      "active",
+      "disabled"
+    ]
+  },
+  "source": {
+    "file": "spec/data/user.data.yaml",
+    "path": "$.entities.User.fields.status"
+  }
+}
+```
+
+注意 `source`。
+
+它是后续实现可追踪生成、错误定位和增量编译的基础。
+
+## 6.2 IR 必须有类型系统
+
+不能只做一个任意 JSON Object。
+
+建议支持：
+
+| 类型 | 示例 |
+|---|---|
+| Primitive | string、number、boolean |
+| Entity | User、Order |
+| FieldRef | User.email |
+| ComponentRef | DataTable |
+| EventRef | onSubmit |
+| Relation | User hasMany Order |
+| Condition | status == active |
+| Action | create、update、delete |
+| Expression | amount * quantity |
+
+还需要检查：
+
+- 类型是否兼容。
+- 引用是否存在。
+- 依赖是否循环。
+- 操作是否合法。
+- 是否存在权限冲突。
+- 组件是否支持对应数据类型。
+
+## 6.3 建立 Dependency Graph
+
+例如：
+
+```text
+User.status
+    |
+    +---- DatabaseSchema
+    |
+    +---- ORMModel
+    |
+    +---- APIValidator
+    |
+    +---- UserForm
+    |
+    +---- UserTable
+    |
+    +---- UserTests
+```
+
+修改 `User.status` 后，编译器只需要重新处理相关节点。
+
+但这里要避免一个技术误区：
+
+不能仅根据文件名决定哪些代码需要重新生成。
+
+应该根据 IR 节点、生成器依赖和构建产物的真实依赖建立 DAG。
+
+建议为每个节点维护：
+
+```text
+node_id
+input_hash
+dependency_hash
+compiler_version
+generator_version
+output_hash
+```
+
+使用内容寻址缓存。
+
+只有输入、依赖或生成器版本发生变化，才需要重新生成。
+
+## 6.4 确定性编译
+
+这里的确定性不能只理解为相同 YAML 得到相同文件。
+
+应该是：
+
+\[
+Output = Compile(IR, CompilerVersion, GeneratorVersion, Dependencies)
+\]
+
+相同的输入、编译器、生成器和依赖版本，应该得到相同的输出。
+
+需要做到：
+
+- 稳定节点排序。
+- 稳定文件排序。
+- 固定代码格式。
+- 固定依赖版本。
+- 消除时间戳等不确定因素。
+- 固定代码生成模板。
+- 构建环境可复现。
+- 生成物可校验。
+
+Buf 的工程实践很值得借鉴：它把格式化、Lint、Breaking Change Detection、依赖管理和代码生成整合进统一工具链，并强调生成结果的确定性。<Cite refs={["turn167470search3","turn167470search5","turn167470search6"]}/>
+
+---
+
+# 七、Compiler：不要做一个简单的模板引擎
+
+我建议将编译器拆成四个阶段。
+
+<box border radius="lg" padding={3} gap={3}>
+  <box gap={1}>
+    **Phase 1 · Frontend Compiler**
+
+    <text color="secondary" size="xs">解析 JSON/YAML、Schema、DSL、语义检查</text>
+  </box>
+  <divider color="subtle"/>
+  <box gap={1}>
+    **Phase 2 · Semantic Compiler**
+
+    <text color="secondary" size="xs">IR 构建、类型检查、依赖解析、规则检查</text>
+  </box>
+  <divider color="subtle"/>
+  <box gap={1}>
+    **Phase 3 · Target Compiler**
+
+    <text color="secondary" size="xs">IR 转换为不同技术栈的目标代码</text>
+  </box>
+  <divider color="subtle"/>
+  <box gap={1}>
+    **Phase 4 · Build Compiler**
+
+    <text color="secondary" size="xs">依赖解析、构建、测试、产物校验</text>
+  </box>
+</box>
+
+## 7.1 Target Compiler
+
+第一阶段只支持一个目标。
+
+我建议：
+
+<badge color="success">首个目标</badge>
+
+**React + TypeScript + Hono + SQLite**
+
+理由：
+
+- React 适合验证 UI DSL。
+- TypeScript 适合构建全栈业务应用。
+- Hono 轻量，方便生成服务端代码。
+- SQLite 适合本地开发和低成本部署。
+- 后续可以增加 MySQL 等数据库 Target。
+
+不要第一天支持 React、Vue、Svelte、Angular、Kotlin、Swift、Rust。
+
+这会让生成器维护成本失控。
+
+## 7.2 生成代码的所有权
+
+建议将项目文件分成三类：
+
+| 文件区域 | 所有权 | 是否允许 Agent 直接修改 |
+|---|---|---|
+| spec/ | 规格系统 | 通过 Spec 操作修改 |
+| generated/ | 编译器 | 不允许直接修改 |
+| extensions/ | 开发者 | 允许正常编码 |
+
+例如：
+
+```text
+project/
+├── spec/
+│   └── ...
+│
+├── generated/
+│   ├── frontend/
+│   ├── backend/
+│   ├── database/
+│   └── types/
+│
+└── extensions/
+    ├── services/
+    ├── algorithms/
+    └── custom-components/
+```
+
+这是非常重要的边界。
+
+如果 Agent 修改了 generated 中的代码，下一次编译就可能覆盖它。
+
+所以必须建立：
+
+- 生成文件标记。
+- 写入拦截。
+- Hash 校验。
+- 生成差异报告。
+- 自定义扩展接口。
+
+不能通过简单的禁止写入来解决全部问题，因为有些项目确实需要人工修改生成代码。
+
+可以提供 `adopt` 操作，把人工修改提取为扩展，或者让 Agent 将修改迁移到对应 Spec。
+
+## 7.3 Plugin Compiler
+
+未来最有价值的不是一个巨大的 Compiler，而是一个 Compiler Plugin Ecosystem。
+
+例如：
+
+```text
+plugins/
+├── frontend/
+│   ├── react
+│   ├── vue
+│   └── svelte
+│
+├── backend/
+│   ├── hono
+│   ├── express
+│   └── rust-axum
+│
+├── database/
+│   ├── sqlite
+│   ├── mysql
+│   └── postgres
+│
+└── integrations/
+    ├── stripe
+    ├── auth
+    └── storage
+```
+
+但插件不能随意修改 IR。
+
+必须通过稳定的 Plugin API 注册：
+
+- 新的 Target。
+- 新的 Component。
+- 新的 Generator。
+- 新的 Validator。
+- 新的 Runtime Provider。
+
+插件版本也必须进入构建指纹。
+
+---
+
+# 八、Runtime：不要把所有逻辑都编译成静态代码
+
+我建议采用：
+
+**Compile-time Generation + Runtime Execution 的混合架构。**
+
+两种机制各有职责。
+
+| 机制 | 负责什么 |
+|---|---|
+| 编译时 | 数据模型、API、类型、页面骨架、静态规则 |
+| 运行时 | 动态权限、条件、事件、工作流、可配置行为 |
+
+例如：
+
+用户权限规则：
+
+```yaml
+permissions:
+  User:
+    read:
+      roles:
+        - admin
+        - operator
+
+    delete:
+      roles:
+        - admin
+      conditions:
+        - field: status
+          operator: equals
+          value: disabled
+```
+
+编译器负责验证权限表达式，并生成对应的执行计划。
+
+Runtime 负责根据当前用户和数据执行权限判断。
+
+这里需要特别注意：
+
+**不能因为 AI 生成了权限 DSL，就认为系统已经安全。**
+
+必须在服务端强制执行权限，不能只依赖前端隐藏按钮。
+
+Runtime 还应该提供：
+
+- 类型安全的数据访问。
+- 参数验证。
+- 事件执行。
+- 事务管理。
+- 权限检查。
+- 审计日志。
+- 错误处理。
+- 超时和资源限制。
+
+对于自定义逻辑，第一版允许调用受控 TypeScript Extension，不建议一开始设计完整的通用脚本语言。
+
+---
+
+# 九、可靠性体系：这是产品真正的护城河
+
+我认为你最应该投入研发资源的地方不是 DSL，而是 Reliability。
+
+一个系统可以生成 JSON，不代表它能够稳定生产软件。
+
+真正的挑战是：
+
+- AI 是否修改了错误的节点？
+- 是否遗漏了依赖？
+- 是否破坏了已有功能？
+- 是否出现生成物漂移？
+- 是否引入了安全漏洞？
+- 是否能在失败后回滚？
+
+我建议建立七层可靠性体系。
+
+## 9.1 七层保障
+
+| 层级 | 检查内容 |
+|---|---|
+| L1 Protocol | 操作格式、权限、参数 |
+| L2 Schema | 字段、类型、结构 |
+| L3 Semantic | 引用、关系、业务规则 |
+| L4 Dependency | 依赖图、循环依赖、影响范围 |
+| L5 Generation | 生成文件、Hash、覆盖冲突 |
+| L6 Build & Test | 编译、单测、集成测试 |
+| L7 Runtime | 权限、行为、执行结果 |
+
+每次 Spec 变更都必须生成一个 Change Set。
+
+例如：
+
+```json
+{
+  "change_id": "chg_001",
+  "status": "validated",
+  "operations": [
+    {
+      "operation": "node.update",
+      "target": "data.entities.User.fields.status"
+    }
+  ],
+  "impact": {
+    "affected_nodes": 6,
+    "affected_files": 8
+  },
+  "checks": {
+    "schema": "passed",
+    "semantic": "passed",
+    "dependency": "passed",
+    "breaking_change": "warning"
+  }
+}
+```
+
+然后进入 Preview 阶段。
+
+Agent 和用户都能看到本次修改会影响哪些文件。
+
+## 9.2 Transactional Build
+
+这是我认为必须做的功能。
+
+不要让编译器边生成边覆盖原文件。
+
+建议：
+
+```text
+Spec Change
+    |
+    v
+Validate
+    |
+    v
+Build Plan
+    |
+    v
+Temporary Output
+    |
+    v
+Build & Test
+    |
+    +---- Failed ----> Discard
+    |
+    v
+Compare Output
+    |
+    v
+Atomic Apply
+    |
+    v
+Record Snapshot
+```
+
+如果生成失败：
+
+- 保留旧版本。
+- 丢弃不完整输出。
+- 保存错误信息。
+- 返回对应 Spec 节点。
+- 不允许半成品污染工作目录。
+
+## 9.3 Breaking Change Detection
+
+例如原来：
+
+```yaml
+email:
+  type: string
+```
+
+修改为：
+
+```yaml
+email:
+  type: integer
+```
+
+不能只看 YAML 是否有效。
+
+必须识别这是一个可能破坏现有数据和接口的变更。
+
+建议设置：
+
+- Safe Change
+- Compatible Change
+- Breaking Change
+- Destructive Change
+
+对于数据库字段删除、类型变更、API 删除等操作，必须提供迁移计划。
+
+借鉴 Buf 的 Schema Compatibility 检查机制，不要等到生产环境才发现协议变化破坏了调用方。<Cite refs={["turn167470search0","turn167470search10"]}/>
+
+## 9.4 Agent 权限控制
+
+我建议设计三个权限级别。
+
+| 权限 | 行为 |
+|---|---|
+| Read | 读取 Spec、IR、编译报告 |
+| Propose | 提交 Spec Patch、预览变更 |
+| Apply | 应用通过验证的变更 |
+
+默认：
+
+- AI 可以读取。
+- AI 可以提交修改建议。
+- AI 不可以绕过验证直接覆盖生成产物。
+- 删除数据、执行迁移、部署等高风险操作需要单独授权。
+
+## 9.5 可靠性不能只依靠 AI 自己验证
+
+AI 生成的测试也可能有错误。
+
+因此必须有独立于生成 Agent 的验证器。
+
+例如：
+
+AI 生成一个用户删除功能。
+
+验证系统不应该只检查：
+
+```text
+AI says: Tests passed.
+```
+
+而应该真正执行：
+
+1. 删除接口是否存在。
+2. 无权限用户是否无法删除。
+3. 删除不存在的用户是否返回正确错误。
+4. 关联数据是否按预期处理。
+5. 数据库事务是否正确。
+6. 生成的 API 是否与规格一致。
+
+**AI 负责提出实现，独立验证器负责证明实现符合规格。**
+
+这才是可靠性架构。
+
+---
+
+# 十、Agent 工作流：Codex、Claude Code、Pi 怎么使用它？
+
+我不建议你重新做一套 Agent。
+
+让已有 Agent 继续负责：
+
+- 理解用户需求。
+- 任务规划。
+- 业务分析。
+- 复杂算法。
+- 原生代码开发。
+
+你的系统只接管结构化软件生产。
+
+## 10.1 理想工作流
+
+<box border radius="lg" padding={3} gap={2}>
+  <title size="lg">Agent + Compiler 协作</title>
+  <list connector="solid" marker="number" gap={2}>
+    <list-item>
+      **用户提出需求**
+
+      创建一个用户管理系统。
+    </list-item>
+    <list-item>
+      **Agent 理解需求**
+
+      将需求拆成数据、页面、业务规则。
+    </list-item>
+    <list-item>
+      **Agent 调用 Spec Protocol**
+
+      创建 User Entity、Users Page。
+    </list-item>
+    <list-item>
+      **Compiler 验证**
+
+      Schema、类型、语义、依赖检查。
+    </list-item>
+    <list-item>
+      **Compiler 预览**
+
+      展示变更节点和受影响文件。
+    </list-item>
+    <list-item>
+      **执行代码生成**
+
+      生成数据库、API、页面。
+    </list-item>
+    <list-item>
+      **独立验证**
+
+      Build、Test、Security Check。
+    </list-item>
+    <list-item>
+      **反馈 Agent**
+
+      成功返回构建摘要，失败返回结构化错误。
+    </list-item>
+  </list>
+</box>
+
+## 10.2 不同 Agent 的接入策略
+
+| Agent | 第一阶段接入 | 后续 |
+|---|---|---|
+| Codex | CLI + MCP | 专用 Adapter |
+| Claude Code | MCP + Skills | Hooks |
+| Pi | CLI + Extension | 深度集成 |
+| 其他 Agent | MCP | Generic Adapter |
+
+这里的目标不是让所有 Agent 都能理解你的内部实现。
+
+而是让所有 Agent 只需要掌握一个协议。
+
+## 10.3 MCP 工具设计
+
+建议第一版提供以下工具：
+
+```text
+spec_get
+spec_search
+spec_apply_patch
+spec_validate
+spec_get_ir
+spec_preview
+spec_compile
+spec_verify
+spec_rollback
+```
+
+每个工具都返回精简结构化结果。
+
+例如：
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "FIELD_NOT_FOUND",
+    "path": "pages.users.columns[2]"
+  },
+  "repair": {
+    "suggested_operation": "node.update",
+    "available_fields": [
+      "name",
+      "email",
+      "status"
+    ]
+  }
+}
+```
+
+不要把整个项目的 IR、所有生成文件和完整构建日志都塞回 Agent 上下文。
+
+只返回：
+
+- 变更结果。
+- 受影响节点。
+- 关键错误。
+- 下一步建议。
+
+详细日志保存在本地。
+
+这样才能真正减少上下文污染。
+
+---
+
+# 十一、最重要的产品创新：Spec Patch，而不是 Spec Rewrite
+
+我想把这个功能单独提出来。
+
+普通 Spec-Driven Development 的流程，往往是：
+
+```text
+需求
+  ↓
+生成完整规格
+  ↓
+修改完整规格
+  ↓
+重新执行工作流
+```
+
+我们应该采用：
+
+```text
+Current Spec
+     |
+     v
+Semantic Diff
+     |
+     v
+Minimal Patch
+     |
+     v
+Validation
+     |
+     v
+Incremental Compilation
+```
+
+例如：
+
+用户说：
+
+> 用户管理页面增加一个手机号字段。
+
+Agent 不需要重新输出整个 User Entity。
+
+只需要：
+
+```json
+{
+  "operation": "node.create",
+  "target": "data.entities.User.fields",
+  "value": {
+    "phone": {
+      "type": "string",
+      "required": false
+    }
+  }
+}
+```
+
+编译器只需要分析与手机号有关的影响范围。
+
+可能生成：
+
+- 数据库迁移。
+- ORM 字段。
+- API 类型。
+- 表单字段。
+- 表格列（如果规格要求）。
+- 对应测试。
+
+而其他模块完全不需要重新生成。
+
+这可以成为产品最核心的交互方式。
+
+---
+
+# 十二、技术选型：我建议 Rust 做核心，TypeScript 做目标运行时
+
+结合这个项目的定位，我不建议纯 TypeScript 实现所有东西，也不建议一开始全用 Rust。
+
+我的最终推荐是双语言架构。
+
+## 12.1 技术栈
+
+| 模块 | 技术 | 决策 |
+|---|---|---|
+| Compiler Core | Rust | 核心引擎 |
+| CLI | Rust / clap | 本地入口 |
+| Parser | serde_yaml + serde_json | 规格解析 |
+| Schema Validation | jsonschema | 结构验证 |
+| IR | Rust 自定义类型 | 统一语义模型 |
+| Dependency Graph | petgraph | DAG |
+| Hash | BLAKE3 | 内容指纹 |
+| Local Storage | SQLite | 构建状态 |
+| Protocol | JSON-RPC / MCP | Agent 接口 |
+| Runtime | TypeScript | 动态业务逻辑 |
+| Frontend Target | React + TypeScript | 首个目标 |
+| Backend Target | Hono | 首个目标 |
+| Database Target | SQLite | 首个目标 |
+| Testing | Vitest + Playwright | 自动化验证 |
+| Build | Vite + TypeScript | 目标项目构建 |
+
+其中 JSON Schema 验证可以使用 Rust 的 `jsonschema` crate，已经具备多版本 Schema 支持和结构化验证能力。<Cite refs={["turn167470search1","turn167470search13"]}/>
+
+## 12.2 为什么 Rust 做 Compiler Core？
+
+因为核心引擎需要：
+
+- 严格类型系统。
+- 可预测的执行过程。
+- 并行编译。
+- 高效的依赖图处理。
+- 文件系统操作。
+- 内容寻址缓存。
+- 稳定的 CLI。
+- 跨平台分发。
+
+Rust 非常适合这类基础设施。
+
+而 TypeScript 负责生成的应用运行时，可以让目标项目更容易接入现有 Web 开发生态。
+
+## 12.3 不建议的技术路线
+
+不要：
+
+1. 用 LLM 参与编译器核心决策。
+2. 用 Prompt 代替 Schema。
+3. 用正则表达式解析复杂代码。
+4. 把所有 DSL 写成一个巨大的 YAML。
+5. 让 AI 自己决定组件名称。
+6. 每次修改都重新生成整个项目。
+7. 让 Compiler 直接覆盖用户代码。
+8. 在第一版实现多语言多平台编译。
+9. 把编译器做成一个依赖云端的 SaaS。
+10. 先做漂亮的可视化编辑器。
+
+先把命令行和编译链路做正确。
+
+# 十三、MVP：第一版到底做什么？
+
+这里我会做一个比较激进的取舍。
+
+**第一版只做一种软件：标准 CRUD 型全栈 Web 应用。**
+
+不做通用 IDE，不做聊天界面，不做模型路由，不做云端 Agent 集群。
+
+你要证明的是一件事：
+
+> 同样的业务需求，使用 Spec Compiler，能否用更少的 AI Token、更少的代码修改、更高的可验证性，生产出同样可用的软件？
+
+如果这个问题没有得到肯定答案，做再多功能都没有意义。
+
+## 13.1 MVP 功能清单
+
+<badge color="success">P0 · 必须完成</badge>
+
+| 模块 | Feature | 验收标准 |
+|---|---|---|
+| CLI | 项目初始化 | 能创建标准工程 |
+| Spec | AppSpec | 能描述应用模块 |
+| Spec | DataSpec | 能描述实体和关系 |
+| Spec | UISpec | 能描述标准页面 |
+| Protocol | Patch API | 能增量修改节点 |
+| Validator | Schema | 能拦截无效规格 |
+| Validator | Semantic | 能检查引用和类型 |
+| IR | Canonical IR | 能生成统一 IR |
+| Compiler | React Generator | 能生成页面 |
+| Compiler | API Generator | 能生成 CRUD API |
+| Compiler | Database Generator | 能生成数据库结构 |
+| Build | Incremental Build | 能只处理受影响节点 |
+| Verify | Build & Test | 能自动构建和测试 |
+| Recovery | Rollback | 能恢复上一个成功版本 |
+| MCP | Generic MCP | 能被 AI Agent 调用 |
+
+<badge color="info">P1 · 第二阶段</badge>
+
+- Claude Code Adapter。
+- Codex Adapter。
+- Pi Extension。
+- 组件注册中心。
+- 自定义代码扩展。
+- Breaking Change 检查。
+- 生成差异预览。
+- 构建缓存。
+- 安全策略。
+- 可视化依赖图。
+
+<badge color="secondary">P2 · 后续扩展</badge>
+
+- Vue Target。
+- Rust Backend Target。
+- Kotlin Android Target。
+- Swift iOS Target。
+- Workflow DSL。
+- 插件市场。
+- 团队协作。
+- 远程构建。
+- 规格模板市场。
+
+## 13.2 第一版 Demo 必须完成的完整案例
+
+我建议做一个真实的 Task Manager。
+
+<AsyncImage query="modern minimal task management SaaS dashboard sidebar project tasks data table clean blue white UI desktop" aspectRatio="16:9" width="100%"/>
+
+功能：
+
+- 用户管理。
+- 项目管理。
+- 任务管理。
+- 任务状态。
+- 用户关联。
+- 任务列表。
+- 任务筛选。
+- 新增、编辑、删除。
+- 权限控制。
+
+然后完成以下连续操作：
+
+**测试 A：初始生成**
+
+输入：
+
+> 创建一个任务管理系统。
+
+Agent 生成 Spec，Compiler 生产应用。
+
+**测试 B：修改字段**
+
+输入：
+
+> 给任务增加 priority，支持 low、medium、high。
+
+只修改对应规格节点，完成增量编译。
+
+**测试 C：修改业务逻辑**
+
+输入：
+
+> 已完成的任务不允许删除。
+
+修改 LogicSpec，生成验证规则和服务端约束。
+
+**测试 D：修改页面**
+
+输入：
+
+> 任务列表增加优先级筛选。
+
+只修改 UISpec。
+
+**测试 E：故意制造错误**
+
+输入一个不存在的字段引用。
+
+验证器必须拒绝编译，并准确指出错误位置。
+
+**测试 F：回滚**
+
+撤销上一次变更，系统必须恢复到此前已验证的版本。
+
+这六个测试完成，才算真正做出了 MVP。
+
+## 13.3 最重要的 Token Benchmark
+
+这个项目必须有一套公开 Benchmark。
+
+不要仅凭感觉说节省了 90% Token。
+
+建议准备 20 个真实业务需求，覆盖：
+
+- 新建项目。
+- 增加字段。
+- 修改字段类型。
+- 增加页面。
+- 修改页面。
+- 增加 API。
+- 修改权限。
+- 增加关联关系。
+- 删除字段。
+- 复杂业务规则。
+
+分别用三种方式完成：
+
+| 实验组 | 开发方式 |
+|---|---|
+| A | 传统 AI Coding |
+| B | Spec-First，AI 仍生成代码 |
+| C | Spec Compiler，AI 生成 Patch |
+
+统一使用：
+
+- 相同模型。
+- 相同需求。
+- 相同初始代码。
+- 相同工具权限。
+- 相同测试用例。
+- 相同构建环境。
+
+记录：
+
+| 指标 | 说明 |
+|---|---|
+| Input Tokens | 输入 Token |
+| Output Tokens | 输出 Token |
+| Total Tokens | 总 Token |
+| Context Reload | 上下文重载 |
+| Files Changed | 修改文件数 |
+| Generated LOC | 生成代码行数 |
+| Build Success | 构建成功率 |
+| Test Pass | 测试通过率 |
+| Repair Attempts | 修复次数 |
+| Time to Verified Result | 到达验证成功的时间 |
+
+尤其要注意：
+
+不能只统计 AI 生成的 Token。
+
+还要统计编译错误后 AI 修复所消耗的 Token，以及为理解项目重新读取的 Token。
+
+另外，编译器自己消耗的 CPU、内存、时间也要记录。
+
+否则可能只是把 AI 的成本转移到了其他地方。
+
+### 我建议设定的 MVP 目标
+
+以下是研发目标，不是已经验证的性能数据。
+
+| 指标 | 目标 |
+|---|---:|
+| 标准 CRUD 初始生成成功率 | ≥95% |
+| Spec 结构验证成功率 | ≥99% |
+| 已支持操作的增量构建正确率 | 100% |
+| 生成结果可重复性 | 100% |
+| 变更可回滚率 | 100% |
+| AI Token 降低目标 | ≥50% |
+| 无关文件修改比例 | 尽可能接近 0 |
+| 未经授权的生成产物覆盖 | 0 |
+
+这里的 100% 只针对受支持的确定性测试场景，不代表系统可以保证所有任意软件永远正确。
+
+**我的核心商业指标是：Time to Verified Software，而不是代码生成速度。**
+
+---
+
+# 十四、完整工程目录设计
+
+我建议从第一天就采用 Monorepo。
+
+```text
+speccompiler/
+│
+├── apps/
+│   ├── cli/
+│   ├── mcp-server/
+│   └── playground/
+│
+├── crates/
+│   ├── core/
+│   ├── parser/
+│   ├── validator/
+│   ├── semantic/
+│   ├── ir/
+│   ├── graph/
+│   ├── compiler/
+│   ├── generator/
+│   ├── incremental/
+│   ├── build/
+│   ├── verify/
+│   ├── storage/
+│   └── protocol/
+│
+├── packages/
+│   ├── dsl-schemas/
+│   ├── runtime-ts/
+│   ├── mcp-types/
+│   └── sdk/
+│
+├── targets/
+│   └── web-fullstack/
+│       ├── frontend/
+│       ├── backend/
+│       ├── database/
+│       └── tests/
+│
+├── adapters/
+│   ├── generic/
+│   ├── codex/
+│   ├── claude-code/
+│   └── pi/
+│
+├── plugins/
+│
+├── examples/
+│   ├── task-manager/
+│   └── user-manager/
+│
+├── benchmarks/
+│   ├── scenarios/
+│   ├── traditional/
+│   ├── spec-first/
+│   └── speccompiler/
+│
+├── docs/
+│   ├── architecture/
+│   ├── protocol/
+│   ├── dsl/
+│   └── compiler/
+│
+└── Cargo.toml
+```
+
+不要一开始就把每个目录都拆成独立 Cargo Workspace Package。
+
+可以先保留一个 Workspace，将内部模块分开，等模块稳定后再细化依赖边界。
+
+## 14.1 CLI 命令设计
+
+最终希望用户可以这样使用：
+
+```bash
+# 安装
+speccompiler install
+
+# 初始化项目
+speccompiler init task-manager
+
+# 验证规格
+speccompiler validate
+
+# 查看 IR
+speccompiler ir inspect
+
+# 查看依赖
+speccompiler graph
+
+# 查看变更影响
+speccompiler preview
+
+# 编译
+speccompiler build
+
+# 增量编译
+speccompiler build --incremental
+
+# 测试
+speccompiler verify
+
+# 查看历史
+speccompiler history
+
+# 回滚
+speccompiler rollback chg_001
+
+# 启动 MCP
+speccompiler mcp
+```
+
+对于 AI Agent：
+
+```text
+User Request
+    |
+    v
+Agent
+    |
+    v
+speccompiler MCP
+    |
+    v
+Spec Patch
+    |
+    v
+Compiler
+    |
+    v
+Verified Application
+```
+
+---
+
+# 十五、12 周研发路线图
+
+这里按照一个有 Rust 和 TypeScript 经验的独立开发者来规划。
+
+<text color="secondary" size="xs">这是研发排期目标，不是对实际开发速度的保证。</text>
+
+<box border radius="lg" padding={3} gap={3}>
+  <title size="lg">Phase 1 · 建立编译基础</title>
+  <badge color="success">Week 1–3</badge>
+  **目标：Spec → IR → Validation**
+
+  - [ ] 创建 Rust Workspace。
+  - [ ] 设计 Spec Protocol v1。
+  - [ ] 实现 AppSpec。
+  - [ ] 实现 DataSpec。
+  - [ ] 实现 UISpec。
+  - [ ] 实现 JSON/YAML Parser。
+  - [ ] 实现 Schema Validator。
+  - [ ] 实现 Canonical IR。
+  - [ ] 实现 Semantic Validator。
+
+  <text color="secondary" size="xs">交付物：一个能够验证并输出 IR 的 CLI。</text>
+  <divider color="subtle"/>
+  <title size="lg">Phase 2 · 建立软件生产能力</title>
+  <badge color="info">Week 4–6</badge>
+  **目标：IR → Executable Software**
+
+  - [ ] 实现 React Generator。
+  - [ ] 实现 TypeScript Model Generator。
+  - [ ] 实现 CRUD API Generator。
+  - [ ] 实现 SQLite Schema Generator。
+  - [ ] 实现标准组件库。
+  - [ ] 实现 Build Pipeline。
+  - [ ] 完成 Task Manager Demo。
+
+  <text color="secondary" size="xs">交付物：通过规格生成可以运行的全栈应用。</text>
+  <divider color="subtle"/>
+  <title size="lg">Phase 3 · 可靠性和增量编译</title>
+  <badge color="info">Week 7–9</badge>
+  **目标：让系统真正可用于 Agent 开发**
+
+  - [ ] 实现 Spec Patch。
+  - [ ] 实现 Dependency Graph。
+  - [ ] 实现 Content Hash。
+  - [ ] 实现 Incremental Compiler。
+  - [ ] 实现 Transactional Build。
+  - [ ] 实现 Build History。
+  - [ ] 实现 Rollback。
+  - [ ] 实现 Breaking Change 检查。
+  - [ ] 实现独立测试验证。
+
+  <text color="secondary" size="xs">交付物：修改规格后只处理受影响节点，失败能够恢复。</text>
+  <divider color="subtle"/>
+  <title size="lg">Phase 4 · Agent 生态和发布</title>
+  <badge color="success">Week 10–12</badge>
+  **目标：真正进入 AI Coding 工作流**
+
+  - [ ] 实现 MCP Server。
+  - [ ] 实现通用 Agent Adapter。
+  - [ ] 实现 Claude Code 接入。
+  - [ ] 实现 Codex 接入。
+  - [ ] 实现 Pi 接入。
+  - [ ] 完成 20 个 Benchmark 场景。
+  - [ ] 发布开源版本。
+  - [ ] 发布架构文档。
+  - [ ] 制作完整演示视频。
+
+  <text color="secondary" size="xs">交付物：任何接入的 Agent 都可以使用 Compiler 生产软件。</text>
+</box>
+
+---
+
+# 十六、商业模式：先开源核心，再做商业化
+
+我不建议一开始就做订阅制 SaaS。
+
+这个产品首先是开发者基础设施，开发者必须信任它，才能把项目交给它处理。
+
+建议：
+
+**Open Core + Pro Developer Tools + Enterprise Infrastructure。**
+
+## 16.1 产品分层
+
+| 版本 | 内容 | 商业模式 |
+|---|---|---|
+| Community | Compiler、DSL、CLI、MCP | 免费开源 |
+| Pro | 可视化 Diff、高级调试、复杂历史管理 | 订阅 |
+| Team | 团队策略、共享插件、协作 | 按席位 |
+| Enterprise | 私有插件仓库、治理、审计、企业策略 | 商业授权 |
+
+## 16.2 付费点应该是什么？
+
+不要把最基础的编译能力锁起来。
+
+真正值得收费的是：
+
+- 多人协作。
+- 企业级权限。
+- 规格变更审批。
+- 私有 Generator Registry。
+- 企业插件市场。
+- 高级构建缓存。
+- 团队构建历史。
+- 合规审计。
+- 私有部署管理。
+- 复杂项目依赖分析。
+
+开发者本地使用 Compiler 不需要经过你的服务器。
+
+这会降低用户的使用门槛。
+
+## 16.3 初期定价实验
+
+以下是待验证的定价假设：
+
+| 产品 | 建议价格 |
+|---|---:|
+| Community | $0 |
+| Pro | $12–19/月 |
+| Team | $15–25/人/月 |
+| Enterprise | 定制报价 |
+
+但我建议前 100 个用户阶段，先不要过度关注收入。
+
+先确认他们是否愿意将真实项目中的部分开发流程交给 Spec Compiler。
+
+---
+
+# 十七、最大风险与应对策略
+
+这个方向不是没有问题。
+
+甚至有几个风险可能直接决定产品能不能成功。
+
+| 风险 | 严重程度 | 应对策略 |
+|---|---|---|
+| DSL 越做越复杂 | 极高 | 严格控制首版支持范围 |
+| 用户不愿改变开发习惯 | 高 | 只接管适合结构化的任务 |
+| Agent 不遵守协议 | 高 | MCP 工具、Hooks、权限拦截 |
+| 生成器覆盖人工代码 | 极高 | 文件所有权和事务式生成 |
+| 增量编译遗漏依赖 | 极高 | 依赖图 + 全量构建对照测试 |
+| 多 Target 维护困难 | 高 | Plugin API，先单 Target |
+| Spec 与源代码不一致 | 极高 | 明确 Source of Truth |
+| 规格错误导致错误软件 | 极高 | 独立验证器和测试 |
+| 现有 SDD 产品竞争 | 高 | 专注 Compiler 和 Reliability |
+| Token 节省不明显 | 高 | 用真实 Benchmark 验证 |
+
+## 17.1 一个必须提前解决的问题：Spec 和原生代码如何共存？
+
+我认为不能简单要求所有东西都由 Spec 管理。
+
+例如：
+
+一个复杂的图像处理算法。
+
+它可能需要大量数学计算、性能优化和特殊处理。
+
+没有必要为了它设计一个复杂的 JSON DSL。
+
+应该允许：
+
+```text
+spec/
+  user.data.yaml
+
+extensions/
+  image-processing/
+    processor.ts
+```
+
+IR 可以引用这个扩展：
+
+```yaml
+logic:
+  actions:
+    - id: process-image
+      implementation:
+        type: extension
+        ref: image-processing
+```
+
+编译器负责检查这个引用是否合法。
+
+扩展模块仍然由传统语言开发。
+
+这能保证系统有足够的表达能力，而不会变成一个封闭的低代码平台。
+
+---
+
+# 十八、项目真正的护城河是什么？
+
+我认为不是 JSON/YAML。
+
+不是 DSL。
+
+不是 React Generator。
+
+这些东西都可以被复制。
+
+真正的长期价值应该来自四个方面。
+
+## 18.1 Universal Spec Protocol
+
+让不同 Agent 共同使用一种软件操作协议。
+
+未来不管是 Codex、Claude Code、Pi，还是新的 Coding Agent，都可以接入。
+
+## 18.2 Semantic Dependency Graph
+
+理解软件的真实语义依赖。
+
+知道修改一个字段会影响哪些 API、组件、数据库、权限和测试。
+
+这比简单的文件级依赖分析更有价值。
+
+## 18.3 Verified Compilation
+
+每次变更都可以验证、追踪、审计、回滚。
+
+这意味着用户不再只是相信 AI 写出的代码，而是可以检查生产过程中的每一步。
+
+## 18.4 Generator Ecosystem
+
+未来用户可以安装：
+
+- SaaS Admin Generator。
+- E-commerce Generator。
+- Mobile App Generator。
+- API Generator。
+- Dashboard Generator。
+- Automation Generator。
+
+开发者可以贡献 Generator，企业可以开发私有 Generator。
+
+但要注意，插件生态是后期的增长杠杆，不是 MVP 的起点。
+
+# 十九、产品命名与品牌定位
+
+暂时不建议直接使用 SpecCompiler 作为最终商业品牌，它更像一个技术类别名称。
+
+我建议考虑以下方向：
+
+| 名称 | 定位 | 特点 |
+|---|---|---|
+| SpecForge | 规格驱动软件生产 | 工程感强 |
+| ForgeIR | 中间表示与编译引擎 | 技术基础设施感 |
+| CodeWeave | 结构化软件生产 | 产品感强 |
+| SpecFlow | 规格与执行流程 | 容易理解，但名称较泛 |
+| CompileX | 新一代编译基础设施 | 简洁、偏开发者工具 |
+
+<badge color="success">我的首选</badge>
+
+**SpecForge**
+
+Tagline：
+
+> Think in Specs. Build with Compilers.
+
+中文：
+
+> 让 AI 描述软件，让编译器创造软件。
+
+品牌定位：
+
+`The Specification-Driven Software Production Engine`
+
+这里的名称尚未进行商标、域名和开源项目冲突核查，不能直接视为可注册名称。
+
+---
+
+# 二十、最终决策：哪些东西现在做，哪些坚决不做？
+
+我把前面的方案收敛成最终研发决策。
+
+<box border radius="lg" padding={3} gap={3}>
+  <title size="xl">SpecForge · 最终产品决策</title>
+  <text color="secondary" size="xs">Product Decision Record · V1.0</text>
+  <divider color="subtle"/>
+  **产品形态**
+
+  通用 AI Coding 软件生产引擎，不做独立 IDE，不做新的 Coding Agent。
+
+  **核心用户**
+
+  Codex、Claude Code、Pi 等 AI Coding 工具的重度用户。
+
+  **核心创新**
+
+  AI Specification Generation + Semantic Compiler + Incremental Compilation + Independent Verification。
+
+  **技术架构**
+
+  Rust Compiler Core + TypeScript Runtime + JSON/YAML DSL + Canonical IR。
+
+  **部署方式**
+
+  Local First，CLI + MCP，支持本地编译。
+
+  **第一个目标**
+
+  React + TypeScript + Hono + SQLite。
+
+  **商业模式**
+
+  Open Core + Pro + Team + Enterprise。
+  <divider color="subtle"/>
+  **第一版必须做**
+
+  - Spec Protocol
+  - AppSpec / DataSpec / UISpec
+  - JSON Schema Validation
+  - Semantic Validation
+  - Canonical IR
+  - React Generator
+  - CRUD API Generator
+  - Incremental Compiler
+  - MCP Server
+  - Build & Test
+  - Rollback
+
+  <divider color="subtle"/>
+  **第一版坚决不做**
+
+  - 自研大模型。
+  - 自研 Coding Agent。
+  - 完整 IDE。
+  - 多 Agent 调度平台。
+  - 云端模型 API。
+  - 通用编程语言。
+  - 多语言、多平台编译。
+  - 可视化低代码编辑器。
+  - 插件市场。
+</box>
+
+## 20.1 最终架构图
+
+<AsyncImage query="professional technical architecture infographic software specification compiler pipeline AI agents JSON YAML DSL AST IR dependency graph incremental compiler code generation verification runtime software engineering dark blue white clean vector" aspectRatio="16:9" width="100%"/>
+
+```text
+                   HUMAN
+                     |
+                     v
+               REQUIREMENTS
+                     |
+                     v
+          +----------------------+
+          |     AI AGENTS        |
+          |                      |
+          | Codex / Claude / Pi  |
+          +----------------------+
+                     |
+                     v
+          +----------------------+
+          |   SPEC PROTOCOL      |
+          |                      |
+          | Create / Update      |
+          | Patch / Delete       |
+          +----------------------+
+                     |
+                     v
+          +----------------------+
+          |  SPECIFICATION STORE |
+          |                      |
+          | App / Data / UI      |
+          | Logic / API          |
+          +----------------------+
+                     |
+                     v
+          +----------------------+
+          |  SEMANTIC COMPILER   |
+          |                      |
+          | Parse / Validate     |
+          | Type / Reference      |
+          +----------------------+
+                     |
+                     v
+          +----------------------+
+          |   CANONICAL IR       |
+          |                      |
+          | AST / Dependency DAG |
+          +----------------------+
+                     |
+                     v
+          +----------------------+
+          | INCREMENTAL ENGINE   |
+          |                      |
+          | Hash / Cache / Diff  |
+          +----------------------+
+                     |
+                     v
+          +----------------------+
+          |   CODE GENERATOR     |
+          |                      |
+          | Frontend / Backend   |
+          | Database / Tests     |
+          +----------------------+
+                     |
+                     v
+          +----------------------+
+          |  VERIFICATION ENGINE |
+          |                      |
+          | Build / Test / Audit |
+          +----------------------+
+                     |
+                     v
+              EXECUTABLE APP
+```
+
+---
+
+# 二十一、真正值得长期投入的三个研究方向
+
+如果这个项目要做成长期基础设施，我认为还应该关注三个未来方向。
+
+### 方向 A：从代码 AST 进化为 Software Semantic Graph
+
+传统 AST 主要描述源代码语法。
+
+但我们需要的是更高层次的业务语义图。
+
+例如：
+
+```text
+User
+  |
+  +-- hasMany --> Order
+  |
+  +-- owns ----> Permission
+  |
+  +-- exposes -> API
+  |
+  +-- renders -> UserTable
+  |
+  +-- validates -> UserForm
+```
+
+AI 不需要阅读几百个文件才能知道用户实体与哪些功能相关。
+
+它可以直接读取语义图。
+
+这是跨 Agent 共享项目理解能力的重要基础。
+
+### 方向 B：从 Code Generation 进化为 Software Change Management
+
+不要只关心如何生成软件。
+
+还要关心软件在长期变化中如何保持正确。
+
+例如：
+
+- 一个需求变更会影响什么？
+- 哪些 API 可能发生破坏性变化？
+- 哪些数据库迁移不安全？
+- 哪些测试需要重新执行？
+- 哪些模块可以复用缓存？
+- 哪些变更需要人工审批？
+
+未来可以把 SpecForge 做成软件变更的控制平面。
+
+### 方向 C：让 Agent 具备结构化的软件操作能力
+
+现在 Agent 的主要操作方式是：
+
+```text
+Read File
+Edit File
+Write File
+Run Command
+```
+
+未来可以增加：
+
+```text
+Create Entity
+Update Field
+Add Component
+Connect Relation
+Define Rule
+Preview Change
+Compile Target
+Verify Result
+```
+
+这意味着 Agent 不再只是一个可以操作文件的程序员。
+
+它还可以成为一个能够操作软件结构的工程师。
+
+---
+
+# 二十二、建议优先阅读的技术资料
+
+这些不是随便列出的技术名词，而是对应产品架构的参考实现。
+
+| 技术 | 重点研究内容 | 官方资料 |
+|---|---|---|
+| <Entity value="GitHub Spec Kit" category="software" disambig="Specification-driven development toolkit"/> | 规格工作流 | <Link url="https://github.com/github/spec-kit" title="GitHub"/> |
+| <Entity value="OpenSpec" category="software" disambig="Spec-driven development framework"/> | 规格变更管理 | <Link url="https://github.com/Fission-AI/OpenSpec" title="GitHub"/> |
+| <Entity value="Protocol Buffers" category="software" disambig="Interface definition and serialization"/> | IDL、代码生成 | <Link url="https://protobuf.dev/" title="文档"/> |
+| <Entity value="Buf" category="software" disambig="Protobuf development toolchain"/> | Lint、兼容性、编译 | <Link url="https://buf.build/docs/" title="文档"/> |
+| <Entity value="Terraform" category="software" disambig="Infrastructure as Code"/> | 声明式状态管理 | <Link url="https://developer.hashicorp.com/terraform" title="文档"/> |
+| <Entity value="Jsonnet" category="software" disambig="Data templating language"/> | 结构化配置 | <Link url="https://jsonnet.org/" title="文档"/> |
+| <Entity value="MCP" category="software" disambig="Model Context Protocol"/> | Agent 工具接入 | <Link url="https://modelcontextprotocol.io/" title="文档"/> |
+| <Entity value="Petgraph" category="software" disambig="Rust graph data structure library"/> | 依赖图 | <Link url="https://docs.rs/petgraph/" title="文档"/> |
+
+另外，建议重点研究 Buf 的兼容性检测和生成插件机制。它比单纯的 YAML 模板系统更接近你真正想做的编译基础设施。<Cite refs={["turn167470search3","turn167470search5","turn167470search0"]}/>
+
+---
+
+# 二十三、我给你的最终创业判断
+
+我认为这个方向值得做，但需要非常清楚地认识到一个事实：
+
+**Spec-Driven Development 本身不是创新，Compiler 也不是创新。**
+
+真正的产品机会在于：
+
+把结构化规格、语义编译、增量生成、多 Agent 协议和独立验证整合成一套开发者真正愿意使用的基础设施。
+
+我会把产品的长期发展分成三个阶段：
+
+<box gap={3}>
+  <row align=start gap={3}>
+    <box background="rgba(59,130,246,0.12)" radius="md" size="44px" align="center" justify="center">
+      <title size="xl" color="default">01</title>
+    </box>
+    <box flex="1" gap={1}>
+      **Software Compiler**
+
+      先证明结构化规格可以稳定生成软件。
+
+      <text color="secondary" size="xs">核心：DSL + IR + Compiler</text>
+    </box>
+  </row>
+  <divider color="subtle"/>
+  <row align=start gap={3}>
+    <box background="rgba(59,130,246,0.12)" radius="md" size="44px" align="center" justify="center">
+      <title size="xl" color="default">02</title>
+    </box>
+    <box flex="1" gap={1}>
+      **AI Coding Infrastructure**
+
+      让所有主流 Agent 都可以通过统一协议使用编译器。
+
+      <text color="secondary" size="xs">核心：Universal Protocol + Incremental Engine</text>
+    </box>
+  </row>
+  <divider color="subtle"/>
+  <row align=start gap={3}>
+    <box background="rgba(59,130,246,0.12)" radius="md" size="44px" align="center" justify="center">
+      <title size="xl" color="default">03</title>
+    </box>
+    <box flex="1" gap={1}>
+      **Software Production Platform**
+
+      让开发者和企业能够使用不同规格、生成器和 Runtime 生产各种软件。
+
+      <text color="secondary" size="xs">核心：Plugin Ecosystem + Verified Production</text>
+    </box>
+  </row>
+</box>
+
+## 我的最终建议：先不要开发完整产品，先验证一个核心假设
+
+我建议你接下来直接做一个非常小的实验：
+
+**用 100 个 JSON 节点，生成一个完整的 Task Manager。**
+
+然后让 Codex、Claude Code、Pi 分别修改这个项目。
+
+观察三个问题：
+
+1. 它们是否都能准确操作同一份 Spec？
+2. 修改一个节点，是否能准确识别所有受影响的代码？
+3. 是否能够在不重新生成整个项目的情况下，持续交付正确的软件？
+
+如果这三个问题都能解决，你就不只是在做一个代码生成器，而是在建立一套新的 AI 软件生产基础设施。
+
+**我最看好的最终产品不是 AI 写代码，而是 AI 驱动的确定性软件生产系统。**
+
+这才是 SpecForge 应该追求的方向。
+
+---
+
+*最后一个重要提醒：不要把「AI 输出 JSON」当成产品护城河。真正值得投入的是语义模型、编译正确性、变更影响分析、增量构建和独立验证。JSON 只是入口，编译器才是产品。*

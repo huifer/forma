@@ -1,0 +1,22 @@
+```json
+{
+  "change_id": "chg_001",
+  "status": "validated",
+  "operations": [
+    {
+      "operation": "node.update",
+      "target": "data.entities.User.fields.status"
+    }
+  ],
+  "impact": {
+    "affected_nodes": 6,
+    "affected_files": 8
+  },
+  "checks": {
+    "schema": "passed",
+    "semantic": "passed",
+    "dependency": "passed",
+    "breaking_change": "warning"
+  }
+}
+```

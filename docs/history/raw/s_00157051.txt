@@ -1,0 +1,205 @@
+## 三、还有几个值得纳入技术研究的产品
+
+它们不是完整竞品，但覆盖了你的某个关键技术环节。
+
+| 产品 | 值得研究的能力 | 为什么不是完整竞品 |
+|---|---|---|
+| <Entity value="Vortex" category="software" disambig="Visual JSON DSL workflow automation engine"/> | 可视化工作流与 JSON DSL 双向同步、版本管理、执行引擎 | 主要编排工作流，不编译完整业务应用。<Cite refs={["turn427041view5"]}/> |
+| <Entity value="NAIV" category="software" disambig="Open-source TypeScript DSL API framework"/> | DSL Editor、数据库结构、API 规格、数据库可视化 | 更聚焦 REST API 和后端框架。<Cite refs={["turn452057search15"]}/> |
+| <Entity value="A2UI" category="software" disambig="Declarative JSON UI protocol"/> | AI 友好的 JSON UI 协议、增量生成、跨框架渲染 | 主要表达和渲染 UI，不是完整应用编译器。<Cite refs={["turn634844search5"]}/> |
+| <Entity value="Scafld" category="software" disambig="Visual backend architecture specification tool"/> | 自然语言生成后端架构、可视化 Schema、导出 JSON/YAML | 规格交给 Claude Code、Cursor 等继续生成代码，不是自己完成编译。<Cite refs={["turn452057search16"]}/> |
+| <Entity value="Elll" category="software" disambig="Visual development environment"/> | 可视化编辑、AST 变换、TypeScript 源码同步、AI Agent | 明确保留源代码作为开发方式，不是用 DSL 取代代码。<Cite refs={["turn634844search0"]}/> |
+
+特别提一下 A2UI。它值得关注，因为它说明 AI 生成结构化 UI 描述、由确定性 Renderer 渲染，是一条独立于 HTML/JSX 生成的技术路线。但它只解决 UI 表达，不解决数据、业务流程和整个软件系统的编译问题。
+
+## 四、把竞品放在同一张图上
+
+下面是我根据公开架构做的主观匹配度评估，不代表产品成熟度或市场份额。
+
+| 产品 | AI 生成规格 | 专用 DSL / IR | 原生可视化编辑 | 编译完整程序 | 与你的匹配程度 |
+|---|---|---|---|---|---|
+| Rishon | 是 | 是 | 公开资料未充分证明图形化 DSL 双向编辑 | 通过 VM 运行软件 | 极高 |
+| fromSpec | 是 | JSON Spec | 有交互原型，非完整图形 DSL 编辑器 | 是 | 极高 |
+| Loopar | 非核心 | JSON 定义 | 是 | 是 | 高 |
+| OpenPage | 是 | JSON Config | 是 | 网站 Renderer / HTML 导出 | 高，但范围窄 |
+| Graphical Agents | 非核心 | Graph IR | 是 | 是 | 高，但只做 Agent 工作流 |
+| Sirius Web | 否 | 可自定义 DSL | 是 | 取决于自建语言和后端 | 技术基础设施 |
+| Vortex | 非核心 | JSON DSL | 是 | 工作流执行，不是完整应用代码 | 中 |
+
+## 五、真正值得你研究的技术路线
+
+我认为你需要把以上产品拆成四条技术路线，而不是只研究 AI Coding 竞品。
+
+<box border radius="lg" padding={3} gap={3}>
+  **路线 A：专用语言与语义编译**
+
+  <badge color="success">最重要</badge>
+
+  <row align="center" gap={2}>
+    <box background="surface-secondary" radius="md" padding={2} flex="1" align="center">
+      Rishon Language
+    </box>
+    <icon name="arrow-right" color="secondary"/>
+    <box background="surface-secondary" radius="md" padding={2} flex="1" align="center">
+      Compiler
+    </box>
+    <icon name="arrow-right" color="secondary"/>
+    <box background="surface-secondary" radius="md" padding={2} flex="1" align="center">
+      Ontology Graph
+    </box>
+  </row>
+  研究重点：语义类型、领域模型、静态校验、编译器和运行时。
+
+  <divider color="subtle"/>
+  **路线 B：AI 生成规格再生成程序**
+
+  <badge color="success">最重要</badge>
+
+  <row align="center" gap={2}>
+    <box background="surface-secondary" radius="md" padding={2} flex="1" align="center">
+      AI
+    </box>
+    <icon name="arrow-right" color="secondary"/>
+    <box background="surface-secondary" radius="md" padding={2} flex="1" align="center">
+      Spec
+    </box>
+    <icon name="arrow-right" color="secondary"/>
+    <box background="surface-secondary" radius="md" padding={2} flex="1" align="center">
+      Code
+    </box>
+  </row>
+  研究重点：fromSpec 的规格设计、审核机制、原型生成、确定性重编译。
+
+  <divider color="subtle"/>
+  **路线 C：图形化 DSL 编辑器**
+
+  <row align="center" gap={2}>
+    <box background="surface-secondary" radius="md" padding={2} flex="1" align="center">
+      Visual Editor
+    </box>
+    <icon name="arrow-right" color="secondary"/>
+    <box background="surface-secondary" radius="md" padding={2} flex="1" align="center">
+      Canonical IR
+    </box>
+    <icon name="arrow-right" color="secondary"/>
+    <box background="surface-secondary" radius="md" padding={2} flex="1" align="center">
+      Compiler
+    </box>
+  </row>
+  研究重点：Sirius、Graphical Agents、Loopar 的建模与同步机制。
+
+  <divider color="subtle"/>
+  **路线 D：声明式 UI 与运行时**
+
+  <row align="center" gap={2}>
+    <box background="surface-secondary" radius="md" padding={2} flex="1" align="center">
+      UI DSL
+    </box>
+    <icon name="arrow-right" color="secondary"/>
+    <box background="surface-secondary" radius="md" padding={2} flex="1" align="center">
+      Renderer
+    </box>
+    <icon name="arrow-right" color="secondary"/>
+    <box background="surface-secondary" radius="md" padding={2} flex="1" align="center">
+      UI
+    </box>
+  </row>
+  研究重点：A2UI、OpenPage、Vortex 的结构化表达和渲染。
+</box>
+
+## 六、我的最终判断：你还有没有机会？
+
+**有，但不能再把“AI + DSL + 可视化 + 编译器”本身作为创新点。**
+
+Rishon 已经覆盖了专用语言、Compiler、语义图和 VM；fromSpec 已经覆盖了 AI 规格到确定性代码生成；Loopar 和 OpenPage 又覆盖了可视化编辑与 JSON Source of Truth。
+
+真正值得你验证的差异化是：
+
+### 1. AI 原生的通用软件 DSL
+
+不是为某一种业务写 DSL，也不是只表达页面和工作流。
+
+让 AI 可以通过统一语义模型描述：
+
+- 数据结构
+- 页面结构
+- 用户交互
+- 业务逻辑
+- 状态机
+- 权限体系
+- API
+- 自动化流程
+
+而且这些 DSL 可以组合、引用、继承和演进。
+
+### 2. 一个真正面向 AI 的多模态规格编辑器
+
+我认为这是你最应该投入设计的产品界面。
+
+同一份 DSL 可以切换为：
+
+- 数据关系图
+- 业务流程图
+- 页面结构树
+- UI 设计画布
+- 状态机图
+- 架构依赖图
+- 结构化 DSL 文本
+
+AI 不需要操作鼠标，也不需要输出大量代码。它直接修改语义节点；用户可以在可视化界面理解、检查和调整。
+
+### 3. 规格直接编译为标准代码
+
+这一点要和 VM 路线区分开。
+
+我更建议你第一阶段以标准代码交付为目标：
+
+```text
+DSL
+ ↓
+Canonical IR
+ ↓
+Semantic Validation
+ ↓
+Dependency Graph
+ ↓
+Incremental Compiler
+ ↓
+React / TypeScript / API / Database
+ ↓
+Standard Project
+```
+
+不把用户锁定在你自己的运行时里。
+
+### 4. Token 成本成为核心竞争指标
+
+让 AI 只生成业务差异，而不是重复的实现细节。
+
+例如新增一个订单审批规则，AI 只修改一个语义节点，编译器自动完成所有相关代码变更。
+
+这才是你与传统 AI Coding 最大的差异。
+
+---
+
+## 七、建议的下一步
+
+我会优先做三个产品的深度拆解：
+
+1. **Rishon**：研究它的 DSL 语法、Compiler、Ontology Graph、VM，判断它的语言边界和可扩展性。
+2. **fromSpec**：研究它的 Spec Schema、规格修改、原型与代码一致性、代码生成机制。
+3. **Graphical Agents**：研究它的 IR、图形化编辑器、验证和多 Target Compiler 实现。
+
+最终要回答的不是它们有哪些功能，而是：
+
+- 它们的 DSL 到底表达了什么？
+- 是否真正不需要 AI 写业务代码？
+- 哪些功能由 Compiler 完成，哪些依赖 Runtime？
+- 可视化画布如何与规格保持双向同步？
+- 规格修改如何精确映射到代码增量？
+- 哪些复杂业务无法被它们的 DSL 表达？
+- 能否把它们的架构抽象成一个通用软件生产系统？
+
+**我的建议：先把 Rishon 当作理念上的最大竞争参照，把 fromSpec 当作产品流程上的最大竞争参照，把 Graphical Agents 当作工程实现上的参照。**
+
+如果你能做出一个真正通用、AI 原生、图形化、可编译为标准代码的 DSL 系统，仍然有独立产品的空间。但在投入完整开发之前，必须对这三个产品做源码和实际产物审计，而不能仅凭官网介绍判断技术差异。

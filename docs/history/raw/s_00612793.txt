@@ -1,0 +1,15 @@
+{
+  "success": false,
+  "error": {
+    "code": "FIELD_NOT_FOUND",
+    "path": "pages.users.columns[2]"
+  },
+  "repair": {
+    "suggested_operation": "node.update",
+    "available_fields": [
+      "name",
+      "email",
+      "status"
+    ]
+  }
+}

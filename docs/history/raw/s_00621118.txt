@@ -1,0 +1,38 @@
+```yaml
+spec_version: "1"
+
+pages:
+  users:
+    route: /users
+    title: Users
+
+    layout:
+      type: page
+
+    components:
+      - id: user-table
+        type: data-table
+
+        source:
+          entity: User
+
+        columns:
+          - field: name
+          - field: email
+          - field: status
+
+        actions:
+          - type: create
+          - type: edit
+          - type: delete
+
+      - id: user-form
+        type: form
+
+        entity: User
+
+        fields:
+          - name
+          - email
+          - status
+```

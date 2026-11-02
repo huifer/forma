@@ -1,0 +1,13 @@
+```text
+Visual Graph / draw.io
+         ↓
+Canonical JSON Graph IR
+         ↓
+Validator
+         ↓
+Compiler
+      ↙     ↘
+Google ADK  LangGraph
+      ↓       ↓
+ Runnable Python Projects
+```

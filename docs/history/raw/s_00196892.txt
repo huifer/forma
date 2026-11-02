@@ -1,0 +1,15 @@
+```text
+用户与 AI 对话
+    ↓
+生成 spec.json
+    ↓
+用户审核规格
+    ↓
+生成可交互原型
+    ↓
+用户批准
+    ↓
+Deterministic Build
+    ↓
+React + FastAPI + PostgreSQL
+```

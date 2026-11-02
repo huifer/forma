@@ -1,0 +1,72 @@
+openapi: "3.1.0"
+info:
+  title: order-management API
+  version: 0.1.0
+  description: Order management REST API — contract owned by OpenAPI.
+paths:
+  /orders:
+    post:
+      operationId: createOrder
+      summary: Create an order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Order'
+      responses:
+        '201':
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+    get:
+      operationId: listOrders
+      summary: List orders
+      responses:
+        '200':
+          description: Order list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Order'
+  /orders/{id}:
+    get:
+      operationId: getOrderById
+      summary: Get an order by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+components:
+  schemas:
+    Order:
+      type: object
+      x-forma-entity: forma://project/order-management/entity/Order
+      required: [amount, status, customerEmail, createdAt]
+      properties:
+        id:
+          type: string
+        amount:
+          type: number
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+        customerEmail:
+          type: string
+          format: email
+        createdAt:
+          type: string
+          format: date-time

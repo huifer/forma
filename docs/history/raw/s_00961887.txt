@@ -1,0 +1,313 @@
+# 三、竞品研究：不能把已有的 Spec Kit 再做一遍
+
+这是产品立项时必须解决的问题。
+
+现在已经出现了 Specification-Driven Development（规格驱动开发）路线，也有很多工具试图让 Agent 先写规格，再执行开发任务。
+
+例如：
+
+- <Entity value="GitHub Spec Kit" category="software" disambig="Specification-driven development toolkit"/>：围绕规格、计划和任务组织 AI 开发。
+- <Entity value="OpenSpec" category="software" disambig="Spec-driven development framework"/>：管理变更规格与开发工作流。
+- <Entity value="Kiro" category="software" disambig="AI IDE with spec-driven development"/>：将需求、设计、任务和代码关联起来。
+- <Entity value="Tessl" category="software" disambig="Specification-driven software development platform"/>：探索规格作为软件工程核心资产。
+- <Entity value="Canlang" category="software" disambig="AI-oriented business software language and compiler"/>：已经在尝试为 AI 构建业务软件提供专用语言和编译器。
+
+规格驱动开发并不是一个空白市场。相关研究也已经开始系统讨论 Spec-first、Spec-anchored 和 Spec-as-source 三种不同成熟度。<Cite refs={["turn386377academia36","turn386377search15","turn386377search14"]}/>
+
+## 3.1 竞品定位矩阵
+
+| 产品 | 核心解决的问题 | 与我们的区别 |
+|---|---|---|
+| GitHub Spec Kit | 规格驱动开发流程 | 不以通用编译器为核心 |
+| OpenSpec | 变更规格管理 | 不以多目标软件生产为核心 |
+| Kiro | Spec 驱动的 AI IDE | IDE 产品形态 |
+| Tessl | 规格与代码关联 | 更偏规格驱动的软件工程 |
+| Terraform | 声明式基础设施生产 | 领域限定 |
+| OpenAPI | API 规格与代码生成 | API 领域限定 |
+| Protocol Buffers | 数据结构和 RPC 代码生成 | 接口描述领域限定 |
+
+## 3.2 真正的差异化在哪里？
+
+我不建议竞争：
+
+- 谁的 Prompt 更好。
+- 谁的任务拆解更完整。
+- 谁的 Agent 更多。
+- 谁的规格文档更漂亮。
+- 谁能生成更多代码。
+
+这些方向容易陷入同质化。
+
+我建议竞争以下五个领域：
+
+<box border radius="lg" padding={3} gap={3}>
+  <title size="lg">五个核心差异化</title>
+  <list connector="solid" marker="number" gap={3}>
+    <list-item>
+      **Universal Spec Protocol**
+
+      建立跨 Codex、Claude Code、Pi 的统一软件规格协议。
+    </list-item>
+    <list-item>
+      **Semantic Compiler**
+
+      不只是模板生成，而是有类型系统、语义检查、依赖图的真正编译器。
+    </list-item>
+    <list-item>
+      **Incremental Production**
+
+      一个业务节点改变，只重新生成真正受影响的部分。
+    </list-item>
+    <list-item>
+      **Verified Changes**
+
+      每次变更都有验证证据、依赖追踪、回滚和构建记录。
+    </list-item>
+    <list-item>
+      **Hybrid Code Generation**
+
+      结构化规格和人工原生代码共存，不强迫用户使用单一 DSL。
+    </list-item>
+  </list>
+</box>
+
+特别需要注意：Claude Code 已有 Hooks、Skills、MCP 和 Subagents，Codex 也有自己的扩展机制。这意味着不需要重新发明 Agent 的执行环境，而应该利用这些接口接入。<Cite refs={["turn386377search1","turn386377search3","turn386377search5"]}/>
+
+**最终竞争定位：不是 Spec 管理工具，而是跨 Agent 的软件编译与可靠性基础设施。**
+
+---
+
+# 四、核心技术架构：从 Agent 到可执行软件
+
+这是我建议采用的正式架构。
+
+<AsyncImage query="software compiler architecture diagram AI specification DSL parser semantic analysis intermediate representation dependency graph incremental code generation runtime verification dark technical blueprint" aspectRatio="16:9" width="100%"/>
+
+整个系统由九个核心模块组成。
+
+```text
+                AI CODING AGENTS
+       Codex / Claude Code / Pi / Other
+                       |
+                       v
+              1. Agent Adapter
+                       |
+                       v
+              2. Spec Protocol
+                       |
+                       v
+              3. Specification Store
+                       |
+                       v
+              4. Parser & Validator
+                       |
+                       v
+              5. Semantic Compiler
+                       |
+                       v
+                 6. AST / IR
+                       |
+              Dependency Graph
+                       |
+                       v
+              7. Incremental Engine
+                       |
+                       v
+              8. Code Generator
+                       |
+                       v
+              Native Source Code
+                       |
+                       v
+              9. Verification Runtime
+                       |
+                       v
+                Build / Test / Deploy
+```
+
+## 4.1 Agent Adapter
+
+负责连接不同 AI Coding Agent。
+
+不要让核心编译器直接依赖某个 Agent 的私有 API。
+
+建议采用 Adapter 模式：
+
+```text
+adapters/
+  codex/
+  claude-code/
+  pi/
+  generic-mcp/
+  cli/
+```
+
+每个 Adapter 只做四件事：
+
+1. 获取 Agent 的结构化输出。
+2. 将其转换成统一协议。
+3. 将编译错误和验证结果返回给 Agent。
+4. 控制 Agent 的写入权限和操作范围。
+
+建议第一阶段使用：
+
+- CLI：主要集成入口。
+- MCP：工具调用接口。
+- Claude Code Hooks：拦截与验证。
+- Codex Skills / Hooks：工作流接入。
+- Pi Extension：深度集成。
+
+不要第一天就做三个复杂的原生插件。
+
+先实现一个通用 CLI + MCP Server，再增加适配器。
+
+## 4.2 Spec Protocol
+
+这是整个项目的核心协议。
+
+AI 不应该每次自由生成一整份 YAML。
+
+而是通过一组标准操作修改规格。
+
+例如：
+
+```json
+{
+  "protocol": "spec.v1",
+  "operation": "node.update",
+  "target": "data.entities.User.fields.status",
+  "patch": {
+    "type": "enum",
+    "values": [
+      "active",
+      "disabled",
+      "pending"
+    ]
+  }
+}
+```
+
+我建议第一版协议只支持以下操作：
+
+| 操作 | 用途 |
+|---|---|
+| project.create | 创建项目 |
+| node.create | 创建节点 |
+| node.update | 修改节点 |
+| node.delete | 删除节点 |
+| node.move | 移动节点 |
+| node.connect | 建立依赖 |
+| spec.validate | 验证规格 |
+| build.preview | 预览变更 |
+| build.apply | 应用变更 |
+| build.rollback | 回滚变更 |
+| build.verify | 验证构建 |
+
+这里有个关键设计：
+
+**AI 不应该每次都重新输出全部 JSON。它应该提交最小化的结构化 Patch。**
+
+这比单纯要求模型输出短 YAML 更重要。
+
+因为真正浪费 Token 的不仅是生成，还有反复读取、重复解释和上下文重建。
+
+## 4.3 Specification Store
+
+建议把规格文件作为项目的一等资产。
+
+项目结构：
+
+```text
+my-app/
+├── spec/
+│   ├── manifest.yaml
+│   ├── app.yaml
+│   ├── data/
+│   │   ├── user.yaml
+│   │   └── order.yaml
+│   ├── ui/
+│   │   ├── dashboard.yaml
+│   │   └── users.yaml
+│   ├── logic/
+│   │   └── permissions.yaml
+│   └── api/
+│       └── users.yaml
+│
+├── extensions/
+│   └── custom/
+│
+├── generated/
+│
+├── runtime/
+│
+├── tests/
+│
+└── .speccompiler/
+    ├── state.db
+    ├── dependency.db
+    ├── build-cache/
+    └── build-history/
+```
+
+建议：
+
+- YAML 用于人类阅读和 Git Review。
+- JSON 用于 Agent 协议和机器交换。
+- SQLite 用于本地构建状态、依赖索引、缓存元数据。
+- Git 用于版本控制与协作。
+
+不要把所有数据塞进一个巨大的 JSON。
+
+也不要让 SQLite 成为规格的唯一真实来源。
+
+**Git 中的 Spec 是 Source of Truth，SQLite 是可重建的索引和缓存。**
+
+## 4.4 Parser & Validator
+
+这里需要建立严格的验证体系。
+
+例如：
+
+```text
+Input
+  |
+  v
+YAML Parser
+  |
+  v
+JSON Normalization
+  |
+  v
+Schema Validation
+  |
+  v
+Reference Validation
+  |
+  v
+Type Validation
+  |
+  v
+Semantic Validation
+  |
+  v
+AST
+```
+
+错误必须有稳定的错误代码。
+
+```json
+{
+  "code": "SPEC_FIELD_REFERENCE_NOT_FOUND",
+  "severity": "error",
+  "path": "ui.pages.users.columns[2]",
+  "message": "Referenced field does not exist",
+  "suggestions": [
+    "name",
+    "email",
+    "status"
+  ]
+}
+```
+
+这能让任何 Agent 都可以处理错误，而不需要理解某个编译器内部的日志格式。
+

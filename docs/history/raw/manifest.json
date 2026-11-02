@@ -1,0 +1,1928 @@
+[
+ {
+  "pos": 953,
+  "len": 1619,
+  "file": "/tmp/forma_share/s_00000953.txt",
+  "head": ",[371,17639,362,1813,1466,6887,1502,5013,3777,938,6810,4253,1669,17640,4266,4259"
+ },
+ {
+  "pos": 4236,
+  "len": 375,
+  "file": "/tmp/forma_share/s_00004236.txt",
+  "head": ",[118,119,120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,13"
+ },
+ {
+  "pos": 16907,
+  "len": 8753,
+  "file": "/tmp/forma_share/s_00016907.txt",
+  "head": "text\",null,__dilConstants[\"0\"],__dil.jsx(\"bold\",null,__dilConstants[\"1\"]),__dilC"
+ },
+ {
+  "pos": 27519,
+  "len": 25063,
+  "file": "/tmp/forma_share/s_00027519.txt",
+  "head": "下面我将 **Forma** 正式定义为一个 AI 原生的软件规格语言与确定性编译平台，而不是普通 AI Coding 工具或低代码平台。  这份内容可以作为项"
+ },
+ {
+  "pos": 61796,
+  "len": 22451,
+  "file": "/tmp/forma_share/s_00061796.txt",
+  "head": ":::writing{variant=\"document\" id=\"73182\"} # Forma ## AI-Native Software Compiler"
+ },
+ {
+  "pos": 86081,
+  "len": 22405,
+  "file": "/tmp/forma_share/s_00086081.txt",
+  "head": "# Forma ## AI-Native Software Compiler  **Slogan:** Describe software. Compile r"
+ },
+ {
+  "pos": 110404,
+  "len": 25951,
+  "file": "/tmp/forma_share/s_00110404.txt",
+  "head": "下面我将 **Forma** 正式定义为一个 AI 原生的软件规格语言与确定性编译平台，而不是普通 AI Coding 工具或低代码平台。  这份内容可以作为项"
+ },
+ {
+  "pos": 140412,
+  "len": 3116,
+  "file": "/tmp/forma_share/s_00140412.txt",
+  "head": "DIL.render(__dil.jsx(()=>{const __dilConstants=DIL.useConstants();const __dilMod"
+ },
+ {
+  "pos": 144252,
+  "len": 756,
+  "file": "/tmp/forma_share/s_00144252.txt",
+  "head": "我建议项目名定为：  # **Forma**  FORMA — AI-Native Software Compiler  **Slogan：Describe s"
+ },
+ {
+  "pos": 145802,
+  "len": 803,
+  "file": "/tmp/forma_share/s_00145802.txt",
+  "head": "我建议项目名定为：  # **Forma**  <text color=\"secondary\" weight=\"medium\" size=\"sm\">FORMA "
+ },
+ {
+  "pos": 148708,
+  "len": 231,
+  "file": "/tmp/forma_share/s_00148708.txt",
+  "head": "https://images.openai.com/static-rsc-1/9LtF9tNxDFLL7z2-n7pFbqM84_nQCZZWw4rJBz_Sv"
+ },
+ {
+  "pos": 149154,
+  "len": 125,
+  "file": "/tmp/forma_share/s_00149154.txt",
+  "head": "https://images.openai.com/static-rsc-1/JBU3GferVPmY4lar0aSaAJXT2iBUQOo-GrKpHgSux"
+ },
+ {
+  "pos": 155061,
+  "len": 175,
+  "file": "/tmp/forma_share/s_00155061.txt",
+  "head": "GitHub - scailetech/tech-agent-flow: Lightweight JSON Schema form generator with"
+ },
+ {
+  "pos": 155275,
+  "len": 277,
+  "file": "/tmp/forma_share/s_00155275.txt",
+  "head": "GitHub - neo-fetch/draw-your-agents: Open-source visual ai builder that lets you"
+ },
+ {
+  "pos": 155625,
+  "len": 237,
+  "file": "/tmp/forma_share/s_00155625.txt",
+  "head": "GitHub - buildingopen/openpage: Open-source website builder with visual drag-and"
+ },
+ {
+  "pos": 155923,
+  "len": 251,
+  "file": "/tmp/forma_share/s_00155923.txt",
+  "head": "GitHub - Trigenys/appfactory-openpage-engine: Open-source website builder with v"
+ },
+ {
+  "pos": 156217,
+  "len": 191,
+  "file": "/tmp/forma_share/s_00156217.txt",
+  "head": "GitHub - MetaConfigurator/meta-configurator: MetaConfigurator is a JSON Schema E"
+ },
+ {
+  "pos": 157051,
+  "len": 5670,
+  "file": "/tmp/forma_share/s_00157051.txt",
+  "head": "## 三、还有几个值得纳入技术研究的产品  它们不是完整竞品，但覆盖了你的某个关键技术环节。  | 产品 | 值得研究的能力 | 为什么不是完整竞品 | |--"
+ },
+ {
+  "pos": 174622,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00174622.txt",
+  "head": "https://images.openai.com/static-rsc-4/8L3VVwErjteC1BZKEK2ew7QMZicklVsAR61E7296q"
+ },
+ {
+  "pos": 174930,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00174930.txt",
+  "head": "https://images.openai.com/static-rsc-4/lqO_DhseY_Yhv50AS0F9ZQ1Z8pkiToXgxak44-5xf"
+ },
+ {
+  "pos": 175158,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00175158.txt",
+  "head": "https://images.openai.com/static-rsc-4/ZUqbgQG0bepsl1HaGjJb09qCMUN4kOXmntv411II5"
+ },
+ {
+  "pos": 175487,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00175487.txt",
+  "head": "https://images.openai.com/static-rsc-4/bypaarZNgtLpSWebzlA-d5Lo39u2rAMh_HzkUiV2f"
+ },
+ {
+  "pos": 175715,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00175715.txt",
+  "head": "https://images.openai.com/static-rsc-4/3c_P7TCrA0goM3dYLnWLiTgTdFprXNPqCeEb6T_3w"
+ },
+ {
+  "pos": 175966,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00175966.txt",
+  "head": "https://images.openai.com/static-rsc-4/zzxIJ5d4RgkgiZAWI-mhRVPAYqHoZEnG5AkyoaLZo"
+ },
+ {
+  "pos": 176194,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00176194.txt",
+  "head": "https://images.openai.com/static-rsc-4/dnA1KAspslXk6f3-xU5OCl7FANu7F2TwFC2leYUf3"
+ },
+ {
+  "pos": 176491,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00176491.txt",
+  "head": "https://images.openai.com/static-rsc-4/3oRv2Jqz5loslO-ptB1k7fWnZZtUMQy2P2xUx04E8"
+ },
+ {
+  "pos": 176719,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00176719.txt",
+  "head": "https://images.openai.com/static-rsc-4/9oDp3XaGk1vUExxJv-AhODybLEWEcWcfU5XYtBsJM"
+ },
+ {
+  "pos": 177017,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00177017.txt",
+  "head": "https://images.openai.com/static-rsc-4/u-gjwMuwAp73Yv7FTYxF2__42ZyLWAT5LPe0Bxk3p"
+ },
+ {
+  "pos": 177245,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00177245.txt",
+  "head": "https://images.openai.com/static-rsc-4/D2DTRcZohmL1QEjoJcFHVeqlpn9r4EHBXqrvJF-f-"
+ },
+ {
+  "pos": 177544,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00177544.txt",
+  "head": "https://images.openai.com/static-rsc-4/ttQF0HyUx1yOfwmgKKNVZvMdspjnN0RMzg3n7jIzZ"
+ },
+ {
+  "pos": 177772,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00177772.txt",
+  "head": "https://images.openai.com/static-rsc-4/klzdzX7mk0kb08TQpeB35yMc3Kt07bPnmD1ls-QVe"
+ },
+ {
+  "pos": 179049,
+  "len": 130,
+  "file": "/tmp/forma_share/s_00179049.txt",
+  "head": "https://technologuy.medium.com/from-n8n-workflows-to-production-ready-ai-agents-"
+ },
+ {
+  "pos": 179182,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00179182.txt",
+  "head": "https://images.openai.com/static-rsc-4/9kJnotIMOoREues61ls_M776CBCYkGnWN7QcQDOJV"
+ },
+ {
+  "pos": 179410,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00179410.txt",
+  "head": "https://images.openai.com/static-rsc-4/ehpUXW6YL-Hn8boUsBAwWVWES2FxLiQ2Ssr7IzU5d"
+ },
+ {
+  "pos": 179661,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00179661.txt",
+  "head": "https://images.openai.com/static-rsc-4/CEflVLlk4UYrME9i86OLVmZPd6gI10l96hR3PoYb-"
+ },
+ {
+  "pos": 179889,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00179889.txt",
+  "head": "https://images.openai.com/static-rsc-4/IPxPlRwsVMTf9YEZAPmRjuJHvV1_iQeDga2xYNDcz"
+ },
+ {
+  "pos": 180220,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00180220.txt",
+  "head": "https://images.openai.com/static-rsc-4/QzpBA2TBl6bB9WBcWmeTBFa2YZAtODfh27_6mHL5a"
+ },
+ {
+  "pos": 180448,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00180448.txt",
+  "head": "https://images.openai.com/static-rsc-4/RvG2yTtbMFo9OFXakr3td7x-lwAf7QvFo5Q1Ynj46"
+ },
+ {
+  "pos": 180699,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00180699.txt",
+  "head": "https://images.openai.com/static-rsc-4/ZAKsiYJWAqQTeRF-W7Oo8xk-lLlM1uRCkZP1mw7By"
+ },
+ {
+  "pos": 180927,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00180927.txt",
+  "head": "https://images.openai.com/static-rsc-4/6jZree7N8U9SeorbB7KkgZ-wzF6QD1KPzmXO130DV"
+ },
+ {
+  "pos": 181281,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00181281.txt",
+  "head": "https://images.openai.com/static-rsc-4/aM_glXaIG8ktXHO92iuhDO2WEL5nmB9xxCLxTSd3u"
+ },
+ {
+  "pos": 181509,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00181509.txt",
+  "head": "https://images.openai.com/static-rsc-4/F4NEk-WOEee0OZfLq7RfV8y2CJuIq14LKCWhfpGnK"
+ },
+ {
+  "pos": 181793,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00181793.txt",
+  "head": "https://images.openai.com/static-rsc-4/HEO3iwrEERCXTrS7qTekWUX0Me138N04oQB2iSNm6"
+ },
+ {
+  "pos": 182021,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00182021.txt",
+  "head": "https://images.openai.com/static-rsc-4/AT8uWfH5xMbG1Tks_JK9YZHDuhg9PYnnIL4Kkt6y7"
+ },
+ {
+  "pos": 182367,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00182367.txt",
+  "head": "https://images.openai.com/static-rsc-4/z1T7H5d3ukx4R1BoRfFnyEnEyi8yW2dMUiRM3Szd0"
+ },
+ {
+  "pos": 182595,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00182595.txt",
+  "head": "https://images.openai.com/static-rsc-4/wS-0Yw0udACs2euvx01XHCACT3FHgjaxO83cmivC6"
+ },
+ {
+  "pos": 183461,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00183461.txt",
+  "head": "https://images.openai.com/static-rsc-4/qDPqUZiOm_p_vgNJnwMQOi_8wo78xa55LKbMVcB0t"
+ },
+ {
+  "pos": 183689,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00183689.txt",
+  "head": "https://images.openai.com/static-rsc-4/1hFwWiO4QNvH-T4Kh_qN3iHuyPozuH0-1uoG-Ao0d"
+ },
+ {
+  "pos": 184969,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00184969.txt",
+  "head": "https://images.openai.com/static-rsc-4/xWfXuscUyudmrk3WxDbzoo1Venf2hJqZzVvK-aht8"
+ },
+ {
+  "pos": 185275,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00185275.txt",
+  "head": "https://images.openai.com/static-rsc-4/9aZI7sXowGA9zSdXYNiRaiusoLEPA8_DAJncHYovx"
+ },
+ {
+  "pos": 185503,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00185503.txt",
+  "head": "https://images.openai.com/static-rsc-4/uGLX-W1A1Bt1D_kEuxVocVU-bkrR0KhZOBX0i2NWW"
+ },
+ {
+  "pos": 185845,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00185845.txt",
+  "head": "https://images.openai.com/static-rsc-4/Zh_Thai-ObygMTq_PWElJciH3Yf0XGsM4NXR_ph7P"
+ },
+ {
+  "pos": 186073,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00186073.txt",
+  "head": "https://images.openai.com/static-rsc-4/xtqNpJOuthH1LH72zp4dH8xjS8FonOp8GraGhaEze"
+ },
+ {
+  "pos": 186433,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00186433.txt",
+  "head": "https://images.openai.com/static-rsc-4/ZXU0hS6QRexKQg6sAVCL7SMZqf8kK833eZ8hi-wF-"
+ },
+ {
+  "pos": 186661,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00186661.txt",
+  "head": "https://images.openai.com/static-rsc-4/SkH1o7a5kmePya2DxNVkBJth-34aQe1wRLCt3kglF"
+ },
+ {
+  "pos": 186938,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00186938.txt",
+  "head": "https://images.openai.com/static-rsc-4/VrX3Ky915EeIVhkZ5fVmlIWLCM0yRKmVR37Vm1xyM"
+ },
+ {
+  "pos": 187166,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00187166.txt",
+  "head": "https://images.openai.com/static-rsc-4/3D8Fqt23NB-Uz9wvkcneJua6tRiZt7gw78_eiLVuL"
+ },
+ {
+  "pos": 187484,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00187484.txt",
+  "head": "https://images.openai.com/static-rsc-4/s0lHMb-5Vgc0ZxtTp8aDMrRIFDjT-q9sMs9P57Fwv"
+ },
+ {
+  "pos": 187712,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00187712.txt",
+  "head": "https://images.openai.com/static-rsc-4/jbzh-dEHRgvbVH4NlDVXk07cPYK8ImFd1GiG-8ZKZ"
+ },
+ {
+  "pos": 188076,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00188076.txt",
+  "head": "https://images.openai.com/static-rsc-4/rYzFxtsahHTa_mwBMKWCSZX22zPhsmCZYDszrPpxV"
+ },
+ {
+  "pos": 188304,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00188304.txt",
+  "head": "https://images.openai.com/static-rsc-4/JevWSVjWh-uSCqqWYQkGe1ajN-SJR8ZA9381goOVc"
+ },
+ {
+  "pos": 189233,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00189233.txt",
+  "head": "https://images.openai.com/static-rsc-4/x6-AaZlR8uJhMsGo3hBv__vi2_LiIB4uzBxXhTkkm"
+ },
+ {
+  "pos": 189461,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00189461.txt",
+  "head": "https://images.openai.com/static-rsc-4/I7YWkxKmE3oqLVNhG2SXldtF7QipgAt0QdZHZ6wQ1"
+ },
+ {
+  "pos": 190265,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00190265.txt",
+  "head": "https://images.openai.com/static-rsc-4/NYEn6qA5WXzOkGqdWGdIWkuG_9JD1H1RMxBQ3uJB8"
+ },
+ {
+  "pos": 190493,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00190493.txt",
+  "head": "https://images.openai.com/static-rsc-4/pcVDVE7oEumNuyoAifM82dzAS8h3ZY1idzlimQ0hn"
+ },
+ {
+  "pos": 192182,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00192182.txt",
+  "head": "https://images.openai.com/static-rsc-4/pcpZ69cZVuxvHYzO91O23MMZZUSNQgh9AUggaQc8B"
+ },
+ {
+  "pos": 192410,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00192410.txt",
+  "head": "https://images.openai.com/static-rsc-4/OMErGoeelUJLaoXX-nK4uLQ1qSxEqzT0hw9rwP7Sc"
+ },
+ {
+  "pos": 192661,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00192661.txt",
+  "head": "https://images.openai.com/static-rsc-4/j-VqGVsY99TaPSc1V5yAs_d3zlVZugTG-NGEpiiIG"
+ },
+ {
+  "pos": 192969,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00192969.txt",
+  "head": "https://images.openai.com/static-rsc-4/nfXaStVw8yovBykBcEZ8sZa6rHM6jQblCMvwyWJdN"
+ },
+ {
+  "pos": 193220,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00193220.txt",
+  "head": "https://images.openai.com/static-rsc-4/80jlqKfv_JdMjDRVHlpZuRkIDYicPU8qsZcI3Kzri"
+ },
+ {
+  "pos": 193524,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00193524.txt",
+  "head": "https://images.openai.com/static-rsc-4/-clVi2s_aTtqhji2GJxx9V4HSMNAJr5UHz_hIZzHJ"
+ },
+ {
+  "pos": 193775,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00193775.txt",
+  "head": "https://images.openai.com/static-rsc-4/oS7RtU3lYVJtC5G2qEeaiuZA9KtMqjud3Z_OJOAvc"
+ },
+ {
+  "pos": 194003,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00194003.txt",
+  "head": "https://images.openai.com/static-rsc-4/xcQ-bYUC3TPJeovLHzYTW3W8YxN0JKCxARlOrHf45"
+ },
+ {
+  "pos": 194274,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00194274.txt",
+  "head": "https://images.openai.com/static-rsc-4/844AOA7jk_WroeaLt-kqrgWRDR8utGG3rlVfWx0FU"
+ },
+ {
+  "pos": 194525,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00194525.txt",
+  "head": "https://images.openai.com/static-rsc-4/LoW4caJQz3tN06ftmoWuMaUiV9NWcjFyCh574f4Qm"
+ },
+ {
+  "pos": 194819,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00194819.txt",
+  "head": "https://images.openai.com/static-rsc-4/g2cbW6_14LtvnAsPQ0T_VizZNg4I2XYWsHoGKM_-Q"
+ },
+ {
+  "pos": 195070,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00195070.txt",
+  "head": "https://images.openai.com/static-rsc-4/gUvlbffZ_1bjSRgdXfEX1cW8V-1lSoJ-3dZzb2u6L"
+ },
+ {
+  "pos": 195349,
+  "len": 157,
+  "file": "/tmp/forma_share/s_00195349.txt",
+  "head": "```text DSL  ↓ Canonical IR  ↓ Semantic Validation  ↓ Dependency Graph  ↓ Increm"
+ },
+ {
+  "pos": 195539,
+  "len": 145,
+  "file": "/tmp/forma_share/s_00195539.txt",
+  "head": "DSL  ↓ Canonical IR  ↓ Semantic Validation  ↓ Dependency Graph  ↓ Incremental Co"
+ },
+ {
+  "pos": 195748,
+  "len": 188,
+  "file": "/tmp/forma_share/s_00195748.txt",
+  "head": "```text Visual Graph / draw.io          ↓ Canonical JSON Graph IR          ↓ Val"
+ },
+ {
+  "pos": 195967,
+  "len": 176,
+  "file": "/tmp/forma_share/s_00195967.txt",
+  "head": "Visual Graph / draw.io          ↓ Canonical JSON Graph IR          ↓ Validator  "
+ },
+ {
+  "pos": 196194,
+  "len": 122,
+  "file": "/tmp/forma_share/s_00196194.txt",
+  "head": "```text        AI Agent           ↕ Visual Editor ↔ JSON Config           ↓     "
+ },
+ {
+  "pos": 196500,
+  "len": 161,
+  "file": "/tmp/forma_share/s_00196500.txt",
+  "head": "```text 可视化设计 / JSON        ↓ Entity Definition        ↓ Loopar Engine        ↓ "
+ },
+ {
+  "pos": 196692,
+  "len": 149,
+  "file": "/tmp/forma_share/s_00196692.txt",
+  "head": "可视化设计 / JSON        ↓ Entity Definition        ↓ Loopar Engine        ↓ Database"
+ },
+ {
+  "pos": 196892,
+  "len": 139,
+  "file": "/tmp/forma_share/s_00196892.txt",
+  "head": "```text 用户与 AI 对话     ↓ 生成 spec.json     ↓ 用户审核规格     ↓ 生成可交互原型     ↓ 用户批准     ↓"
+ },
+ {
+  "pos": 197064,
+  "len": 127,
+  "file": "/tmp/forma_share/s_00197064.txt",
+  "head": "用户与 AI 对话     ↓ 生成 spec.json     ↓ 用户审核规格     ↓ 生成可交互原型     ↓ 用户批准     ↓ Determi"
+ },
+ {
+  "pos": 197244,
+  "len": 203,
+  "file": "/tmp/forma_share/s_00197244.txt",
+  "head": "```text 自然语言需求     ↓ AI Product Agent     ↓ 详细产品规格     ↓ AI Developer Agent     "
+ },
+ {
+  "pos": 197484,
+  "len": 191,
+  "file": "/tmp/forma_share/s_00197484.txt",
+  "head": "自然语言需求     ↓ AI Product Agent     ↓ 详细产品规格     ↓ AI Developer Agent     ↓ Rishon"
+ },
+ {
+  "pos": 198018,
+  "len": 28225,
+  "file": "/tmp/forma_share/s_00198018.txt",
+  "head": "function __dilSafe(evaluate,failureValue){try{return evaluate()}catch{return fai"
+ },
+ {
+  "pos": 233592,
+  "len": 9438,
+  "file": "/tmp/forma_share/s_00233592.txt",
+  "head": "这次我会按照你刚刚明确的产品定义重新筛选，不再把普通的 Spec-Driven Development 工具算作直接竞品。  我重点寻找的是同时具备以下特征的产"
+ },
+ {
+  "pos": 260277,
+  "len": 128,
+  "file": "/tmp/forma_share/s_00260277.txt",
+  "head": "From n8n Workflows to Production ready AI Agents: Migrating to Amazon Bedrock Ag"
+ },
+ {
+  "pos": 260592,
+  "len": 166,
+  "file": "/tmp/forma_share/s_00260592.txt",
+  "head": "https://reactflow.dev/_next/image?q=75&url=https%3A%2F%2Ff20vdoobtdxrjemr.public"
+ },
+ {
+  "pos": 260912,
+  "len": 210,
+  "file": "/tmp/forma_share/s_00260912.txt",
+  "head": "https://media.licdn.com/dms/image/v2/D4D12AQHPOSydBsjdjw/article-cover_image-shr"
+ },
+ {
+  "pos": 261810,
+  "len": 166,
+  "file": "/tmp/forma_share/s_00261810.txt",
+  "head": "https://reactflow.dev/_next/image?q=75&url=https%3A%2F%2Ff20vdoobtdxrjemr.public"
+ },
+ {
+  "pos": 266564,
+  "len": 129,
+  "file": "/tmp/forma_share/s_00266564.txt",
+  "head": "[AMA] Workflow Lineage team: The story behind the rename and what's next - Commu"
+ },
+ {
+  "pos": 266816,
+  "len": 192,
+  "file": "/tmp/forma_share/s_00266816.txt",
+  "head": "https://static.wixstatic.com/media/8667c8_db7ebe15bb3844f7890c1988dba979af~mv2.p"
+ },
+ {
+  "pos": 267484,
+  "len": 149,
+  "file": "/tmp/forma_share/s_00267484.txt",
+  "head": "https://resources.learn.liferay.com/images/dxp/latest/en/low-code/objects/creati"
+ },
+ {
+  "pos": 298809,
+  "len": 122,
+  "file": "/tmp/forma_share/s_00298809.txt",
+  "head": "我正在区分“可视化 DSL 编辑器”“图模型驱动”“规范生成应用”和“AI 工作流编译器”。当前看，fromSpec 最接近整体概念；Rishon 偏语义运行时"
+ },
+ {
+  "pos": 304450,
+  "len": 6074,
+  "file": "/tmp/forma_share/s_00304450.txt",
+  "head": "## 一、先给结论：有，而且有几个比之前提到的案例更接近  这次检索发现了几个值得重点关注的产品。其中有两个尤其重要：  - **Rishon**：在产品理念上"
+ },
+ {
+  "pos": 320981,
+  "len": 132,
+  "file": "/tmp/forma_share/s_00320981.txt",
+  "head": "正在搜索 AI generates visual DSL specification compiler generates application code v"
+ },
+ {
+  "pos": 324874,
+  "len": 8830,
+  "file": "/tmp/forma_share/s_00324874.txt",
+  "head": "## 1. 你的方向与现有产品的真正区别  我把它们重新放在一起比较：  | 方向 | AI 生产什么 | 谁负责生成程序 | 核心载体 | |---|---|"
+ },
+ {
+  "pos": 336023,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00336023.txt",
+  "head": "https://images.openai.com/static-rsc-4/nnKaatCFHv1CDAJq12f2feVEPuiSfUdzy2gUbSF6E"
+ },
+ {
+  "pos": 336251,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00336251.txt",
+  "head": "https://images.openai.com/static-rsc-4/tTKTWYcc95fjwAZPsv6hM6cVKsOpCUfvZzKjfmmK0"
+ },
+ {
+  "pos": 336726,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00336726.txt",
+  "head": "https://images.openai.com/static-rsc-4/kp_76-mGhS15P4hRfz4ojd6iWsii2aHkSAT9JQhXh"
+ },
+ {
+  "pos": 336954,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00336954.txt",
+  "head": "https://images.openai.com/static-rsc-4/pzNrtqwWFBClU6-HJKz6JYAVxNi0k5EHAvSs7yUPw"
+ },
+ {
+  "pos": 337398,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00337398.txt",
+  "head": "https://images.openai.com/static-rsc-4/ikEbfIbdoyq8OExyLEZgd-iamCg9J5z4Gs1jE5gMf"
+ },
+ {
+  "pos": 337626,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00337626.txt",
+  "head": "https://images.openai.com/static-rsc-4/U9yoErnVkzf3KS2iLmldtx-XJAEoyhTLuF1uF3dRb"
+ },
+ {
+  "pos": 338058,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00338058.txt",
+  "head": "https://images.openai.com/static-rsc-4/R1pSKkUTy16SBhvp_1mRj8mEoZvbQiyZ_XZfrmfr_"
+ },
+ {
+  "pos": 338286,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00338286.txt",
+  "head": "https://images.openai.com/static-rsc-4/8eDwAek-1UkATIuN34DShzmVfEoCh7ua2OsubNUG-"
+ },
+ {
+  "pos": 339136,
+  "len": 756,
+  "file": "/tmp/forma_share/s_00339136.txt",
+  "head": "```yaml app:   id: order-management   name: Order Management  models:   Order:  "
+ },
+ {
+  "pos": 339956,
+  "len": 744,
+  "file": "/tmp/forma_share/s_00339956.txt",
+  "head": "app:   id: order-management   name: Order Management  models:   Order:     field"
+ },
+ {
+  "pos": 366060,
+  "len": 6604,
+  "file": "/tmp/forma_share/s_00366060.txt",
+  "head": "是的。你这次补充后，我认为之前把你的方向归类为 **Spec-Driven Development（规格驱动开发）**，确实不够准确。  你真正想做的不是让 A"
+ },
+ {
+  "pos": 395152,
+  "len": 209,
+  "file": "/tmp/forma_share/s_00395152.txt",
+  "head": "你说的这几个案例和我的最初的不一样吧 ？  我的意图是不要让 ai 写代码， 而是让ai生产规格 ，现有的规格都是 md 。 可以用图 流程图等 做载体 然后基"
+ },
+ {
+  "pos": 397091,
+  "len": 125,
+  "file": "/tmp/forma_share/s_00397091.txt",
+  "head": "https://stackness.dev/blog/spec-driven-development-tools-for-coding-agents-opens"
+ },
+ {
+  "pos": 405236,
+  "len": 2603,
+  "file": "/tmp/forma_share/s_00405236.txt",
+  "head": "# 五、我建议你重点拆解的三个项目  不要同时研究十几个项目。先深入这三个。  <box border radius=\"lg\" padding={3} gap="
+ },
+ {
+  "pos": 418891,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00418891.txt",
+  "head": "https://images.openai.com/static-rsc-4/vgWgDLwaNy_uQAAzjOwb-Tkzcvass428RDtEFtUGK"
+ },
+ {
+  "pos": 419119,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00419119.txt",
+  "head": "https://images.openai.com/static-rsc-4/IUXl-QXwwRgnn3H_U8dGtdV9f0-A8fxsmMTXrcTgp"
+ },
+ {
+  "pos": 419862,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00419862.txt",
+  "head": "https://images.openai.com/static-rsc-4/Wx_6mDHDMiTfv3CSsswceNBOyfxhxlaAO2j8ph0j-"
+ },
+ {
+  "pos": 420090,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00420090.txt",
+  "head": "https://images.openai.com/static-rsc-4/PP0k80NJxRpjA_W7KRh0ozuvwT0wd6VR37rcbsm7T"
+ },
+ {
+  "pos": 420749,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00420749.txt",
+  "head": "https://images.openai.com/static-rsc-4/3Lg2SV9R1KIMLFyg05b6ns61v73TNu2qDVQGmqQWq"
+ },
+ {
+  "pos": 420977,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00420977.txt",
+  "head": "https://images.openai.com/static-rsc-4/1X7TRJw_eiKW_dhP1f-A9Oig6Ky7a_f9YOLP0A0K-"
+ },
+ {
+  "pos": 421482,
+  "len": 148,
+  "file": "/tmp/forma_share/s_00421482.txt",
+  "head": "https://stackness.dev/blog/spec-driven-development-tools-for-coding-agents-opens"
+ },
+ {
+  "pos": 422038,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00422038.txt",
+  "head": "https://images.openai.com/static-rsc-4/ntNCMtoVbJQkvyBBAe5KW1foIBR4cORzYtyMAldBk"
+ },
+ {
+  "pos": 422266,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00422266.txt",
+  "head": "https://images.openai.com/static-rsc-4/LYdXU5R-H1bJfXHUIOxIPV92U7M475lpYq6zNc8vS"
+ },
+ {
+  "pos": 423045,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00423045.txt",
+  "head": "https://images.openai.com/static-rsc-4/PB11cZ9fjW9QRLmPs3Y1b5dwvr5jETQRYJoXYso9N"
+ },
+ {
+  "pos": 423273,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00423273.txt",
+  "head": "https://images.openai.com/static-rsc-4/t7GJSeNKHcEOw48m-qOGmpsakiMbabnzJq-TMiVJ8"
+ },
+ {
+  "pos": 424140,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00424140.txt",
+  "head": "https://images.openai.com/static-rsc-4/FQ6MbvVOCQlDaKRrF9e--9WviN3ykNXtQMRMOYP86"
+ },
+ {
+  "pos": 424368,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00424368.txt",
+  "head": "https://images.openai.com/static-rsc-4/Q0yHHmMHIVuXgDY6So_39yfdd2S64-cMDRa-Agupo"
+ },
+ {
+  "pos": 425141,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00425141.txt",
+  "head": "https://images.openai.com/static-rsc-4/J0cxq2XlaXPGeBJlphdrnA6WFEJch2Pl_4A5nFweM"
+ },
+ {
+  "pos": 425369,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00425369.txt",
+  "head": "https://images.openai.com/static-rsc-4/Tzlrf_uw0tkHi81n1RBy0Y3eULKQrMoqITZReze4Y"
+ },
+ {
+  "pos": 426701,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00426701.txt",
+  "head": "https://images.openai.com/static-rsc-4/u_JZgUp_YP2bwIl-6j43AqNwug054oCMIihfgNdev"
+ },
+ {
+  "pos": 426929,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00426929.txt",
+  "head": "https://images.openai.com/static-rsc-4/nqZfFCBxjGOlNOTBbUC_Tn_NxbbDW0bBnkXhtdjIs"
+ },
+ {
+  "pos": 461283,
+  "len": 8382,
+  "file": "/tmp/forma_share/s_00461283.txt",
+  "head": "有，而且不只是一个。  我重新审视了一下你的产品构想，结论是：**你想做的东西已经有多个相邻产品，甚至有产品已经实现了其中一部分核心技术。**  但我认为，目前"
+ },
+ {
+  "pos": 482403,
+  "len": 133,
+  "file": "/tmp/forma_share/s_00482403.txt",
+  "head": "https://assets.st-note.com/production/uploads/images/222574988/rectangle_large_t"
+ },
+ {
+  "pos": 518019,
+  "len": 1565,
+  "file": "/tmp/forma_share/s_00518019.txt",
+  "head": "# 三、竞品能力矩阵：到底谁已经做到了什么？  这是我认为最有价值的对比。  | 核心能力 | Overplane | Prodara | Tessl | Sp"
+ },
+ {
+  "pos": 525602,
+  "len": 6265,
+  "file": "/tmp/forma_share/s_00525602.txt",
+  "head": "# 一、最值得关注的竞品：已经发现两个非常接近的产品  <box border radius=\"lg\" padding={3} gap={2}>   <row "
+ },
+ {
+  "pos": 542345,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00542345.txt",
+  "head": "OPENAPI INITIATIVE PUBLICATIONS  This site contains the authoritative HTML rende"
+ },
+ {
+  "pos": 542885,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00542885.txt",
+  "head": "BEST PRACTICES FOR TERRAFORM OPERATIONS STAY ORGANIZED WITH COLLECTIONS SAVE AND"
+ },
+ {
+  "pos": 543615,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00543615.txt",
+  "head": "DO DEFINE MESSAGE TYPES IN SEPARATE FILES  When defining a proto schema, you sho"
+ },
+ {
+  "pos": 543992,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00543992.txt",
+  "head": "} `  DELETING FIELDS  Deleting fields can cause serious problems if not done pro"
+ },
+ {
+  "pos": 544356,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00544356.txt",
+  "head": "1-1-1 BEST PRACTICE  All proto definitions should have one top-level element and"
+ },
+ {
+  "pos": 544696,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00544696.txt",
+  "head": "OVERVIEW  Protobuf is a language-neutral, platform-neutral extensible mechanism "
+ },
+ {
+  "pos": 545386,
+  "len": 201,
+  "file": "/tmp/forma_share/s_00545386.txt",
+  "head": "OPENAPI PROVIDER SPEC GENERATOR  Note  Code Generation is currently in tech prev"
+ },
+ {
+  "pos": 545782,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00545782.txt",
+  "head": "CODE GENERATION DESIGN  Note  Code Generation is currently in tech preview.  Thi"
+ },
+ {
+  "pos": 546165,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00546165.txt",
+  "head": "CODE GENERATION  Note  Code Generation is currently in tech preview.  Code gener"
+ },
+ {
+  "pos": 546670,
+  "len": 203,
+  "file": "/tmp/forma_share/s_00546670.txt",
+  "head": "Image: AIコーディングエージェント勢力図〖2026年7月版〗調査対象40本を5分類で比較する2026年7月25日  AIコーディングエージェント勢力図〖"
+ },
+ {
+  "pos": 547093,
+  "len": 163,
+  "file": "/tmp/forma_share/s_00547093.txt",
+  "head": "Code generation with large language models: a survey from neural program synthes"
+ },
+ {
+  "pos": 547259,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00547259.txt",
+  "head": "CODE GENERATION WITH LARGE LANGUAGE MODELS: A SURVEY FROM NEURAL PROGRAM SYNTHES"
+ },
+ {
+  "pos": 547759,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00547759.txt",
+  "head": "Published February 13, 2026•Updated September 16, 2026·24 min read·industry  AI "
+ },
+ {
+  "pos": 548261,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00548261.txt",
+  "head": "THE 2026 GUIDE TO CODING CLI TOOLS: 15 AI AGENTS COMPARED  15 coding CLI tools c"
+ },
+ {
+  "pos": 549666,
+  "len": 203,
+  "file": "/tmp/forma_share/s_00549666.txt",
+  "head": "DISTRIBUTION FILES DIRECTORIES  The distribution directory is another Bazel mech"
+ },
+ {
+  "pos": 550043,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00550043.txt",
+  "head": "HERMETICITY STAY ORGANIZED WITH COLLECTIONS SAVE AND CATEGORIZE CONTENT BASED ON"
+ },
+ {
+  "pos": 550402,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00550402.txt",
+  "head": "BUILD CONSISTENCY AND INCREMENTAL BUILDS  Formally, we define the state of a bui"
+ },
+ {
+  "pos": 550748,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00550748.txt",
+  "head": "BUILD FILES STAY ORGANIZED WITH COLLECTIONS SAVE AND CATEGORIZE CONTENT BASED ON"
+ },
+ {
+  "pos": 551099,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00551099.txt",
+  "head": "EXECUTION ROOT  A directory in the workspace’s output base directory where local"
+ },
+ {
+  "pos": 551450,
+  "len": 201,
+  "file": "/tmp/forma_share/s_00551450.txt",
+  "head": "hermetic_cc_toolchain 4.3.0 Latest published 3.1mo ago  OverviewDocumentationPac"
+ },
+ {
+  "pos": 551814,
+  "len": 203,
+  "file": "/tmp/forma_share/s_00551814.txt",
+  "head": "EXECUTION PHASE  The third phase of a build. Executes the actions in the action "
+ },
+ {
+  "pos": 552175,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00552175.txt",
+  "head": "HERMETICITY  This page covers hermeticity, the benefits of using hermetic builds"
+ },
+ {
+  "pos": 552524,
+  "len": 203,
+  "file": "/tmp/forma_share/s_00552524.txt",
+  "head": "DISK CACHE  A local on-disk blob store for the remote caching feature. Can be us"
+ },
+ {
+  "pos": 553364,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00553364.txt",
+  "head": "THE BEST AGENTIC CODING TOOLS  2026 Market Guide  A criteria-based guide to the "
+ },
+ {
+  "pos": 553870,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00553870.txt",
+  "head": "AGENTIC CODING TOOLS LANDSCAPE  Created: 2026-08-22T00:00Z / Updated: 2026-11-01"
+ },
+ {
+  "pos": 554391,
+  "len": 203,
+  "file": "/tmp/forma_share/s_00554391.txt",
+  "head": "TOOL SUPPORT  Which AI coding agents and editors each framework drives. Rows app"
+ },
+ {
+  "pos": 554734,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00554734.txt",
+  "head": "TOOL SUPPORT  Which AI coding agents and editors each framework drives. Rows app"
+ },
+ {
+  "pos": 555213,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00555213.txt",
+  "head": "§ 05 · the full catalogue  THE FULL SET.  Every language designed for LLMs or ag"
+ },
+ {
+  "pos": 555698,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00555698.txt",
+  "head": "COMPARE AI CODING AGENTS  Compare 65 AI coding agents, also called AI coding ass"
+ },
+ {
+  "pos": 556157,
+  "len": 201,
+  "file": "/tmp/forma_share/s_00556157.txt",
+  "head": "HOOKS REFERENCE  > Reference for Claude Code hook events, configuration schema, "
+ },
+ {
+  "pos": 556630,
+  "len": 200,
+  "file": "/tmp/forma_share/s_00556630.txt",
+  "head": "The agent plugin  THE AGENT PLUGIN  The awp plugin for Claude Code and Agent Plu"
+ },
+ {
+  "pos": 557080,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00557080.txt",
+  "head": "PLUGINS REFERENCE  PLUGINS REFERENCE  > Complete technical reference for Claude "
+ },
+ {
+  "pos": 557522,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00557522.txt",
+  "head": "CODING AGENTS  Integrate Hugging Face into your coding workflow with the MCP Ser"
+ },
+ {
+  "pos": 558014,
+  "len": 328,
+  "file": "/tmp/forma_share/s_00558014.txt",
+  "head": "GitHub - lbotinelly/state-of-agentic-coding: Source-verified survey of the agent"
+ },
+ {
+  "pos": 558345,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00558345.txt",
+  "head": "STATE OF AGENTIC CODING  > What should developers and engineering teams actually"
+ },
+ {
+  "pos": 558720,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00558720.txt",
+  "head": "PLUGINS, AGENTS, AND SKILLS FOR AI CODING TOOLS  Use one collection of plugins, "
+ },
+ {
+  "pos": 559159,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00559159.txt",
+  "head": "PLUGINS  Plugins are the installable distribution unit for Codex. Where a skill "
+ },
+ {
+  "pos": 559653,
+  "len": 201,
+  "file": "/tmp/forma_share/s_00559653.txt",
+  "head": "THE NEW AGENT HARNESSES, COMPARED (2024–2026)  August 25, 2026 15 min read Abel "
+ },
+ {
+  "pos": 560169,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00560169.txt",
+  "head": "TOOLS REFERENCE  Complete reference for the tools Claude Code can use, including"
+ },
+ {
+  "pos": 560495,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00560495.txt",
+  "head": "Configuration  Hooks are defined in JSON settings files. The configuration has t"
+ },
+ {
+  "pos": 561084,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00561084.txt",
+  "head": "HOOKS  Codex CLI Claude Code Cursor Agent OpenCode pi[Button: All]  [Input: Sear"
+ },
+ {
+  "pos": 561381,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00561381.txt",
+  "head": "HOOKS  Updated 2026-10-30  Which moments a hook can attach to, and what it can d"
+ },
+ {
+  "pos": 562772,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00562772.txt",
+  "head": "OPTIONS  JSONSCHEMA0.58.3  FUNCTION OPTIONS [BUTTON: COPY ITEM PATH]  Source  `p"
+ },
+ {
+  "pos": 563107,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00563107.txt",
+  "head": "HIGHLIGHTS  * 📚 Full support for popular JSON Schema drafts * 🔧 Custom keywords "
+ },
+ {
+  "pos": 563450,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00563450.txt",
+  "head": "CRATE SERDE_JSON [BUTTON: COPY ITEM PATH]  §SERDE JSON  JSON is a ubiquitous ope"
+ },
+ {
+  "pos": 563813,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00563813.txt",
+  "head": "FUNCTION EVALUATE [BUTTON: COPY ITEM PATH]  Search  Settings  Help  SummarySourc"
+ },
+ {
+  "pos": 564158,
+  "len": 203,
+  "file": "/tmp/forma_share/s_00564158.txt",
+  "head": "4//! A high-performance JSON Schema validator for Rust. 5//! 6//! - 📚 Support fo"
+ },
+ {
+  "pos": 564519,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00564519.txt",
+  "head": "VALIDATE  JSONSCHEMA0.56.0  VALIDATE  FUNCTION VALIDATE [BUTTON: COPY ITEM PATH]"
+ },
+ {
+  "pos": 564866,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00564866.txt",
+  "head": "MODULE JSON [BUTTON: COPY ITEM PATH]  JSON Schema serialisation + Confluent wire"
+ },
+ {
+  "pos": 565226,
+  "len": 203,
+  "file": "/tmp/forma_share/s_00565226.txt",
+  "head": "`#[json_schema(title = \"...\")]` and, on fields, **`#[json_schema(minimum = N, ma"
+ },
+ {
+  "pos": 565593,
+  "len": 201,
+  "file": "/tmp/forma_share/s_00565593.txt",
+  "head": "ATTRIBUTE MACRO VALIDATOR [BUTTON: COPY ITEM PATH]  SummarySource  `#[validator]"
+ },
+ {
+  "pos": 566065,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00566065.txt",
+  "head": "CRATE JSONSCHEMA  JSONSCHEMA0.56.0  CRATE JSONSCHEMA [BUTTON: COPY ITEM PATH]  S"
+ },
+ {
+  "pos": 566376,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00566376.txt",
+  "head": "CRATE JSONSCHEMA [BUTTON: COPY ITEM PATH]  Source  Expand description  A high-pe"
+ },
+ {
+  "pos": 567735,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00567735.txt",
+  "head": "WHAT IS BUF?#  Buf builds tooling for Protocol Buffers, the schema language behi"
+ },
+ {
+  "pos": 568065,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00568065.txt",
+  "head": "LINT A PROTOBUF WORKSPACE#  `buf lint` checks `.proto` files against a configura"
+ },
+ {
+  "pos": 568395,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00568395.txt",
+  "head": "CONFIGURE AND RUN BUF BREAKING#  `buf breaking` compares a Protobuf schema again"
+ },
+ {
+  "pos": 568730,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00568730.txt",
+  "head": "RULES AND CATEGORIES#  `buf lint` checks `.proto` files against individual rules"
+ },
+ {
+  "pos": 569079,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00569079.txt",
+  "head": "INTERNAL COMPILER#  Protobuf is the most stable and widely adopted interface des"
+ },
+ {
+  "pos": 569389,
+  "len": 201,
+  "file": "/tmp/forma_share/s_00569389.txt",
+  "head": "DETECT BREAKING CHANGES LOCALLY#  `buf breaking` compares a set of `.proto` file"
+ },
+ {
+  "pos": 569718,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00569718.txt",
+  "head": "LINTING PROTOBUF FILES#  `buf lint` checks `.proto` files against style and stru"
+ },
+ {
+  "pos": 570030,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00570030.txt",
+  "head": "BUF DOCS#  Documentation for the Buf CLI, the Buf Schema Registry (BSR), and rel"
+ },
+ {
+  "pos": 570377,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00570377.txt",
+  "head": "DETECTING BREAKING CHANGES#  `buf breaking` compares the current version of your"
+ },
+ {
+  "pos": 570705,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00570705.txt",
+  "head": "Generating code  GENERATING CODE#  `buf generate` runs Protobuf plugins over you"
+ },
+ {
+  "pos": 571025,
+  "len": 201,
+  "file": "/tmp/forma_share/s_00571025.txt",
+  "head": "BUF CLI#  The Buf CLI is the modern toolchain for Protocol Buffers. It replaces "
+ },
+ {
+  "pos": 571323,
+  "len": 201,
+  "file": "/tmp/forma_share/s_00571323.txt",
+  "head": "GENERATING CODE#  `buf generate` runs Protobuf plugins over your `.proto` files,"
+ },
+ {
+  "pos": 571749,
+  "len": 149,
+  "file": "/tmp/forma_share/s_00571749.txt",
+  "head": "https://claude.com/resources/articles/steering-claude-code-skills-hooks-rules-su"
+ },
+ {
+  "pos": 571999,
+  "len": 203,
+  "file": "/tmp/forma_share/s_00571999.txt",
+  "head": "SUBAGENTS  Subagents are markdown files in `.claude/agents/ `that define isolate"
+ },
+ {
+  "pos": 572389,
+  "len": 202,
+  "file": "/tmp/forma_share/s_00572389.txt",
+  "head": "3. LEVELING UP  Question  | Answer 3.1 What is MCP?  | MCP connects Claude Code "
+ },
+ {
+  "pos": 572788,
+  "len": 8388,
+  "file": "/tmp/forma_share/s_00572788.txt",
+  "head": "# 十九、产品命名与品牌定位  暂时不建议直接使用 SpecCompiler 作为最终商业品牌，它更像一个技术类别名称。  我建议考虑以下方向：  | 名称 |"
+ },
+ {
+  "pos": 589437,
+  "len": 126,
+  "file": "/tmp/forma_share/s_00589437.txt",
+  "head": "https://claude.com/resources/articles/steering-claude-code-skills-hooks-rules-su"
+ },
+ {
+  "pos": 593773,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00593773.txt",
+  "head": "https://images.openai.com/static-rsc-4/JNmO6olInJImkFKamBOkPKFTOLev7gsxyKQHCU8ns"
+ },
+ {
+  "pos": 594001,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00594001.txt",
+  "head": "https://images.openai.com/static-rsc-4/czMsG67zjDk8C4Z38Hryu47iW1SSBB8R79HFJcOb_"
+ },
+ {
+  "pos": 594252,
+  "len": 121,
+  "file": "/tmp/forma_share/s_00594252.txt",
+  "head": "https://www.linkedin.com/posts/sohrab-rahimi_agentic-ai-is-often-described-as-ll"
+ },
+ {
+  "pos": 594490,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00594490.txt",
+  "head": "https://images.openai.com/static-rsc-4/76rN3It4w_lJiWXUcgluMitAoTRmbihQPgNjnOjPz"
+ },
+ {
+  "pos": 594718,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00594718.txt",
+  "head": "https://images.openai.com/static-rsc-4/S-yxmDfYh-oCeHO6ZoOBDPCN7j2pgnMsVvdy6Z7wj"
+ },
+ {
+  "pos": 595909,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00595909.txt",
+  "head": "https://images.openai.com/static-rsc-4/UQofnG0_G9NLbP3loCmzrUjCOTQJRGtvMwi8wpjtb"
+ },
+ {
+  "pos": 596137,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00596137.txt",
+  "head": "https://images.openai.com/static-rsc-4/k0XL_KAi2K8HxLrR5es6-A2nm093xnWFiRRFqwtHE"
+ },
+ {
+  "pos": 597347,
+  "len": 225,
+  "file": "/tmp/forma_share/s_00597347.txt",
+  "head": "https://images.openai.com/static-rsc-4/CS0pb5JRrr4Ogpr6_5xlsJcI3zcvhODtioGKdXwWa"
+ },
+ {
+  "pos": 597575,
+  "len": 248,
+  "file": "/tmp/forma_share/s_00597575.txt",
+  "head": "https://images.openai.com/static-rsc-4/5T3RJYFTTTTDCcWyF_uiNLFP1uj4rgj0TGinCUX-M"
+ },
+ {
+  "pos": 602469,
+  "len": 125,
+  "file": "/tmp/forma_share/s_00602469.txt",
+  "head": "```text Create Entity Update Field Add Component Connect Relation Define Rule Pr"
+ },
+ {
+  "pos": 602951,
+  "len": 164,
+  "file": "/tmp/forma_share/s_00602951.txt",
+  "head": "```text User   |   +-- hasMany --> Order   |   +-- owns ----> Permission   |   +"
+ },
+ {
+  "pos": 603148,
+  "len": 152,
+  "file": "/tmp/forma_share/s_00603148.txt",
+  "head": "User   |   +-- hasMany --> Order   |   +-- owns ----> Permission   |   +-- expos"
+ },
+ {
+  "pos": 603351,
+  "len": 2094,
+  "file": "/tmp/forma_share/s_00603351.txt",
+  "head": "```text                    HUMAN                      |                      v  "
+ },
+ {
+  "pos": 605534,
+  "len": 2082,
+  "file": "/tmp/forma_share/s_00605534.txt",
+  "head": "                   HUMAN                      |                      v          "
+ },
+ {
+  "pos": 607724,
+  "len": 129,
+  "file": "/tmp/forma_share/s_00607724.txt",
+  "head": "```yaml logic:   actions:     - id: process-image       implementation:         "
+ },
+ {
+  "pos": 608274,
+  "len": 148,
+  "file": "/tmp/forma_share/s_00608274.txt",
+  "head": "```text User Request     |     v Agent     |     v speccompiler MCP     |     v "
+ },
+ {
+  "pos": 608460,
+  "len": 136,
+  "file": "/tmp/forma_share/s_00608460.txt",
+  "head": "User Request     |     v Agent     |     v speccompiler MCP     |     v Spec Pat"
+ },
+ {
+  "pos": 608653,
+  "len": 382,
+  "file": "/tmp/forma_share/s_00608653.txt",
+  "head": "```bash # 安装 speccompiler install  # 初始化项目 speccompiler init task-manager  # 验证规"
+ },
+ {
+  "pos": 609092,
+  "len": 370,
+  "file": "/tmp/forma_share/s_00609092.txt",
+  "head": "# 安装 speccompiler install  # 初始化项目 speccompiler init task-manager  # 验证规格 specco"
+ },
+ {
+  "pos": 609544,
+  "len": 889,
+  "file": "/tmp/forma_share/s_00609544.txt",
+  "head": "```text speccompiler/ │ ├── apps/ │   ├── cli/ │   ├── mcp-server/ │   └── playg"
+ },
+ {
+  "pos": 610515,
+  "len": 877,
+  "file": "/tmp/forma_share/s_00610515.txt",
+  "head": "speccompiler/ │ ├── apps/ │   ├── cli/ │   ├── mcp-server/ │   └── playground/ │"
+ },
+ {
+  "pos": 611493,
+  "len": 172,
+  "file": "/tmp/forma_share/s_00611493.txt",
+  "head": "```json {   \"operation\": \"node.create\",   \"target\": \"data.entities.User.fields\","
+ },
+ {
+  "pos": 611715,
+  "len": 160,
+  "file": "/tmp/forma_share/s_00611715.txt",
+  "head": "{   \"operation\": \"node.create\",   \"target\": \"data.entities.User.fields\",   \"valu"
+ },
+ {
+  "pos": 611950,
+  "len": 143,
+  "file": "/tmp/forma_share/s_00611950.txt",
+  "head": "```text Current Spec      |      v Semantic Diff      |      v Minimal Patch    "
+ },
+ {
+  "pos": 612128,
+  "len": 131,
+  "file": "/tmp/forma_share/s_00612128.txt",
+  "head": "Current Spec      |      v Semantic Diff      |      v Minimal Patch      |     "
+ },
+ {
+  "pos": 612473,
+  "len": 257,
+  "file": "/tmp/forma_share/s_00612473.txt",
+  "head": "```json {   \"success\": false,   \"error\": {     \"code\": \"FIELD_NOT_FOUND\",     \"p"
+ },
+ {
+  "pos": 612793,
+  "len": 245,
+  "file": "/tmp/forma_share/s_00612793.txt",
+  "head": "{   \"success\": false,   \"error\": {     \"code\": \"FIELD_NOT_FOUND\",     \"path\": \"p"
+ },
+ {
+  "pos": 613119,
+  "len": 127,
+  "file": "/tmp/forma_share/s_00613119.txt",
+  "head": "```text spec_get spec_search spec_apply_patch spec_validate spec_get_ir spec_pre"
+ },
+ {
+  "pos": 613805,
+  "len": 238,
+  "file": "/tmp/forma_share/s_00613805.txt",
+  "head": "```text Spec Change     |     v Validate     |     v Build Plan     |     v Temp"
+ },
+ {
+  "pos": 614089,
+  "len": 226,
+  "file": "/tmp/forma_share/s_00614089.txt",
+  "head": "Spec Change     |     v Validate     |     v Build Plan     |     v Temporary Ou"
+ },
+ {
+  "pos": 614380,
+  "len": 383,
+  "file": "/tmp/forma_share/s_00614380.txt",
+  "head": "```json {   \"change_id\": \"chg_001\",   \"status\": \"validated\",   \"operations\": [  "
+ },
+ {
+  "pos": 614847,
+  "len": 371,
+  "file": "/tmp/forma_share/s_00614847.txt",
+  "head": "{   \"change_id\": \"chg_001\",   \"status\": \"validated\",   \"operations\": [     {    "
+ },
+ {
+  "pos": 615321,
+  "len": 227,
+  "file": "/tmp/forma_share/s_00615321.txt",
+  "head": "```yaml permissions:   User:     read:       roles:         - admin         - op"
+ },
+ {
+  "pos": 615584,
+  "len": 215,
+  "file": "/tmp/forma_share/s_00615584.txt",
+  "head": "permissions:   User:     read:       roles:         - admin         - operator  "
+ },
+ {
+  "pos": 615853,
+  "len": 263,
+  "file": "/tmp/forma_share/s_00615853.txt",
+  "head": "```text plugins/ ├── frontend/ │   ├── react │   ├── vue │   └── svelte │ ├── ba"
+ },
+ {
+  "pos": 616158,
+  "len": 251,
+  "file": "/tmp/forma_share/s_00616158.txt",
+  "head": "plugins/ ├── frontend/ │   ├── react │   ├── vue │   └── svelte │ ├── backend/ │"
+ },
+ {
+  "pos": 616469,
+  "len": 210,
+  "file": "/tmp/forma_share/s_00616469.txt",
+  "head": "```text project/ ├── spec/ │   └── ... │ ├── generated/ │   ├── frontend/ │   ├─"
+ },
+ {
+  "pos": 616715,
+  "len": 198,
+  "file": "/tmp/forma_share/s_00616715.txt",
+  "head": "project/ ├── spec/ │   └── ... │ ├── generated/ │   ├── frontend/ │   ├── backen"
+ },
+ {
+  "pos": 617215,
+  "len": 185,
+  "file": "/tmp/forma_share/s_00617215.txt",
+  "head": "```text User.status     |     +---- DatabaseSchema     |     +---- ORMModel     "
+ },
+ {
+  "pos": 617435,
+  "len": 173,
+  "file": "/tmp/forma_share/s_00617435.txt",
+  "head": "User.status     |     +---- DatabaseSchema     |     +---- ORMModel     |     +-"
+ },
+ {
+  "pos": 617662,
+  "len": 291,
+  "file": "/tmp/forma_share/s_00617662.txt",
+  "head": "```json {   \"id\": \"field:user.status\",   \"kind\": \"DataField\",   \"type\": \"enum\", "
+ },
+ {
+  "pos": 618025,
+  "len": 279,
+  "file": "/tmp/forma_share/s_00618025.txt",
+  "head": "{   \"id\": \"field:user.status\",   \"kind\": \"DataField\",   \"type\": \"enum\",   \"owner"
+ },
+ {
+  "pos": 618394,
+  "len": 405,
+  "file": "/tmp/forma_share/s_00618394.txt",
+  "head": "```text IR ├── Project │   ├── Modules │   └── Targets │ ├── Data │   ├── Entiti"
+ },
+ {
+  "pos": 618852,
+  "len": 393,
+  "file": "/tmp/forma_share/s_00618852.txt",
+  "head": "IR ├── Project │   ├── Modules │   └── Targets │ ├── Data │   ├── Entities │   ├"
+ },
+ {
+  "pos": 619599,
+  "len": 287,
+  "file": "/tmp/forma_share/s_00619599.txt",
+  "head": "```json {   \"component\": \"DataTable\",   \"version\": \"1.0\",   \"props\": {     \"enti"
+ },
+ {
+  "pos": 619957,
+  "len": 275,
+  "file": "/tmp/forma_share/s_00619957.txt",
+  "head": "{   \"component\": \"DataTable\",   \"version\": \"1.0\",   \"props\": {     \"entity\": {  "
+ },
+ {
+  "pos": 620321,
+  "len": 347,
+  "file": "/tmp/forma_share/s_00620321.txt",
+  "head": "```text components/ ├── layout/ │   ├── Page │   ├── Sidebar │   └── Header │ ├─"
+ },
+ {
+  "pos": 620716,
+  "len": 335,
+  "file": "/tmp/forma_share/s_00620716.txt",
+  "head": "components/ ├── layout/ │   ├── Page │   ├── Sidebar │   └── Header │ ├── data/ "
+ },
+ {
+  "pos": 621118,
+  "len": 535,
+  "file": "/tmp/forma_share/s_00621118.txt",
+  "head": "```yaml spec_version: \"1\"  pages:   users:     route: /users     title: Users   "
+ },
+ {
+  "pos": 621712,
+  "len": 523,
+  "file": "/tmp/forma_share/s_00621712.txt",
+  "head": "spec_version: \"1\"  pages:   users:     route: /users     title: Users      layou"
+ },
+ {
+  "pos": 622314,
+  "len": 408,
+  "file": "/tmp/forma_share/s_00622314.txt",
+  "head": "```yaml spec_version: \"1\"  entities:   User:     fields:       id:         type:"
+ },
+ {
+  "pos": 622772,
+  "len": 396,
+  "file": "/tmp/forma_share/s_00622772.txt",
+  "head": "spec_version: \"1\"  entities:   User:     fields:       id:         type: uuid   "
+ },
+ {
+  "pos": 623239,
+  "len": 277,
+  "file": "/tmp/forma_share/s_00623239.txt",
+  "head": "```yaml spec_version: \"1\"  app:   id: task-manager   name: Task Manager   versio"
+ },
+ {
+  "pos": 623559,
+  "len": 265,
+  "file": "/tmp/forma_share/s_00623559.txt",
+  "head": "spec_version: \"1\"  app:   id: task-manager   name: Task Manager   version: 1.0.0"
+ },
+ {
+  "pos": 623888,
+  "len": 230,
+  "file": "/tmp/forma_share/s_00623888.txt",
+  "head": "```json {   \"code\": \"SPEC_FIELD_REFERENCE_NOT_FOUND\",   \"severity\": \"error\",   \""
+ },
+ {
+  "pos": 624173,
+  "len": 218,
+  "file": "/tmp/forma_share/s_00624173.txt",
+  "head": "{   \"code\": \"SPEC_FIELD_REFERENCE_NOT_FOUND\",   \"severity\": \"error\",   \"path\": \""
+ },
+ {
+  "pos": 624466,
+  "len": 183,
+  "file": "/tmp/forma_share/s_00624466.txt",
+  "head": "```text Input   |   v YAML Parser   |   v JSON Normalization   |   v Schema Vali"
+ },
+ {
+  "pos": 624691,
+  "len": 171,
+  "file": "/tmp/forma_share/s_00624691.txt",
+  "head": "Input   |   v YAML Parser   |   v JSON Normalization   |   v Schema Validation  "
+ },
+ {
+  "pos": 624924,
+  "len": 452,
+  "file": "/tmp/forma_share/s_00624924.txt",
+  "head": "```text my-app/ ├── spec/ │   ├── manifest.yaml │   ├── app.yaml │   ├── data/ │"
+ },
+ {
+  "pos": 625425,
+  "len": 440,
+  "file": "/tmp/forma_share/s_00625425.txt",
+  "head": "my-app/ ├── spec/ │   ├── manifest.yaml │   ├── app.yaml │   ├── data/ │   │   ├"
+ },
+ {
+  "pos": 625935,
+  "len": 227,
+  "file": "/tmp/forma_share/s_00625935.txt",
+  "head": "```json {   \"protocol\": \"spec.v1\",   \"operation\": \"node.update\",   \"target\": \"da"
+ },
+ {
+  "pos": 626221,
+  "len": 215,
+  "file": "/tmp/forma_share/s_00626221.txt",
+  "head": "{   \"protocol\": \"spec.v1\",   \"operation\": \"node.update\",   \"target\": \"data.entit"
+ },
+ {
+  "pos": 626721,
+  "len": 1066,
+  "file": "/tmp/forma_share/s_00626721.txt",
+  "head": "```text                 AI CODING AGENTS        Codex / Claude Code / Pi / Other"
+ },
+ {
+  "pos": 627844,
+  "len": 1054,
+  "file": "/tmp/forma_share/s_00627844.txt",
+  "head": "                AI CODING AGENTS        Codex / Claude Code / Pi / Other        "
+ },
+ {
+  "pos": 630957,
+  "len": 111811,
+  "file": "/tmp/forma_share/s_00630957.txt",
+  "head": "const __dilAutoControls=(()=>{ function __dilAutoControls_checkbox_state({slot,p"
+ },
+ {
+  "pos": 770638,
+  "len": 36688,
+  "file": "/tmp/forma_share/s_00770638.txt",
+  "head": "# AI Specification Compiler：下一代 AI Coding 软件生产引擎  产品战略 · 技术架构 · DSL 设计 · 编译器 · A"
+ },
+ {
+  "pos": 820590,
+  "len": 175,
+  "file": "/tmp/forma_share/s_00820590.txt",
+  "head": "https://media.licdn.com/dms/image/v2/D4E22AQFwatkBjZEWSA/feedshare-shrink_800/B4"
+ },
+ {
+  "pos": 820866,
+  "len": 244,
+  "file": "/tmp/forma_share/s_00820866.txt",
+  "head": "professional technical architecture infographic software specification compiler "
+ },
+ {
+  "pos": 821550,
+  "len": 134,
+  "file": "/tmp/forma_share/s_00821550.txt",
+  "head": "https://cdn.dribbble.com/userupload/46445066/file/15a54d156e7f6c08d942deb6e89c10"
+ },
+ {
+  "pos": 822291,
+  "len": 193,
+  "file": "/tmp/forma_share/s_00822291.txt",
+  "head": "https://media2.dev.to/dynamic/image/width%3D1200%2Cheight%3D627%2Cfit%3Dcover%2C"
+ },
+ {
+  "pos": 822586,
+  "len": 203,
+  "file": "/tmp/forma_share/s_00822586.txt",
+  "head": "software compiler architecture diagram AI specification DSL parser semantic anal"
+ },
+ {
+  "pos": 825793,
+  "len": 204,
+  "file": "/tmp/forma_share/s_00825793.txt",
+  "head": "https://media2.dev.to/dynamic/image/width%3D1000%2Cheight%3D420%2Cfit%3Dcover%2C"
+ },
+ {
+  "pos": 826072,
+  "len": 171,
+  "file": "/tmp/forma_share/s_00826072.txt",
+  "head": "minimalist futuristic software compiler architecture dark navy interface structu"
+ },
+ {
+  "pos": 855856,
+  "len": 40145,
+  "file": "/tmp/forma_share/s_00855856.txt",
+  "head": "# AI Specification Compiler：下一代 AI Coding 软件生产引擎  <text color=\"secondary\" size=\""
+ },
+ {
+  "pos": 916549,
+  "len": 8865,
+  "file": "/tmp/forma_share/s_00916549.txt",
+  "head": "# 十三、MVP：第一版到底做什么？  这里我会做一个比较激进的取舍。  **第一版只做一种软件：标准 CRUD 型全栈 Web 应用。**  不做通用 IDE"
+ },
+ {
+  "pos": 936399,
+  "len": 14179,
+  "file": "/tmp/forma_share/s_00936399.txt",
+  "head": "# 五、DSL 设计：不要一开始创造一门通用编程语言  这里我想做一个重要的技术决策：  **不要尝试用 JSON/YAML 描述整个世界。先做一套受约束的软件"
+ },
+ {
+  "pos": 961887,
+  "len": 6048,
+  "file": "/tmp/forma_share/s_00961887.txt",
+  "head": "# 三、竞品研究：不能把已有的 Spec Kit 再做一遍  这是产品立项时必须解决的问题。  现在已经出现了 Specification-Driven Dev"
+ },
+ {
+  "pos": 974985,
+  "len": 140,
+  "file": "/tmp/forma_share/s_00974985.txt",
+  "head": "请给我制定一套完整方案。交付范围：全部一套；目标产品：通用 AI Coding（支持 Codex、Claude Code、Pi 等）。围绕 AI Specifi"
+ },
+ {
+  "pos": 977982,
+  "len": 446,
+  "file": "/tmp/forma_share/s_00977982.txt",
+  "head": "我建议不要把这个方向仅仅当成一篇技术文章，而是把它发展成一个完整的技术项目，甚至一个新的 AI Coding 产品方向。  我理解你想做的是：**让 AI 从直"
+ },
+ {
+  "pos": 978979,
+  "len": 1296,
+  "file": "/tmp/forma_share/s_00978979.txt",
+  "head": "我建议不要把这个方向仅仅当成一篇技术文章，而是把它发展成一个完整的技术项目，甚至一个新的 AI Coding 产品方向。  我理解你想做的是：**让 AI 从直"
+ },
+ {
+  "pos": 984849,
+  "len": 8107,
+  "file": "/tmp/forma_share/s_00984849.txt",
+  "head": "下面这篇按照微信公众号技术观点文章来写，保留标题的争议性，同时加入技术架构、代码示例和实际落地思路。核心不是否定 AI Coding，而是质疑当前 AI Cod"
+ },
+ {
+  "pos": 993889,
+  "len": 128,
+  "file": "/tmp/forma_share/s_00993889.txt",
+  "head": " 标题保持激进，不要改成温和的技术教程标题。封面可以用「100 万 Token，多少真正创造了价值？」作为主视觉文案。文章的争议点是 AI 是否应该直接写代码，"
+ },
+ {
+  "pos": 994186,
+  "len": 7876,
+  "file": "/tmp/forma_share/s_00994186.txt",
+  "head": ":::writing{variant=\"document\" id=\"73182\"} # 我认为 AI Coding 最大的骗局：让 AI 写代码  **100 "
+ },
+ {
+  "pos": 1002751,
+  "len": 7830,
+  "file": "/tmp/forma_share/s_01002751.txt",
+  "head": "# 我认为 AI Coding 最大的骗局：让 AI 写代码  **100 万 Token，真正有价值的可能只有 1 万。我们是不是从一开始就用错了 AI？**"
+ },
+ {
+  "pos": 1011267,
+  "len": 8120,
+  "file": "/tmp/forma_share/s_01011267.txt",
+  "head": "下面这篇按照微信公众号技术观点文章来写，保留标题的争议性，同时加入技术架构、代码示例和实际落地思路。核心不是否定 AI Coding，而是质疑当前 AI Cod"
+ },
+ {
+  "pos": 1021527,
+  "len": 225,
+  "file": "/tmp/forma_share/s_01021527.txt",
+  "head": "https://images.openai.com/static-rsc-4/8hTvJ11Yuzs7Z5WiQ7_CAe-Gi4vlypUdl21piRrGY"
+ },
+ {
+  "pos": 1021755,
+  "len": 248,
+  "file": "/tmp/forma_share/s_01021755.txt",
+  "head": "https://images.openai.com/static-rsc-4/QENPD-qq2Rdru6d3R9DB3YgKy_smKJkVIQRHbqqaH"
+ },
+ {
+  "pos": 1029516,
+  "len": 2010,
+  "file": "/tmp/forma_share/s_01029516.txt",
+  "head": "我建议标题不要写成普通的技术分享，而是直接挑战 AI Coding 这个行业目前默认的工作方式。  核心争议点：**AI 写代码，本身可能就是一种巨大的 Tok"
+ },
+ {
+  "pos": 1032265,
+  "len": 180,
+  "file": "/tmp/forma_share/s_01032265.txt",
+  "head": "minimalist dark editorial illustration artificial intelligence neural network ge"
+ },
+ {
+  "pos": 1038666,
+  "len": 248,
+  "file": "/tmp/forma_share/s_01038666.txt",
+  "head": "https://images.openai.com/static-rsc-4/-BMw8eKOeGGRs7fEpuJZK7YNgtTkPCmb7QS3xDnx0"
+ },
+ {
+  "pos": 1038917,
+  "len": 225,
+  "file": "/tmp/forma_share/s_01038917.txt",
+  "head": "https://images.openai.com/static-rsc-4/5MqFNNq0F4c4Jh-6v1z6ST3r777WnSM5abLGPSTuK"
+ },
+ {
+  "pos": 1039145,
+  "len": 248,
+  "file": "/tmp/forma_share/s_01039145.txt",
+  "head": "https://images.openai.com/static-rsc-4/Al17ym6uK_i7pj6Zu28_S2wrm2NZhvKIpebp0H6EH"
+ },
+ {
+  "pos": 1039396,
+  "len": 225,
+  "file": "/tmp/forma_share/s_01039396.txt",
+  "head": "https://images.openai.com/static-rsc-4/B2aGsH1uJnbFb-Hwut6e8GyzTNYJBBpHEKhrKPHYK"
+ },
+ {
+  "pos": 1039624,
+  "len": 225,
+  "file": "/tmp/forma_share/s_01039624.txt",
+  "head": "https://images.openai.com/static-rsc-4/ONjSCmFb9s0UJF4AswkBF9Ps22hE9ysHjZ_Iqbz4e"
+ },
+ {
+  "pos": 1039852,
+  "len": 225,
+  "file": "/tmp/forma_share/s_01039852.txt",
+  "head": "https://images.openai.com/static-rsc-4/VppkjZWnr8-CLeJtRVY-I_bawpEqtyTkmT4QTRNqh"
+ },
+ {
+  "pos": 1040080,
+  "len": 225,
+  "file": "/tmp/forma_share/s_01040080.txt",
+  "head": "https://images.openai.com/static-rsc-4/WC_1A8EYJGD8fDo7e73nJn_rFrw6t2tOSV_TlXjqm"
+ },
+ {
+  "pos": 1040308,
+  "len": 248,
+  "file": "/tmp/forma_share/s_01040308.txt",
+  "head": "https://images.openai.com/static-rsc-4/lWdZYIRcma-3tXpKEgcTAESEthwPCS1S9CfP-gM36"
+ },
+ {
+  "pos": 1040559,
+  "len": 248,
+  "file": "/tmp/forma_share/s_01040559.txt",
+  "head": "https://images.openai.com/static-rsc-4/pNlJFMeTFfbAuat6Z9wC5eO-SkJavcP440AkOBey2"
+ },
+ {
+  "pos": 1040810,
+  "len": 225,
+  "file": "/tmp/forma_share/s_01040810.txt",
+  "head": "https://images.openai.com/static-rsc-4/s1pecxOAQn309_7P3IjBXtwwcKRiZxd11OXCjvuhN"
+ },
+ {
+  "pos": 1041038,
+  "len": 248,
+  "file": "/tmp/forma_share/s_01041038.txt",
+  "head": "https://images.openai.com/static-rsc-4/vbtWVKdTJJZZhdFhvrsV5cH1h8TZZvEw8JJQafLRp"
+ },
+ {
+  "pos": 1041289,
+  "len": 248,
+  "file": "/tmp/forma_share/s_01041289.txt",
+  "head": "https://images.openai.com/static-rsc-4/x5l5uJGakQe399lH4LKpeuNFJfnBFG281Z-ZWzmgF"
+ },
+ {
+  "pos": 1071284,
+  "len": 6755,
+  "file": "/tmp/forma_share/s_01071284.txt",
+  "head": "你的这个想法非常值得做，而且我认为它不只是优化 AI Coding 的 Token 消耗，而是可以发展成一套新的软件生产范式：  **AI 不再直接编写程序，而"
+ },
+ {
+  "pos": 1082350,
+  "len": 210,
+  "file": "/tmp/forma_share/s_01082350.txt",
+  "head": "https://media.licdn.com/dms/image/v2/D5612AQFpDA9wyJ-R-A/article-cover_image-shr"
+ },
+ {
+  "pos": 1086376,
+  "len": 121,
+  "file": "/tmp/forma_share/s_01086376.txt",
+  "head": "From MCU to Cloud: Lightweight Serialization with Nanopb | by Wadix Technologies"
+ },
+ {
+  "pos": 1092670,
+  "len": 232,
+  "file": "/tmp/forma_share/s_01092670.txt",
+  "head": "```text 原始 Spec    |    +-- Data DSL    +-- UI DSL    +-- Logic DSL    +-- API D"
+ },
+ {
+  "pos": 1092938,
+  "len": 220,
+  "file": "/tmp/forma_share/s_01092938.txt",
+  "head": "原始 Spec    |    +-- Data DSL    +-- UI DSL    +-- Logic DSL    +-- API DSL      "
+ },
+ {
+  "pos": 1093216,
+  "len": 201,
+  "file": "/tmp/forma_share/s_01093216.txt",
+  "head": "```json {   \"error\": \"INVALID_FIELD_REFERENCE\",   \"path\": \"ui.pages.users.column"
+ },
+ {
+  "pos": 1093468,
+  "len": 189,
+  "file": "/tmp/forma_share/s_01093468.txt",
+  "head": "{   \"error\": \"INVALID_FIELD_REFERENCE\",   \"path\": \"ui.pages.users.columns[2]\",  "
+ },
+ {
+  "pos": 1094026,
+  "len": 125,
+  "file": "/tmp/forma_share/s_01094026.txt",
+  "head": "```json {   \"component\": \"DataTable\",   \"props\": {     \"entity\": \"User\",     \"co"
+ },
+ {
+  "pos": 1094376,
+  "len": 720,
+  "file": "/tmp/forma_share/s_01094376.txt",
+  "head": "```yaml app:   id: user-manager   name: User Manager  data:   entities:     User"
+ },
+ {
+  "pos": 1095162,
+  "len": 708,
+  "file": "/tmp/forma_share/s_01095162.txt",
+  "head": "app:   id: user-manager   name: User Manager  data:   entities:     User:       "
+ },
+ {
+  "pos": 1095957,
+  "len": 178,
+  "file": "/tmp/forma_share/s_01095957.txt",
+  "head": "```text AI  └── JSON / YAML / DSL          ↓     Schema Validator          ↓    "
+ },
+ {
+  "pos": 1096165,
+  "len": 166,
+  "file": "/tmp/forma_share/s_01096165.txt",
+  "head": "AI  └── JSON / YAML / DSL          ↓     Schema Validator          ↓      AST Co"
+ },
+ {
+  "pos": 1096384,
+  "len": 132,
+  "file": "/tmp/forma_share/s_01096384.txt",
+  "head": "```text AI  ├── HTML  ├── CSS  ├── React  ├── TypeScript  ├── API  ├── CRUD  ├──"
+ },
+ {
+  "pos": 1096545,
+  "len": 120,
+  "file": "/tmp/forma_share/s_01096545.txt",
+  "head": "AI  ├── HTML  ├── CSS  ├── React  ├── TypeScript  ├── API  ├── CRUD  ├── Validat"
+ }
+]

@@ -1,0 +1,28 @@
+```text
+components/
+├── layout/
+│   ├── Page
+│   ├── Sidebar
+│   └── Header
+│
+├── data/
+│   ├── DataTable
+│   ├── DataGrid
+│   └── DataView
+│
+├── forms/
+│   ├── Form
+│   ├── Input
+│   ├── Select
+│   └── DatePicker
+│
+├── feedback/
+│   ├── Dialog
+│   ├── Toast
+│   └── EmptyState
+│
+└── charts/
+    ├── LineChart
+    ├── BarChart
+    └── PieChart
+```

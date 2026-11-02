@@ -1,0 +1,1834 @@
+# Forma v0.1 Technical Blueprint（自研 DSL 版，本次战略调整的对象）
+
+> 来源：[ChatGPT 分享 6ae81e37](https://chatgpt.com/share/6ae81e37-c000-83ee-9a47-77fec81cd99a)
+> 定位：FORMA — AI-Native Software Compiler，Slogan「Describe software. Compile reality.」
+> **本蓝图第 4-5 章的自研 DSL（App/Data/UI/Flow/Rule/API/Theme/Test DSL）已被新提案取代：改用 SQL DDL / OpenAPI 3.1 / JSON Schema 2020-12 / BPMN 2.0 / DMN / AsyncAPI / JSON Forms / C4 等现有标准（Specification Federation）。
+> 仍然有效的资产：Canonical IR 与 Semantic Graph（第 6 章）、Studio（第 7 章）、增量编译（第 9 章）、Semantic Patch Protocol（第 10 章）、Verification System（第 11 章）。**
+
+下面我将 **Forma** 正式定义为一个 AI 原生的软件规格语言与确定性编译平台，而不是普通 AI Coding 工具或低代码平台。
+
+这份内容可以作为项目的技术立项文档、产品总设计（Technical Blueprint）和后续拆分开发任务的基础。
+
+# FORMA
+
+## AI-Native Software Compiler
+
+**Describe software. Compile reality.**
+
+Version 0.1 · Technical Blueprint · 2026
+
+---
+
+## 产品定义
+
+Forma 是一个以 DSL（Domain-Specific Language）为核心的软件生产系统。AI 将自然语言需求转化为结构化软件规格，人类通过可视化编辑器理解和修改规格，编译器将规格确定性地编译为完整、标准、可维护的软件项目。
+
+**AI**
+
+理解需求、生成规格、修改语义
+
+**DSL**
+
+软件唯一事实来源
+
+**Studio**
+
+可视化编辑与交互
+
+**Compiler**
+
+确定性生成软件
+
+# Forma — 完整产品与技术设计
+
+:::writing{variant="document" id="73182"}
+# Forma
+## AI-Native Software Compiler
+
+**Slogan:** Describe software. Compile reality.
+
+**产品定位：** AI 原生的软件规格语言、可视化建模与确定性编译平台。
+
+**核心理念：** AI 不应该把大量 Token 消耗在重复编写 HTML、CSS、TypeScript、SQL 和样板代码上。AI 应该负责理解需求、设计软件结构和表达业务语义；Forma 负责把这些语义转换成可执行程序。
+
+---
+
+# 1. 产品愿景
+
+## 1.1 要解决的问题
+
+目前 AI Coding 的主要工作模式：
+
+Natural Language → AI → Source Code → Build → Debug → Modify Source Code
+
+这一模式存在几个结构性问题：
+
+1. AI 必须不断生成大量重复的程序代码。
+2. 业务需求和实际代码之间缺乏统一的语义模型。
+3. 修改一个业务需求，可能涉及多个文件。
+4. AI 需要反复阅读和理解整个代码库。
+5. 生成结果存在随机性和不确定性。
+6. 代码实现细节消耗大量 Token。
+7. 不同 Agent 对项目结构、代码风格和架构的理解不一致。
+8. 很难准确判断一次修改会影响哪些模块。
+9. 代码生成与业务需求之间缺乏可验证的映射关系。
+
+## 1.2 Forma 的解决方案
+
+改变软件生产的基本单位。
+
+传统 AI Coding 的基本单位是 Source Code。
+
+Forma 的基本单位是 Semantic Specification。
+
+AI 不直接生成大量业务代码，而是产生结构化的程序规格。
+
+例如：
+
+用户要求：
+
+创建一个订单系统，支持订单创建、审批、拒绝、取消，审批通过后自动生成发货任务。
+
+传统 AI Coding：
+
+- 编写数据库 Schema
+- 编写 Model
+- 编写 API
+- 编写 React 页面
+- 编写表单
+- 编写状态管理
+- 编写业务逻辑
+- 编写权限校验
+- 编写测试
+
+Forma：
+
+- 定义 Order 实体
+- 定义订单状态机
+- 定义审批规则
+- 定义订单页面
+- 定义审批事件
+- 定义发货工作流
+
+其余工作由编译器完成。
+
+## 1.3 产品原则
+
+1. Spec First：规格是软件的事实来源。
+2. AI Native：DSL 专门为 AI 生成、理解和修改而设计。
+3. Visual First：规格拥有原生可视化表达。
+4. Compiler Driven：编译器而不是 AI 负责重复性代码生成。
+5. Deterministic：相同规格、编译器版本和配置产生相同输出。
+6. Incremental：只重新编译发生变化的部分。
+7. Reversible：支持规格版本管理、Diff、回滚和迁移。
+8. Agent Agnostic：兼容 Codex、Claude Code、Pi 等 Agent。
+9. Open Output：生成标准代码，不强制用户依赖专有运行时。
+10. Verifiable：规格、编译结果和测试之间存在可追溯关系。
+
+---
+
+# 2. 产品边界
+
+Forma 不做：
+
+- 新的通用 AI Coding Agent。
+- IDE 的简单替代品。
+- Markdown 需求管理器。
+- 单纯的 Prompt-to-Website 工具。
+- 只能拖拽组件的传统 Low-Code。
+- 只能在专有云平台运行的软件。
+- 用自然语言包装现有代码生成 API 的工具。
+
+Forma 要做：
+
+- 软件 DSL 语言。
+- 统一语义模型。
+- 图形化规格编辑器。
+- AI Specification Engine。
+- Compiler Core。
+- 多 Target Code Generator。
+- 增量编译引擎。
+- 软件规格验证系统。
+- Agent 集成协议。
+- 标准项目导出。
+
+---
+
+# 3. 总体技术架构
+
+```text
+                       User
+                         |
+              Natural Language Request
+                         |
+                         v
+                 AI Specification Engine
+                         |
+                  Semantic Operations
+                         |
+                         v
+              +-----------------------+
+              |     Forma Project     |
+              |                       |
+              |    Canonical DSL      |
+              |                       |
+              |       AST / IR        |
+              |                       |
+              |   Semantic Graph      |
+              +-----------------------+
+                    ^           ^
+                    |           |
+              Forma Studio   Agent API
+                    |           |
+              Visual Editor  Codex/CC/Pi
+                    |           |
+                    +-----+-----+
+                          |
+                          v
+                    Forma Compiler
+                          |
+          +---------------+---------------+
+          |               |               |
+      Validation      Dependency       Incremental
+       Engine           Engine           Engine
+          |               |               |
+          +---------------+---------------+
+                          |
+                          v
+                    Target Compiler
+                          |
+          +---------------+---------------+
+          |               |               |
+       React UI        API Server       Database
+          |               |               |
+          +---------------+---------------+
+                          |
+                          v
+                 Standard Software Project
+                          |
+                          v
+                  Build / Test / Deploy
+```
+
+系统分为七个核心层：
+
+1. Specification Layer
+2. Visual Modeling Layer
+3. AI Interaction Layer
+4. Semantic Compiler Layer
+5. Incremental Build Layer
+6. Target Generation Layer
+7. Verification Layer
+
+---
+
+# 4. Forma DSL 语言设计
+
+这是整个项目最核心的资产。
+
+不能简单把 YAML 当成最终语言。
+
+YAML 可以作为一种可读的序列化格式，但 Forma 必须拥有自己的语言规范、类型系统、语义模型和版本机制。
+
+## 4.1 DSL 设计目标
+
+- 人类可以阅读。
+- AI 可以低 Token 成本生成。
+- 机器可以严格解析。
+- 能够表达完整业务语义。
+- 支持引用和依赖。
+- 支持模块化。
+- 支持增量修改。
+- 支持图形化呈现。
+- 支持静态检查。
+- 支持多语言 Target。
+- 支持版本迁移。
+
+## 4.2 DSL 文件结构
+
+建议一个 Forma 项目使用模块化目录：
+
+```text
+my-app/
+├── forma.toml
+├── specs/
+│   ├── app.forma
+│   ├── models/
+│   │   ├── user.forma
+│   │   └── order.forma
+│   ├── pages/
+│   │   ├── dashboard.forma
+│   │   └── orders.forma
+│   ├── workflows/
+│   │   └── order-approval.forma
+│   ├── rules/
+│   │   └── permissions.forma
+│   └── apis/
+│       └── orders.forma
+├── extensions/
+│   └── custom/
+├── generated/
+├── tests/
+└── .forma/
+    ├── lock
+    ├── cache/
+    └── manifest
+```
+
+`forma.toml`：
+
+```toml
+[project]
+name = "order-management"
+version = "1.0.0"
+language_version = "0.1"
+
+[compiler]
+target = "web-fullstack"
+incremental = true
+
+[target]
+frontend = "react-typescript"
+backend = "hono"
+database = "sqlite"
+
+[features]
+workflow = true
+permissions = true
+api = true
+```
+
+## 4.3 第一代 DSL 分类
+
+### App DSL
+
+描述应用程序的整体信息：
+
+- Application
+- Modules
+- Navigation
+- Global Settings
+- Authentication
+- Themes
+- Environments
+
+### Data DSL
+
+描述数据模型：
+
+- Entity
+- Field
+- Type
+- Relation
+- Index
+- Constraint
+- Default Value
+- Enum
+- Computed Field
+
+### UI DSL
+
+描述用户界面：
+
+- Page
+- Layout
+- Component
+- Form
+- Table
+- Dialog
+- Navigation
+- Data Binding
+- Interaction
+- Responsive Rules
+
+### Flow DSL
+
+描述业务流程：
+
+- Workflow
+- Trigger
+- Event
+- Step
+- Condition
+- Branch
+- Transition
+- State Machine
+- Retry
+- Timeout
+
+### Rule DSL
+
+描述业务规则：
+
+- Validation
+- Permission
+- Authorization
+- Business Constraint
+- Calculation
+- Policy
+
+### API DSL
+
+描述接口：
+
+- Endpoint
+- Method
+- Request
+- Response
+- Authentication
+- Middleware
+- Error Handling
+
+### Theme DSL
+
+描述：
+
+- Color Tokens
+- Typography
+- Spacing
+- Component Variants
+- Design Tokens
+- Responsive Breakpoints
+
+### Test DSL
+
+描述：
+
+- Unit Test
+- Integration Test
+- Workflow Test
+- Acceptance Criteria
+- Assertions
+- Fixtures
+
+---
+
+# 5. DSL 示例
+
+下面是概念语法，最终语法需要经过 Parser、Type System 和实际编译验证。
+
+## 5.1 数据模型
+
+```yaml
+model:
+  name: Order
+
+  fields:
+    id:
+      type: uuid
+      primary: true
+
+    amount:
+      type: decimal
+      required: true
+
+    status:
+      type: enum
+      values:
+        - pending
+        - approved
+        - rejected
+        - cancelled
+
+    created_at:
+      type: datetime
+      default: now
+
+  relations:
+    customer:
+      type: belongs_to
+      model: Customer
+```
+
+## 5.2 UI 页面
+
+```yaml
+page:
+  id: order-list
+  path: /orders
+
+  layout:
+    type: dashboard
+
+  content:
+    - component: heading
+      text: Orders
+
+    - component: data-table
+      source: Order
+      columns:
+        - id
+        - amount
+        - status
+        - created_at
+
+      actions:
+        - open-detail
+        - approve
+        - reject
+```
+
+## 5.3 业务流程
+
+```yaml
+workflow:
+  id: order-approval
+
+  trigger:
+    event: Order.approve_requested
+
+  steps:
+    - validate:
+        expression: order.amount > 0
+
+    - transition:
+        entity: Order
+        from: pending
+        to: approved
+
+    - create:
+        entity: Shipment
+        values:
+          order_id: $event.order.id
+```
+
+## 5.4 业务规则
+
+```yaml
+rule:
+  id: order-approval-limit
+
+  applies_to: Order
+
+  condition:
+    field: amount
+    operator: less_than_or_equal
+    value: 50000
+
+  effect:
+    allow: approve
+```
+
+## 5.5 API
+
+```yaml
+api:
+  resource: Order
+
+  endpoints:
+    - name: list
+      method: GET
+      path: /orders
+
+    - name: create
+      method: POST
+      path: /orders
+      input: OrderCreateInput
+
+    - name: approve
+      method: POST
+      path: /orders/{id}/approve
+      action: Order.approve
+```
+
+注意：表达式必须有受限的语法树和类型检查。不能把任意字符串直接当作可执行代码。
+
+---
+
+# 6. Canonical IR：统一语义中间表示
+
+DSL 不应该直接生成代码。
+
+必须有一个统一的 Canonical Intermediate Representation。
+
+```text
+DSL Source
+    |
+    v
+Parser
+    |
+    v
+AST
+    |
+    v
+Semantic Analysis
+    |
+    v
+Canonical IR
+    |
+    v
+Dependency Graph
+    |
+    v
+Target Compiler
+```
+
+## 6.1 为什么需要 IR
+
+1. 让 DSL 和编译器解耦。
+2. 让多个可视化视图使用相同模型。
+3. 让多个 Target 使用同一个语义模型。
+4. 支持静态分析。
+5. 支持依赖关系分析。
+6. 支持增量编译。
+7. 支持 Agent 只修改部分语义。
+8. 避免每个代码生成器独立解析 DSL。
+
+## 6.2 IR 结构
+
+每一个语义节点应包含：
+
+```json
+{
+  "id": "model.order",
+  "kind": "Entity",
+  "name": "Order",
+  "version": 1,
+  "properties": {},
+  "relations": [],
+  "source": {
+    "file": "models/order.forma",
+    "range": {
+      "start": 1,
+      "end": 20
+    }
+  },
+  "metadata": {
+    "owner": "spec",
+    "generated": true
+  }
+}
+```
+
+IR 必须有稳定的 Node ID。
+
+不能依赖文件行号或数组位置来识别节点。
+
+## 6.3 Semantic Graph
+
+将 IR 转换成有向依赖图：
+
+```text
+Order Entity
+    |
+    +---- Order Repository
+    |
+    +---- Order API
+    |
+    +---- Order List Page
+    |
+    +---- Order Detail Page
+    |
+    +---- Approval Workflow
+    |
+    +---- Order Tests
+```
+
+编译器可以知道：
+
+修改 Order.amount 后，需要重新检查哪些组件。
+
+这将成为增量编译和 Token 节省的重要基础。
+
+---
+
+# 7. Forma Studio：可视化规格编辑器
+
+Forma Studio 不是传统拖拽式 Low-Code 编辑器。
+
+它是 Canonical IR 的多视图编辑器。
+
+## 7.1 核心设计
+
+同一份规格可以有不同的 Projection。
+
+```text
+                 Canonical IR
+                      |
+       +--------------+--------------+
+       |              |              |
+       v              v              v
+   Data View       Flow View       UI View
+       |              |              |
+       v              v              v
+      ERD          Workflow       Page Builder
+       |              |              |
+       +--------------+--------------+
+                      |
+                  IR Update
+                      |
+                   Compiler
+```
+
+## 7.2 必须支持的视图
+
+### Data View
+
+- Entity Relationship Diagram
+- Entity Editor
+- Field Editor
+- Relationship Editor
+- Constraint Editor
+- Schema Diff
+
+### Flow View
+
+- Workflow Nodes
+- Condition Branches
+- State Machines
+- Event Connections
+- Validation Rules
+- Execution Preview
+
+### UI View
+
+- Page Canvas
+- Component Tree
+- Properties Panel
+- Layout Editor
+- Data Binding
+- Interaction Editor
+- Responsive Preview
+
+### API View
+
+- Endpoint List
+- Request / Response Schema
+- Relationship Viewer
+- Authentication Rules
+- API Preview
+
+### Architecture View
+
+- Module Dependencies
+- Entity Dependencies
+- Workflow Dependencies
+- API Dependencies
+- External Integrations
+
+## 7.3 双向同步
+
+这是一个非常重要的架构要求。
+
+用户通过画布修改：
+
+```text
+Canvas → IR Transaction → DSL Serialization
+```
+
+AI 修改：
+
+```text
+Agent → Semantic Patch → IR Transaction → DSL Serialization
+```
+
+两条路径必须修改同一份语义模型。
+
+不能维护两套独立状态。
+
+## 7.4 Studio 技术栈
+
+建议：
+
+- React
+- TypeScript
+- Vite
+- Tailwind CSS
+- shadcn/ui
+- React Flow / XYFlow
+- Monaco Editor
+- Zustand 或 Redux Toolkit
+- Zod
+
+建议采用：
+
+- 左侧：项目与规格导航
+- 中间：多视图编辑画布
+- 右侧：属性与语义检查
+- 底部：编译、验证、诊断信息
+
+不建议第一版做成完全自由的无限画布。
+
+应该优先保证业务模型的可读性和操作效率。
+
+---
+
+# 8. Forma Compiler
+
+Compiler 是整个产品的核心技术壁垒。
+
+## 8.1 编译阶段
+
+```text
+1. Source Loading
+2. Parsing
+3. AST Construction
+4. Type Checking
+5. Reference Resolution
+6. Semantic Validation
+7. Canonical IR Construction
+8. Dependency Graph Construction
+9. Change Impact Analysis
+10. Target Lowering
+11. Code Generation
+12. Output Validation
+13. Build Manifest
+```
+
+## 8.2 Compiler Core
+
+推荐使用 Rust。
+
+原因：
+
+- 强类型系统适合编译器开发。
+- 性能和内存控制好。
+- 适合构建 CLI。
+- 容易构建 WASM 模块。
+- 可以将 Compiler Core 嵌入其他应用。
+
+建议内部模块：
+
+```text
+forma/
+├── crates/
+│   ├── forma-parser/
+│   ├── forma-ast/
+│   ├── forma-types/
+│   ├── forma-semantic/
+│   ├── forma-ir/
+│   ├── forma-graph/
+│   ├── forma-validator/
+│   ├── forma-diff/
+│   ├── forma-incremental/
+│   ├── forma-codegen/
+│   ├── forma-runtime/
+│   ├── forma-project/
+│   └── forma-cli/
+```
+
+## 8.3 Parser
+
+职责：
+
+- 读取 DSL。
+- 检查语法。
+- 构建 AST。
+- 生成语法错误。
+- 提供精确 Source Location。
+
+建议第一版先采用 YAML 或 JSON 作为 DSL 序列化格式，随后开发专用文本语法。
+
+原因是先验证语义模型，比先开发复杂 Parser 更重要。
+
+## 8.4 Type Checker
+
+必须支持：
+
+- Primitive Types
+- Object Types
+- Array Types
+- Optional Types
+- Enum Types
+- Reference Types
+- Generic Types
+- Relation Types
+- Expression Types
+
+例如：
+
+Order.amount 是 Decimal。
+
+如果规则写成：
+
+Order.amount + "hello"
+
+必须在编译阶段报错，而不是等生成程序运行后才发现问题。
+
+## 8.5 Semantic Validator
+
+负责检查：
+
+- 重复实体。
+- 无效字段引用。
+- 不存在的 API。
+- 不存在的事件。
+- 无效状态迁移。
+- 不可达工作流节点。
+- 循环依赖。
+- 不一致的权限规则。
+- UI 数据绑定错误。
+- 不兼容的模块版本。
+
+## 8.6 Code Generator
+
+生成器必须与 Target 解耦。
+
+```text
+Canonical IR
+    |
+    +---- React Generator
+    |
+    +---- Hono Generator
+    |
+    +---- SQLite Generator
+    |
+    +---- PostgreSQL Generator
+    |
+    +---- OpenAPI Generator
+    |
+    +---- Test Generator
+```
+
+第一版不应该同时开发太多 Target。
+
+先固定一个完整的全栈 Target。
+
+## 8.7 生成代码的所有权
+
+生成代码与用户代码必须严格分离。
+
+建议：
+
+```text
+project/
+├── src/
+│   ├── generated/
+│   │   ├── models/
+│   │   ├── api/
+│   │   ├── pages/
+│   │   ├── components/
+│   │   └── workflows/
+│   │
+│   ├── extensions/
+│   │   └── custom/
+│   │
+│   └── bootstrap/
+│
+├── specs/
+└── forma.toml
+```
+
+规则：
+
+1. `generated/` 完全由编译器管理。
+2. 用户自定义代码放在 `extensions/`。
+3. 编译器不得覆盖用户代码。
+4. 自定义扩展必须有明确接口。
+5. 规格修改后重新编译生成区域。
+6. 编译器负责检查扩展接口兼容性。
+
+不要在第一版使用复杂的代码区域注入机制。
+
+---
+
+# 9. Incremental Compilation
+
+这是 Forma 的关键竞争力之一。
+
+传统代码生成：
+
+```text
+Spec Changed
+    |
+    v
+Regenerate Everything
+```
+
+Forma：
+
+```text
+Spec Changed
+    |
+    v
+Semantic Diff
+    |
+    v
+Affected Node Detection
+    |
+    v
+Dependency Traversal
+    |
+    v
+Incremental Compilation
+    |
+    v
+Affected Output Only
+```
+
+## 9.1 节点 Hash
+
+每个 IR 节点计算稳定 Hash：
+
+```text
+Node Hash =
+Hash(
+    Node Type +
+    Semantic Properties +
+    Dependency Hashes +
+    Compiler Version
+)
+```
+
+如果节点 Hash 没变化，就不必重新生成它的输出。
+
+## 9.2 Dependency DAG
+
+例如：
+
+```text
+Order Model
+    |
+    +---- Order API
+    |
+    +---- Order Repository
+    |
+    +---- Order Table
+    |
+    +---- Order Form
+    |
+    +---- Approval Workflow
+```
+
+修改 Order.amount：
+
+- 检查相关类型。
+- 检查 API Schema。
+- 检查表单绑定。
+- 检查数据库迁移。
+- 检查相关测试。
+
+但不应该重新生成无关的 User 模块。
+
+## 9.3 编译缓存
+
+缓存 Key：
+
+```text
+hash(
+  node_hash,
+  dependency_hash,
+  generator_version,
+  target_config
+)
+```
+
+缓存必须支持：
+
+- 本地缓存。
+- 可选远程缓存。
+- 缓存失效。
+- 编译重放。
+- 缓存清理。
+
+---
+
+# 10. AI Specification Engine
+
+AI Specification Engine 不负责直接写业务代码。
+
+它负责把需求转换为可验证的规格变更。
+
+## 10.1 工作流程
+
+```text
+User Requirement
+      |
+      v
+Intent Understanding
+      |
+      v
+Requirement Decomposition
+      |
+      v
+Semantic Planning
+      |
+      v
+Specification Generation
+      |
+      v
+Schema Validation
+      |
+      v
+Semantic Validation
+      |
+      v
+Visual Preview
+      |
+      v
+User Approval
+      |
+      v
+Compiler
+```
+
+## 10.2 AI 只使用 Semantic Operations
+
+不建议让 AI 每次重新输出完整规格文件。
+
+设计一套操作协议：
+
+```json
+{
+  "operations": [
+    {
+      "op": "node.create",
+      "kind": "Rule",
+      "id": "rule.order-limit",
+      "properties": {
+        "field": "Order.amount",
+        "operator": "lte",
+        "value": 50000
+      }
+    },
+    {
+      "op": "edge.create",
+      "from": "rule.order-limit",
+      "to": "workflow.order-approval"
+    }
+  ]
+}
+```
+
+## 10.3 Semantic Patch Protocol
+
+支持以下操作：
+
+- node.create
+- node.update
+- node.delete
+- node.rename
+- edge.create
+- edge.delete
+- property.set
+- property.unset
+- relation.create
+- relation.delete
+- module.create
+- module.move
+
+每个操作都必须经过：
+
+1. Schema Validation
+2. Permission Check
+3. Conflict Detection
+4. Semantic Validation
+5. Transaction Commit
+
+AI 不能直接覆盖整个项目。
+
+## 10.4 Agent Adapter
+
+支持：
+
+- Codex
+- Claude Code
+- Pi
+- OpenCode
+- 其他 MCP 兼容 Agent
+
+集成方式：
+
+- MCP Server
+- CLI
+- Local HTTP API
+- 文件系统协议
+
+Agent 不需要知道底层 Compiler 的全部细节。
+
+只需要：
+
+1. 获取项目摘要。
+2. 获取相关 DSL。
+3. 获取语义节点。
+4. 提交 Semantic Patch。
+5. 查询验证结果。
+6. 触发编译。
+7. 获取诊断信息。
+
+## 10.5 Token Optimization
+
+必须采用上下文按需加载。
+
+不能每次把整个 DSL 项目交给 Agent。
+
+提供：
+
+- Project Summary
+- Module Summary
+- Node Detail
+- Dependency Summary
+- Relevant Spec Retrieval
+- Semantic Diff
+- Compile Diagnostics
+
+Agent 只获取当前任务所需要的语义上下文。
+
+---
+
+# 11. Verification System
+
+编译成功不等于程序正确。
+
+Forma 必须把验证分成多个层级。
+
+## 11.1 Specification Validation
+
+检查 DSL 是否符合语言规范。
+
+## 11.2 Type Validation
+
+检查字段、关系、表达式和接口类型。
+
+## 11.3 Semantic Validation
+
+检查业务规则是否自洽。
+
+## 11.4 Dependency Validation
+
+检查依赖关系和循环引用。
+
+## 11.5 Generation Validation
+
+检查生成文件是否完整、引用是否有效。
+
+## 11.6 Build Validation
+
+执行实际构建。
+
+## 11.7 Test Validation
+
+运行：
+
+- Unit Tests
+- Integration Tests
+- Workflow Tests
+- Acceptance Tests
+
+## 11.8 Runtime Validation
+
+检查运行时行为是否符合预期。
+
+## 11.9 Transactional Build
+
+一次编译应该是事务式的：
+
+```text
+Compile Start
+     |
+Generate Temporary Outputs
+     |
+Validate Outputs
+     |
+Run Build
+     |
+All Passed?
+  /       \
+ Yes       No
+ |          |
+Commit     Rollback
+```
+
+不能因为编译失败而破坏原本可以正常运行的项目。
+
+---
+
+# 12. Runtime 设计
+
+Forma 应尽可能生成标准程序代码。
+
+Runtime 只负责标准代码无法完全静态表达的动态行为。
+
+第一版 Runtime 可以包含：
+
+- Workflow Execution
+- Event Dispatching
+- Rule Evaluation
+- Permission Evaluation
+- Form Validation
+- Data Binding
+
+不应该把所有业务逻辑都强行塞进自有 Runtime。
+
+优先生成普通的 TypeScript 函数、API 和数据库操作。
+
+对于复杂算法、第三方 SDK、特殊集成，允许使用受控的 Native Extension。
+
+---
+
+# 13. 推荐技术栈
+
+## Compiler Core
+
+- Rust
+- Serde
+- Petgraph
+- blake3
+- WASM
+- JSON Schema / 自定义类型检查器
+
+## Visual Studio
+
+- React
+- TypeScript
+- Vite
+- Tailwind CSS
+- shadcn/ui
+- XYFlow
+- Monaco Editor
+- Zustand
+
+## Runtime
+
+- TypeScript
+- Node.js
+- Hono
+- Zod
+
+## Target
+
+第一版：
+
+- React
+- TypeScript
+- Hono
+- SQLite
+- Drizzle ORM
+
+后续：
+
+- PostgreSQL
+- Next.js
+- Vue
+- Flutter
+- Kotlin
+- Python
+
+## Testing
+
+- Vitest
+- Playwright
+- Rust Tests
+- Golden Tests
+- Snapshot Tests
+
+## Distribution
+
+- Local CLI
+- Desktop Studio
+- MCP Server
+- WASM Compiler
+
+---
+
+# 14. MVP：第一版具体做什么
+
+不要第一版就支持任意软件。
+
+建议只支持 CRUD + Business Workflow 应用。
+
+## 14.1 MVP 功能
+
+### P0：语言和编译器
+
+- App DSL
+- Data DSL
+- UI DSL
+- Flow DSL
+- 基础 Rule DSL
+- Parser
+- AST
+- Canonical IR
+- Type Checker
+- Semantic Validator
+- React Generator
+- Hono Generator
+- SQLite Generator
+- Incremental Compilation
+- Build Verification
+
+### P0：可视化编辑器
+
+- 项目导航
+- Entity Relationship Editor
+- Page Editor
+- Workflow Editor
+- Property Panel
+- DSL Source Editor
+- Preview
+- Semantic Diff
+
+### P0：AI 集成
+
+- MCP Server
+- Project Summary
+- Semantic Patch
+- Spec Generation
+- Validation Diagnostics
+- Compile Trigger
+
+### P1：工程能力
+
+- Version History
+- Rollback
+- Code Export
+- Extension API
+- Test Generation
+- Import Existing Project（只读分析先行）
+
+### P2：扩展能力
+
+- 多 Target
+- 插件系统
+- 团队协作
+- 远程缓存
+- 自定义 DSL Module
+- 第三方 Runtime Integration
+
+## 14.2 MVP 演示项目
+
+推荐制作一个完整的 Task Management 系统：
+
+- User
+- Project
+- Task
+- Comment
+- Role
+- Permission
+- Workflow
+- Dashboard
+- Task List
+- Task Detail
+- Task Form
+
+用户只需要对 AI 说：
+
+创建一个任务管理系统，支持项目、任务、负责人、状态和截止日期。任务有待办、进行中、已完成三种状态。管理员可以管理项目，普通成员只能操作自己负责的任务。
+
+AI 生成 DSL。
+
+用户在 Forma Studio 中看到：
+
+- ER Diagram
+- Workflow Diagram
+- 页面结构
+- 权限关系
+
+用户可以修改状态图或页面结构。
+
+点击 Compile，生成完整的 React + TypeScript + Hono + SQLite 项目。
+
+这个演示必须证明：整个过程中，AI 没有直接编写业务源代码。
+
+---
+
+# 15. Benchmark：必须证明 Token 价值
+
+不能只凭感觉说 DSL 比代码节省 Token。
+
+必须构建 Benchmark。
+
+对同一组需求分别使用：
+
+A. 传统 AI Coding  
+B. Markdown Spec + AI Coding  
+C. Forma DSL + Compiler
+
+记录：
+
+- Input Tokens
+- Output Tokens
+- Total Tokens
+- Agent Tool Calls
+- Generated Files
+- Modified Files
+- Build Success Rate
+- Test Pass Rate
+- Time to Verified Build
+- Change Cost
+- Regression Count
+
+重点测试三个场景：
+
+1. 从零创建一个 CRUD 应用。
+2. 修改一个已有业务规则。
+3. 修改一个公共数据模型并传播到多个页面和接口。
+
+尤其是第二和第三个场景。
+
+因为 Forma 的长期优势不是一次生成代码，而是修改软件时只需要修改少量业务语义。
+
+核心指标：
+
+```text
+Tokens Per Verified Feature
+
+Cost Per Verified Change
+
+Semantic Change Propagation Cost
+
+Generated Code Correctness
+
+Incremental Build Time
+```
+
+---
+
+# 16. 安全和权限设计
+
+AI 不能拥有无限制的项目修改权限。
+
+需要：
+
+- Project Scope
+- Module Scope
+- Node Scope
+- Operation Permission
+- Approval Policy
+- Destructive Operation Confirmation
+- Patch Audit Log
+- Rollback
+- Generated Output Ownership
+
+例如：
+
+AI 可以修改 UI DSL，但不能修改数据库结构。
+
+或者：
+
+AI 可以增加字段，但删除字段必须由用户确认。
+
+所有 Semantic Patch 都必须经过权限验证。
+
+---
+
+# 17. 项目目录与代码仓库
+
+建议采用 Monorepo：
+
+```text
+forma/
+├── apps/
+│   ├── studio/
+│   ├── playground/
+│   └── docs/
+│
+├── crates/
+│   ├── parser/
+│   ├── ast/
+│   ├── types/
+│   ├── semantic/
+│   ├── ir/
+│   ├── graph/
+│   ├── validator/
+│   ├── diff/
+│   ├── incremental/
+│   ├── codegen/
+│   ├── runtime/
+│   └── cli/
+│
+├── packages/
+│   ├── dsl-schema/
+│   ├── studio-components/
+│   ├── visual-editor/
+│   ├── agent-sdk/
+│   ├── mcp-server/
+│   └── target-react/
+│
+├── examples/
+│   ├── task-manager/
+│   ├── order-management/
+│   └── inventory/
+│
+├── benchmarks/
+│
+├── docs/
+│   ├── architecture/
+│   ├── language-spec/
+│   ├── compiler/
+│   ├── visual-editor/
+│   └── agent-protocol/
+│
+└── Cargo.toml
+```
+
+---
+
+# 18. CLI 设计
+
+建议：
+
+```bash
+forma init task-manager
+
+forma spec validate
+
+forma spec inspect
+
+forma spec graph
+
+forma spec diff
+
+forma spec check
+
+forma compile
+
+forma compile --watch
+
+forma build
+
+forma test
+
+forma preview
+
+forma export
+
+forma mcp
+```
+
+Agent 可以执行：
+
+```bash
+forma inspect --scope models.order
+
+forma patch ./changes/order-approval.json
+
+forma validate --changed-only
+
+forma compile --incremental
+
+forma diagnostics --json
+```
+
+CLI 输出必须支持机器可读 JSON，方便 Agent 自动处理。
+
+---
+
+# 19. 商业模式
+
+建议 Open Core。
+
+## Community
+
+- DSL
+- Compiler
+- CLI
+- 基础 Studio
+- React / TypeScript Target
+- 本地编译
+- MCP
+
+## Pro
+
+- 高级 Visual Studio
+- AI Specification Engine
+- 高级 Semantic Diff
+- 高级调试和诊断
+- 多项目管理
+- 更强的代码生成能力
+
+## Team
+
+- 多人协作
+- 权限控制
+- 远程编译缓存
+- 团队模板
+- 版本审计
+- 共享 DSL Module
+
+## Enterprise
+
+- 私有部署
+- 自定义 DSL
+- 自定义 Compiler Target
+- 企业级权限和审计
+- 私有模型集成
+- 定制化软件生成流水线
+
+长期商业模式不应完全依赖 Token 充值。
+
+应该让开发者为生产效率、编译能力、协作和企业级基础设施付费。
+
+---
+
+# 20. 研发路线图
+
+## Phase 1：Language Foundation
+
+目标：证明 DSL 可以描述真实业务软件。
+
+- DSL Schema
+- AST
+- Canonical IR
+- Type Checker
+- Semantic Validator
+- Task Manager 示例
+
+## Phase 2：Compiler Foundation
+
+目标：证明 DSL 能直接编译为标准代码。
+
+- React Generator
+- Hono Generator
+- SQLite Generator
+- Build Pipeline
+- Generated Code Ownership
+- Golden Tests
+
+## Phase 3：Visual Studio
+
+目标：证明人可以通过图形界面理解和修改 DSL。
+
+- ERD
+- Workflow Canvas
+- Page Builder
+- Property Editor
+- DSL Sync
+- Preview
+
+## Phase 4：AI Integration
+
+目标：证明 AI 可以只通过语义操作构建应用。
+
+- MCP
+- Agent SDK
+- Semantic Patch
+- Context Retrieval
+- AI Specification Generation
+- Diagnostics Feedback
+
+## Phase 5：Incremental Compiler
+
+目标：证明规格变更比传统代码修改更高效。
+
+- Semantic Diff
+- Dependency DAG
+- Hash Cache
+- Incremental Build
+- Rollback
+- Change Impact Analysis
+
+## Phase 6：Ecosystem
+
+目标：从工具变成软件生产基础设施。
+
+- Multiple Targets
+- DSL Extensions
+- Plugin System
+- Runtime Extensions
+- Team Collaboration
+- Enterprise Deployment
+
+---
+
+# 21. 最重要的技术决策
+
+1. DSL 是 Source of Truth，不是 Markdown。
+2. Visual Editor 是 DSL 的 Projection，不是独立的数据存储。
+3. Agent 通过 Semantic Patch 修改 DSL，而不是重写整个项目。
+4. Canonical IR 是所有工具共享的中间表示。
+5. Compiler 负责生成代码，AI 不负责重复性实现。
+6. Generated Code 与 Custom Code 必须隔离。
+7. Incremental Compilation 是第一代核心能力。
+8. 第一版只支持一个成熟的全栈 Target。
+9. 复杂业务逻辑允许受控 Native Extension。
+10. 所有编译过程都必须可验证、可追踪、可回滚。
+
+---
+
+# 22. 成功标准
+
+Forma 的 MVP 成功，不是因为它能生成一个好看的页面。
+
+而是因为它能够证明：
+
+- 一个完整的业务应用可以主要通过 DSL 描述。
+- AI 可以通过少量 Semantic Patch 修改应用。
+- 人类可以通过可视化界面理解同一份规格。
+- 编译器可以独立生成完整标准代码。
+- 同一份规格重复编译产生确定性结果。
+- 修改局部规格不会破坏无关模块。
+- 生成的代码能够独立构建、测试和部署。
+- 在相同质量标准下，业务功能修改消耗的 Token 明显低于传统 AI Coding。
+
+**Forma 的最终目标：让 AI 从 Source Code Generator 转变为 Software Specification Generator，让 Compiler 成为真正的软件生产引擎。**
+:::
+
+# 23\. 我建议的第一版工程实施决策
+
+上面的完整蓝图是长期架构，不建议直接全部开发。真正落地时，我会把以下事项作为第一批必须确定的工程决策。
+
+| 决策项 | 我的建议 | 原因 |
+|--------|--------|--------|
+| DSL 格式 | JSON/YAML 序列化 + 自定义语义规范 | 降低第一阶段 Parser 难度 |
+| 内部模型 | Typed Canonical IR | 避免 JSON 直接变成编译器内部架构 |
+| 图形编辑 | React + XYFlow | 先解决节点、关系和工作流 |
+| 编译器 | Rust | 适合构建长期编译基础设施 |
+| Studio | React + TypeScript | 方便可视化生态建设 |
+| AI 修改协议 | Semantic Patch | 减少重复上下文和 Token |
+| 第一目标 | React + TypeScript + Hono + SQLite | 限制编译目标，先打通完整链路 |
+| 运行方式 | 生成标准代码 | 避免过早依赖专有 Runtime |
+| 数据存储 | DSL 文件 + 本地项目元数据 | 初期不需要服务端 |
+| Agent 接入 | MCP + CLI | 兼容多种 Coding Agent |
+
+## 24\. 还有三个需要特别注意的技术陷阱
+
+**第一：不要把所有逻辑都塞进 DSL。**
+
+如果 DSL 无法表达复杂业务逻辑，最后会出现大量自定义脚本；如果 DSL 过度复杂，又会变成一门难以维护的通用编程语言。
+
+合理的边界是：DSL 表达领域模型、状态、规则、流程和 UI；复杂算法和特殊集成允许受控原生扩展。
+
+**第二：确定性不等于正确性。**
+
+同一份 DSL 可以确定性地生成同一份错误代码。必须通过类型检查、语义验证、构建和测试建立正确性证据。
+
+**第三：可视化不能成为独立的第二套编程系统。**
+
+所有视图都必须基于同一个语义模型。图形编辑、文本编辑和 AI 修改都要进入同一套事务系统。
+
+## 25\. 最终产品形态
+
+我建议最终把 Forma 做成一个桌面优先、同时提供 CLI 和 MCP 的开发工具。
+
+image_group{"query":["modern professional node based workflow editor dark software interface"],"aspect_ratio":"5:4","layout":"carousel","num_per_query":1}
+
+**Workflow Studio**
+
+业务流程与状态机设计
+
+image_group{"query":["modern database ER diagram visual editor developer application interface"],"aspect_ratio":"5:4","layout":"carousel","num_per_query":1}
+
+**Data Studio**
+
+实体、关系和约束
+
+image_group{"query":["modern web application visual page builder developer interface component tree"],"aspect_ratio":"5:4","layout":"carousel","num_per_query":1}
+
+**UI Studio**
+
+页面和交互设计
+
+image_group{"query":["modern code compiler build diagnostics developer desktop interface"],"aspect_ratio":"5:4","layout":"carousel","num_per_query":1}
+
+**Compiler Studio**
+
+编译、Diff、诊断与验证
+
+**我的最终建议：先实现一个完整闭环，而不是先实现一个庞大的编辑器。**
+
+闭环应该是：
+
+`自然语言 → AI 生成 DSL → 可视化检查 → 修改 DSL → 编译 → 生成标准项目 → 构建成功 → 修改需求 → 增量编译`
+
+只要这个闭环真正跑通，Forma 就不再只是一个概念，而是一个可以被开发者实际使用和验证的软件生产系统。
+
+接下来最值得优先产出的工程文档是 **Forma Language Specification v0.1**：正式定义语法、类型系统、语义节点、引用规则、版本机制和 Semantic Patch 协议。这份文档应该先于大规模 Studio 开发。
+
+---
+
+If you want, I can:
+
+- 详细讲解 Forma DSL 设计与分类
+- 解释 Forma 编译器的关键技术流程
+- 演示 AI Specification Engine 的实际工作流程

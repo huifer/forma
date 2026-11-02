@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  id="Defs_OrderApproval"
+                  targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="order-approval" name="Order Approval" isExecutable="true">
+    <bpmn:startEvent id="Start_OrderSubmitted" name="Order Submitted">
+      <bpmn:outgoing>Flow_SubmitToGateway</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:exclusiveGateway id="Gateway_NeedsApproval" name="Needs Approval?">
+      <bpmn:incoming>Flow_SubmitToGateway</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToAutoApprove</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ToManualApproval</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="Task_AutoApprove" name="Auto Approve">
+      <bpmn:incoming>Flow_ToAutoApprove</bpmn:incoming>
+      <bpmn:outgoing>Flow_ApproveToEnd</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:userTask id="Task_ManualApproval" name="Review Order">
+      <bpmn:incoming>Flow_ToManualApproval</bpmn:incoming>
+      <bpmn:outgoing>Flow_ApproveToEnd</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="End_OrderProcessed" name="Order Processed">
+      <bpmn:incoming>Flow_ApproveToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_SubmitToGateway" sourceRef="Start_OrderSubmitted" targetRef="Gateway_NeedsApproval" />
+    <bpmn:sequenceFlow id="Flow_ToAutoApprove" name="amount &lt; 1000" sourceRef="Gateway_NeedsApproval" targetRef="Task_AutoApprove">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">amount &lt; 1000</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ToManualApproval" name="amount &gt;= 1000" sourceRef="Gateway_NeedsApproval" targetRef="Task_ManualApproval" />
+    <bpmn:sequenceFlow id="Flow_ApproveToEnd" sourceRef="Task_AutoApprove" targetRef="End_OrderProcessed" />
+    <bpmn:sequenceFlow id="Flow_ManualToEnd" sourceRef="Task_ManualApproval" targetRef="End_OrderProcessed" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="Diagram_1">
+    <bpmndi:BPMNPlane id="Plane_1" bpmnElement="order-approval" />
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

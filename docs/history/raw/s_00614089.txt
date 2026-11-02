@@ -1,0 +1,24 @@
+Spec Change
+    |
+    v
+Validate
+    |
+    v
+Build Plan
+    |
+    v
+Temporary Output
+    |
+    v
+Build & Test
+    |
+    +---- Failed ----> Discard
+    |
+    v
+Compare Output
+    |
+    v
+Atomic Apply
+    |
+    v
+Record Snapshot

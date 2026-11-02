@@ -1,0 +1,27 @@
+我建议不要把这个方向仅仅当成一篇技术文章，而是把它发展成一个完整的技术项目，甚至一个新的 AI Coding 产品方向。
+
+我理解你想做的是：**让 AI 从直接生成源代码，转变为生成结构化软件规格，再由编译器生产完整软件。**
+
+这套东西可以从产品定位、技术架构、DSL 设计、编译器、Agent 工作流、MVP 到商业化完整规划。
+
+你说的「一套」，我先确认一下：你想要哪种交付？
+
+{@body const [scope,setScope] = DIL.useState("完整产品方案")}
+{@body const [target,setTarget] = DIL.useState("通用 AI Coding（支持 Codex、Claude Code、Pi 等）")}
+<box border radius="lg" padding={3} gap={3}>
+  **交付范围**
+  <radio-group direction="col" value={scope} onChange={setScope}>
+    <radio value="完整产品方案">完整产品方案：定位、创新、竞品、商业模式、路线图</radio>
+    <radio value="完整技术架构">完整技术架构：DSL、JSON Schema、AST、IR、Compiler、Runtime</radio>
+    <radio value="可执行开发方案">可执行开发方案：Feature List、技术选型、目录结构、开发任务、验收标准</radio>
+    <radio value="全部一套">全部一套：从产品战略到可运行 MVP 的完整蓝图</radio>
+  </radio-group>
+  <divider color="subtle"/>
+  **目标产品**
+  <radio-group direction="col" value={target} onChange={setTarget}>
+    <radio value="通用 AI Coding（支持 Codex、Claude Code、Pi 等）">通用 AI Coding（支持 Codex、Claude Code、Pi 等）</radio>
+    <radio value="独立的软件编译器平台">独立的软件编译器平台</radio>
+    <radio value="AI Agent 专用的结构化代码生产引擎">AI Agent 专用的结构化代码生产引擎</radio>
+  </radio-group>
+  <button block onClick={()=>GenUI.issueNewTurn("请给我制定一套完整方案。交付范围："+scope+"；目标产品："+target+"。围绕 AI Specification Generation、DSL、AST/IR、Compiler、Runtime 和可靠性展开，给出最终决策。")}>确定，开始制定</button>
+</box>

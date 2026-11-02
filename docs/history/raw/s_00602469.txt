@@ -1,0 +1,10 @@
+```text
+Create Entity
+Update Field
+Add Component
+Connect Relation
+Define Rule
+Preview Change
+Compile Target
+Verify Result
+```

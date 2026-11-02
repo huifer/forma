@@ -1,0 +1,15 @@
+```text
+DSL
+ ↓
+Canonical IR
+ ↓
+Semantic Validation
+ ↓
+Dependency Graph
+ ↓
+Incremental Compiler
+ ↓
+React / TypeScript / API / Database
+ ↓
+Standard Project
+```

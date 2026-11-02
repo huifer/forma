@@ -1,0 +1,348 @@
+# 十九、产品命名与品牌定位
+
+暂时不建议直接使用 SpecCompiler 作为最终商业品牌，它更像一个技术类别名称。
+
+我建议考虑以下方向：
+
+| 名称 | 定位 | 特点 |
+|---|---|---|
+| SpecForge | 规格驱动软件生产 | 工程感强 |
+| ForgeIR | 中间表示与编译引擎 | 技术基础设施感 |
+| CodeWeave | 结构化软件生产 | 产品感强 |
+| SpecFlow | 规格与执行流程 | 容易理解，但名称较泛 |
+| CompileX | 新一代编译基础设施 | 简洁、偏开发者工具 |
+
+<badge color="success">我的首选</badge>
+
+**SpecForge**
+
+Tagline：
+
+> Think in Specs. Build with Compilers.
+
+中文：
+
+> 让 AI 描述软件，让编译器创造软件。
+
+品牌定位：
+
+`The Specification-Driven Software Production Engine`
+
+这里的名称尚未进行商标、域名和开源项目冲突核查，不能直接视为可注册名称。
+
+---
+
+# 二十、最终决策：哪些东西现在做，哪些坚决不做？
+
+我把前面的方案收敛成最终研发决策。
+
+<box border radius="lg" padding={3} gap={3}>
+  <title size="xl">SpecForge · 最终产品决策</title>
+  <text color="secondary" size="xs">Product Decision Record · V1.0</text>
+  <divider color="subtle"/>
+  **产品形态**
+
+  通用 AI Coding 软件生产引擎，不做独立 IDE，不做新的 Coding Agent。
+
+  **核心用户**
+
+  Codex、Claude Code、Pi 等 AI Coding 工具的重度用户。
+
+  **核心创新**
+
+  AI Specification Generation + Semantic Compiler + Incremental Compilation + Independent Verification。
+
+  **技术架构**
+
+  Rust Compiler Core + TypeScript Runtime + JSON/YAML DSL + Canonical IR。
+
+  **部署方式**
+
+  Local First，CLI + MCP，支持本地编译。
+
+  **第一个目标**
+
+  React + TypeScript + Hono + SQLite。
+
+  **商业模式**
+
+  Open Core + Pro + Team + Enterprise。
+  <divider color="subtle"/>
+  **第一版必须做**
+
+  - Spec Protocol
+  - AppSpec / DataSpec / UISpec
+  - JSON Schema Validation
+  - Semantic Validation
+  - Canonical IR
+  - React Generator
+  - CRUD API Generator
+  - Incremental Compiler
+  - MCP Server
+  - Build & Test
+  - Rollback
+
+  <divider color="subtle"/>
+  **第一版坚决不做**
+
+  - 自研大模型。
+  - 自研 Coding Agent。
+  - 完整 IDE。
+  - 多 Agent 调度平台。
+  - 云端模型 API。
+  - 通用编程语言。
+  - 多语言、多平台编译。
+  - 可视化低代码编辑器。
+  - 插件市场。
+</box>
+
+## 20.1 最终架构图
+
+<AsyncImage query="professional technical architecture infographic software specification compiler pipeline AI agents JSON YAML DSL AST IR dependency graph incremental compiler code generation verification runtime software engineering dark blue white clean vector" aspectRatio="16:9" width="100%"/>
+
+```text
+                   HUMAN
+                     |
+                     v
+               REQUIREMENTS
+                     |
+                     v
+          +----------------------+
+          |     AI AGENTS        |
+          |                      |
+          | Codex / Claude / Pi  |
+          +----------------------+
+                     |
+                     v
+          +----------------------+
+          |   SPEC PROTOCOL      |
+          |                      |
+          | Create / Update      |
+          | Patch / Delete       |
+          +----------------------+
+                     |
+                     v
+          +----------------------+
+          |  SPECIFICATION STORE |
+          |                      |
+          | App / Data / UI      |
+          | Logic / API          |
+          +----------------------+
+                     |
+                     v
+          +----------------------+
+          |  SEMANTIC COMPILER   |
+          |                      |
+          | Parse / Validate     |
+          | Type / Reference      |
+          +----------------------+
+                     |
+                     v
+          +----------------------+
+          |   CANONICAL IR       |
+          |                      |
+          | AST / Dependency DAG |
+          +----------------------+
+                     |
+                     v
+          +----------------------+
+          | INCREMENTAL ENGINE   |
+          |                      |
+          | Hash / Cache / Diff  |
+          +----------------------+
+                     |
+                     v
+          +----------------------+
+          |   CODE GENERATOR     |
+          |                      |
+          | Frontend / Backend   |
+          | Database / Tests     |
+          +----------------------+
+                     |
+                     v
+          +----------------------+
+          |  VERIFICATION ENGINE |
+          |                      |
+          | Build / Test / Audit |
+          +----------------------+
+                     |
+                     v
+              EXECUTABLE APP
+```
+
+---
+
+# 二十一、真正值得长期投入的三个研究方向
+
+如果这个项目要做成长期基础设施，我认为还应该关注三个未来方向。
+
+### 方向 A：从代码 AST 进化为 Software Semantic Graph
+
+传统 AST 主要描述源代码语法。
+
+但我们需要的是更高层次的业务语义图。
+
+例如：
+
+```text
+User
+  |
+  +-- hasMany --> Order
+  |
+  +-- owns ----> Permission
+  |
+  +-- exposes -> API
+  |
+  +-- renders -> UserTable
+  |
+  +-- validates -> UserForm
+```
+
+AI 不需要阅读几百个文件才能知道用户实体与哪些功能相关。
+
+它可以直接读取语义图。
+
+这是跨 Agent 共享项目理解能力的重要基础。
+
+### 方向 B：从 Code Generation 进化为 Software Change Management
+
+不要只关心如何生成软件。
+
+还要关心软件在长期变化中如何保持正确。
+
+例如：
+
+- 一个需求变更会影响什么？
+- 哪些 API 可能发生破坏性变化？
+- 哪些数据库迁移不安全？
+- 哪些测试需要重新执行？
+- 哪些模块可以复用缓存？
+- 哪些变更需要人工审批？
+
+未来可以把 SpecForge 做成软件变更的控制平面。
+
+### 方向 C：让 Agent 具备结构化的软件操作能力
+
+现在 Agent 的主要操作方式是：
+
+```text
+Read File
+Edit File
+Write File
+Run Command
+```
+
+未来可以增加：
+
+```text
+Create Entity
+Update Field
+Add Component
+Connect Relation
+Define Rule
+Preview Change
+Compile Target
+Verify Result
+```
+
+这意味着 Agent 不再只是一个可以操作文件的程序员。
+
+它还可以成为一个能够操作软件结构的工程师。
+
+---
+
+# 二十二、建议优先阅读的技术资料
+
+这些不是随便列出的技术名词，而是对应产品架构的参考实现。
+
+| 技术 | 重点研究内容 | 官方资料 |
+|---|---|---|
+| <Entity value="GitHub Spec Kit" category="software" disambig="Specification-driven development toolkit"/> | 规格工作流 | <Link url="https://github.com/github/spec-kit" title="GitHub"/> |
+| <Entity value="OpenSpec" category="software" disambig="Spec-driven development framework"/> | 规格变更管理 | <Link url="https://github.com/Fission-AI/OpenSpec" title="GitHub"/> |
+| <Entity value="Protocol Buffers" category="software" disambig="Interface definition and serialization"/> | IDL、代码生成 | <Link url="https://protobuf.dev/" title="文档"/> |
+| <Entity value="Buf" category="software" disambig="Protobuf development toolchain"/> | Lint、兼容性、编译 | <Link url="https://buf.build/docs/" title="文档"/> |
+| <Entity value="Terraform" category="software" disambig="Infrastructure as Code"/> | 声明式状态管理 | <Link url="https://developer.hashicorp.com/terraform" title="文档"/> |
+| <Entity value="Jsonnet" category="software" disambig="Data templating language"/> | 结构化配置 | <Link url="https://jsonnet.org/" title="文档"/> |
+| <Entity value="MCP" category="software" disambig="Model Context Protocol"/> | Agent 工具接入 | <Link url="https://modelcontextprotocol.io/" title="文档"/> |
+| <Entity value="Petgraph" category="software" disambig="Rust graph data structure library"/> | 依赖图 | <Link url="https://docs.rs/petgraph/" title="文档"/> |
+
+另外，建议重点研究 Buf 的兼容性检测和生成插件机制。它比单纯的 YAML 模板系统更接近你真正想做的编译基础设施。<Cite refs={["turn167470search3","turn167470search5","turn167470search0"]}/>
+
+---
+
+# 二十三、我给你的最终创业判断
+
+我认为这个方向值得做，但需要非常清楚地认识到一个事实：
+
+**Spec-Driven Development 本身不是创新，Compiler 也不是创新。**
+
+真正的产品机会在于：
+
+把结构化规格、语义编译、增量生成、多 Agent 协议和独立验证整合成一套开发者真正愿意使用的基础设施。
+
+我会把产品的长期发展分成三个阶段：
+
+<box gap={3}>
+  <row align=start gap={3}>
+    <box background="rgba(59,130,246,0.12)" radius="md" size="44px" align="center" justify="center">
+      <title size="xl" color="default">01</title>
+    </box>
+    <box flex="1" gap={1}>
+      **Software Compiler**
+
+      先证明结构化规格可以稳定生成软件。
+
+      <text color="secondary" size="xs">核心：DSL + IR + Compiler</text>
+    </box>
+  </row>
+  <divider color="subtle"/>
+  <row align=start gap={3}>
+    <box background="rgba(59,130,246,0.12)" radius="md" size="44px" align="center" justify="center">
+      <title size="xl" color="default">02</title>
+    </box>
+    <box flex="1" gap={1}>
+      **AI Coding Infrastructure**
+
+      让所有主流 Agent 都可以通过统一协议使用编译器。
+
+      <text color="secondary" size="xs">核心：Universal Protocol + Incremental Engine</text>
+    </box>
+  </row>
+  <divider color="subtle"/>
+  <row align=start gap={3}>
+    <box background="rgba(59,130,246,0.12)" radius="md" size="44px" align="center" justify="center">
+      <title size="xl" color="default">03</title>
+    </box>
+    <box flex="1" gap={1}>
+      **Software Production Platform**
+
+      让开发者和企业能够使用不同规格、生成器和 Runtime 生产各种软件。
+
+      <text color="secondary" size="xs">核心：Plugin Ecosystem + Verified Production</text>
+    </box>
+  </row>
+</box>
+
+## 我的最终建议：先不要开发完整产品，先验证一个核心假设
+
+我建议你接下来直接做一个非常小的实验：
+
+**用 100 个 JSON 节点，生成一个完整的 Task Manager。**
+
+然后让 Codex、Claude Code、Pi 分别修改这个项目。
+
+观察三个问题：
+
+1. 它们是否都能准确操作同一份 Spec？
+2. 修改一个节点，是否能准确识别所有受影响的代码？
+3. 是否能够在不重新生成整个项目的情况下，持续交付正确的软件？
+
+如果这三个问题都能解决，你就不只是在做一个代码生成器，而是在建立一套新的 AI 软件生产基础设施。
+
+**我最看好的最终产品不是 AI 写代码，而是 AI 驱动的确定性软件生产系统。**
+
+这才是 SpecForge 应该追求的方向。
+
+---
+
+*最后一个重要提醒：不要把「AI 输出 JSON」当成产品护城河。真正值得投入的是语义模型、编译正确性、变更影响分析、增量构建和独立验证。JSON 只是入口，编译器才是产品。*

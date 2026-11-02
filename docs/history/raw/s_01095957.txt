@@ -1,0 +1,14 @@
+```text
+AI
+ └── JSON / YAML / DSL
+         ↓
+    Schema Validator
+         ↓
+     AST Compiler
+         ↓
+     Code Generator
+         ↓
+    完整程序
+         ↓
+     Build & Test
+```

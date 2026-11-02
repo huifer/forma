@@ -1,0 +1,48 @@
+```yaml
+app:
+  id: user-manager
+  name: User Manager
+
+data:
+  entities:
+    User:
+      fields:
+        id: uuid
+        name:
+          type: string
+          required: true
+        email:
+          type: email
+          unique: true
+        status:
+          type: enum
+          values: [active, disabled]
+
+ui:
+  navigation:
+    - users
+
+  pages:
+    users:
+      type: data-table
+      entity: User
+      columns:
+        - name
+        - email
+        - status
+      actions:
+        - create
+        - edit
+        - delete
+      filters:
+        - status
+
+logic:
+  rules:
+    - id: prevent-delete-active-admin
+      when:
+        user.role: admin
+        user.status: active
+      deny:
+        action: delete
+```

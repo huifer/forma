@@ -1,0 +1,21 @@
+spec_version: "1"
+
+app:
+  id: task-manager
+  name: Task Manager
+  version: 1.0.0
+
+modules:
+  - id: users
+  - id: tasks
+
+navigation:
+  type: sidebar
+  items:
+    - module: users
+    - module: tasks
+
+targets:
+  frontend: react
+  backend: typescript
+  database: sqlite

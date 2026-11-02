@@ -1,0 +1,13 @@
+{
+  "protocol": "spec.v1",
+  "operation": "node.update",
+  "target": "data.entities.User.fields.status",
+  "patch": {
+    "type": "enum",
+    "values": [
+      "active",
+      "disabled",
+      "pending"
+    ]
+  }
+}

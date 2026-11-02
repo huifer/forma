@@ -1,0 +1,17 @@
+{
+  "component": "DataTable",
+  "version": "1.0",
+  "props": {
+    "entity": {
+      "type": "EntityRef",
+      "required": true
+    },
+    "columns": {
+      "type": "FieldRef[]",
+      "required": true
+    },
+    "pagination": {
+      "type": "PaginationConfig"
+    }
+  }
+}

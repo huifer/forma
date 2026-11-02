@@ -1,0 +1,10 @@
+{
+  "operation": "node.create",
+  "target": "data.entities.User.fields",
+  "value": {
+    "phone": {
+      "type": "string",
+      "required": false
+    }
+  }
+}

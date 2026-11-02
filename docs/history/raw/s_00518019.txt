@@ -1,0 +1,61 @@
+# 三、竞品能力矩阵：到底谁已经做到了什么？
+
+这是我认为最有价值的对比。
+
+| 核心能力 | Overplane | Prodara | Tessl | Spec Kit |
+|---|:---:|:---:|:---:|:---:|
+| AI 生成规格 | 是 | 是 | 是 | 是 |
+| 结构化 DSL | 部分 | 是 | 是 | 主要 Markdown |
+| Canonical IR | 是 | Product Graph | 有规格模型 | 非核心 |
+| 语义验证 | 是 | 是 | 规格约束 | 有分析流程 |
+| 依赖图 | 部分 | 是 | 有映射关系 | 非核心 |
+| 增量构建 | 是 | 是 | 有相关能力 | 非核心 |
+| 确定性代码生成 | 部分 | 目标之一 | 目标之一 | 否 |
+| Agent 无关 | 是 | 需要进一步核查 | 是 | 是 |
+| MCP | 需要核查具体版本 | 需要核查 | 是 | 依赖 Agent 集成 |
+| 独立构建验证 | 是 | 需要核查 | 测试关联 | 主要由 Agent 执行 |
+| 回滚与事务构建 | 需进一步验证 | 需进一步验证 | 需进一步验证 | 非核心 |
+
+说明：表格中的「部分」「非核心」不代表产品完全不具备该功能，而是其公开资料没有把它作为核心能力。对于 Prodara、Overplane 等新项目，具体功能和实现成熟度还需要源码级审计，不能把宣传描述等同于已经通过生产验证。
+
+## 四、最重要的发现：你原本的产品定义需要调整
+
+我会把原本的构想分成三个层次：
+
+<box border radius="lg" padding={3} gap={3}>
+  <title size="lg">Layer 1：Spec-driven Agent Workflow</title>
+  <badge color="warning">竞争已经比较充分</badge>
+  - AI 生成规格。
+  - 规格驱动开发。
+  - 多 Agent 接入。
+  - 任务管理。
+  - 测试与验证。
+
+  代表：Spec Kit、OpenSpec、Kiro、Overplane。
+  <divider color="subtle"/>
+  <title size="lg">Layer 2：Semantic Specification Compiler</title>
+  <badge color="warning">已有直接竞品</badge>
+  - DSL。
+  - AST / IR。
+  - Semantic Graph。
+  - 影响分析。
+  - Incremental Compilation。
+  - 结构化代码生产。
+
+  代表：Prodara、Overplane、Tessl。
+  <divider color="subtle"/>
+  <title size="lg">Layer 3：Universal Deterministic Software Production</title>
+  <badge color="success">建议重点研究</badge>
+  - AI 输出最小化 Patch。
+  - 统一类型化软件模型。
+  - 确定性 Target Compiler。
+  - 多语言、多平台生成。
+  - 生成代码和原生代码混合管理。
+  - 独立验证生成结果。
+  - 跨 Agent 的软件语义操作协议。
+</box>
+
+我认为第三层才值得你继续寻找差异化。
+
+但必须强调：这不是已经证明没有竞争者的空白市场。它是从现有产品中提炼出来的差异化假设，需要逐项做竞品验证。
+

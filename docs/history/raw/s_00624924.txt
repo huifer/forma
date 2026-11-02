@@ -1,0 +1,31 @@
+```text
+my-app/
+├── spec/
+│   ├── manifest.yaml
+│   ├── app.yaml
+│   ├── data/
+│   │   ├── user.yaml
+│   │   └── order.yaml
+│   ├── ui/
+│   │   ├── dashboard.yaml
+│   │   └── users.yaml
+│   ├── logic/
+│   │   └── permissions.yaml
+│   └── api/
+│       └── users.yaml
+│
+├── extensions/
+│   └── custom/
+│
+├── generated/
+│
+├── runtime/
+│
+├── tests/
+│
+└── .speccompiler/
+    ├── state.db
+    ├── dependency.db
+    ├── build-cache/
+    └── build-history/
+```

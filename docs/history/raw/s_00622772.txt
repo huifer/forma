@@ -1,0 +1,28 @@
+spec_version: "1"
+
+entities:
+  User:
+    fields:
+      id:
+        type: uuid
+        primary: true
+
+      name:
+        type: string
+        required: true
+        max_length: 100
+
+      email:
+        type: email
+        required: true
+        unique: true
+
+      status:
+        type: enum
+        values:
+          - active
+          - disabled
+
+    indexes:
+      - fields:
+          - email

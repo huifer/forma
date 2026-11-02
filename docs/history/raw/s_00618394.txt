@@ -1,0 +1,33 @@
+```text
+IR
+├── Project
+│   ├── Modules
+│   └── Targets
+│
+├── Data
+│   ├── Entities
+│   ├── Fields
+│   ├── Relations
+│   └── Indexes
+│
+├── UI
+│   ├── Pages
+│   ├── Layouts
+│   ├── Components
+│   └── Events
+│
+├── Logic
+│   ├── Rules
+│   ├── Conditions
+│   └── Actions
+│
+├── API
+│   ├── Endpoints
+│   ├── Requests
+│   └── Responses
+│
+└── Dependencies
+    ├── References
+    ├── Imports
+    └── BuildGraph
+```

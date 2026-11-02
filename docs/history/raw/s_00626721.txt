@@ -1,0 +1,39 @@
+```text
+                AI CODING AGENTS
+       Codex / Claude Code / Pi / Other
+                       |
+                       v
+              1. Agent Adapter
+                       |
+                       v
+              2. Spec Protocol
+                       |
+                       v
+              3. Specification Store
+                       |
+                       v
+              4. Parser & Validator
+                       |
+                       v
+              5. Semantic Compiler
+                       |
+                       v
+                 6. AST / IR
+                       |
+              Dependency Graph
+                       |
+                       v
+              7. Incremental Engine
+                       |
+                       v
+              8. Code Generator
+                       |
+                       v
+              Native Source Code
+                       |
+                       v
+              9. Verification Runtime
+                       |
+                       v
+                Build / Test / Deploy
+```

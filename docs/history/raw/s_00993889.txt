@@ -1,0 +1,1 @@
+ 标题保持激进，不要改成温和的技术教程标题。封面可以用「100 万 Token，多少真正创造了价值？」作为主视觉文案。文章的争议点是 AI 是否应该直接写代码，而技术落点是 Specification-Driven Software Generation。

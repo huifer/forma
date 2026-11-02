@@ -1,0 +1,1 @@
+GitHub - MetaConfigurator/meta-configurator: MetaConfigurator is a JSON Schema Editor and Form Generator with AI assistance. It can also generate Code and Documentation from schemas. · GitHub

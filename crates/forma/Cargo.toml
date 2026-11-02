@@ -1,0 +1,21 @@
+[package]
+name = "forma"
+version = "0.2.0"
+edition = "2021"
+description = "Forma — Universal Specification Compiler. Organizes existing standards (SQL DDL, OpenAPI, JSON Schema, JSON Forms, BPMN) into an AI-operable, visual, compilable software specification system."
+license = "MIT"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+serde_yaml = "0.9"
+sha2 = "0.10"
+anyhow = "1"
+
+[[bin]]
+name = "forma"
+path = "src/main.rs"
+
+[lib]
+name = "forma"
+path = "src/lib.rs"

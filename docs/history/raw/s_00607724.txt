@@ -1,0 +1,8 @@
+```yaml
+logic:
+  actions:
+    - id: process-image
+      implementation:
+        type: extension
+        ref: image-processing
+```

@@ -1,0 +1,9 @@
+```text
+       AI Agent
+          ↕
+Visual Editor ↔ JSON Config
+          ↓
+       Renderer
+          ↓
+       Website
+```

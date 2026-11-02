@@ -1,0 +1,18 @@
+```text
+User Request
+    |
+    v
+Agent
+    |
+    v
+speccompiler MCP
+    |
+    v
+Spec Patch
+    |
+    v
+Compiler
+    |
+    v
+Verified Application
+```

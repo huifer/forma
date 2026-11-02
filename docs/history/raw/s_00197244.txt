@@ -1,0 +1,19 @@
+```text
+自然语言需求
+    ↓
+AI Product Agent
+    ↓
+详细产品规格
+    ↓
+AI Developer Agent
+    ↓
+Rishon Language（专用 DSL）
+    ↓
+Rishon Compiler
+    ↓
+Ontology Graph
+    ↓
+Rishon Virtual Machine
+    ↓
+业务软件 / 自动化 / UI
+```

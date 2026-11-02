@@ -1,0 +1,14 @@
+permissions:
+  User:
+    read:
+      roles:
+        - admin
+        - operator
+
+    delete:
+      roles:
+        - admin
+      conditions:
+        - field: status
+          operator: equals
+          value: disabled

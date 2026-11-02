@@ -1,0 +1,144 @@
+# 一、最值得关注的竞品：已经发现两个非常接近的产品
+
+<box border radius="lg" padding={3} gap={2}>
+  <row align="center" justify="between">
+    **1. <Entity value="Overplane" category="software" disambig="Spec-driven AI coding build and verification system"/>**
+    <badge color="danger">高度重合</badge>
+  </row>
+  <AsyncImage query="Overplane AI coding spec driven development software website screenshot" aspectRatio="16:9" width="100%" fit="contain"/>
+  <text color="secondary" size="xs">官网：<Link url="https://www.overplane.dev/" title="overplane.dev"/> · 开源 Apache-2.0</text>
+  它已经实现了你方案中非常多的关键设计：
+
+  - 支持 Codex、Claude Code、OpenCode。
+  - Markdown Spec 作为规格来源。
+  - Spec 转换成 IR。
+  - 使用 Z3 做规格一致性验证。
+  - Agent 在隔离容器中运行。
+  - 内容 Hash 和增量缓存。
+  - 构建结果可追踪、可重放。
+  - AI 负责生成软件，系统负责管理生产流程。
+
+  它甚至已经有 `raise → verify → codegen` 三阶段编译流程。<Cite refs={["turn293874search0","turn293874search2","turn293874search4","turn293874search5"]}/>
+
+  **判断：这是你必须第一个下载、安装、实际运行的项目。**
+
+  不过有一个重要区别：它的 IR 是由 AI 从自然语言规格中提取的形式化模型，后续代码生成仍由 Coding Agent 完成。它不是完全由确定性 Target Compiler 根据统一业务 AST 生成全部源代码。<Cite refs={["turn293874search4","turn293874search9"]}/>
+</box>
+<box border radius="lg" padding={3} gap={2}>
+  <row align="center" justify="between">
+    **2. <Entity value="Prodara" category="software" disambig="AI product specification compiler and incremental code generation"/>**
+    <badge color="danger">高度重合</badge>
+  </row>
+  <text color="secondary" size="xs">GitHub：<Link url="https://github.com/prodara-ai/prodara" title="prodara-ai/prodara"/></text>
+  它的项目描述几乎直接命中了你最初的设想：
+
+  - AI 生成 `.prd` 规格文件。
+  - 编译为 Typed Product Graph。
+  - 13 阶段验证流水线。
+  - 语义 Diff。
+  - 自动分析变更影响。
+  - 结构化、增量代码生成。
+  - Agent 根据编译器提供的影响范围执行开发。
+
+  它描述的核心理念是：Give your AI a compiler, not a pile of markdown。<Cite refs={["turn293874search7"]}/>
+
+  **判断：这是最值得研究的 DSL + IR + Semantic Graph + Incremental Code Generation 方向的直接竞品。**
+
+  特别需要研究它的 Product Graph 和 13 阶段 Pipeline，而不是只看它的宣传页面。
+</box>
+
+这两个项目会显著改变我的建议：你不能再把「Agent + Spec + IR + 增量编译」整体当成尚未有人涉足的创新。
+
+---
+
+# 二、其他值得研究的具体产品
+
+以下按照与你的技术路线的接近程度排列。
+
+<box gap={3}>
+  <row align=start gap={3}>
+    <AsyncImage query="Tessl AI software specification framework website logo" aspectRatio="1:1" maxWidth="88px"/>
+    <box flex="1" gap={1}>
+      **3. <Entity value="Tessl" category="software" disambig="Specification-driven AI software development platform"/>**
+      <badge color="danger">Spec-as-Source</badge>
+      <text color="secondary" size="xs"><Link url="https://tessl.io/" title="官网"/> · <Link url="https://www.martinfowler.com/articles/exploring-gen-ai/sdd-3-tools.html" title="技术分析"/></text>
+      核心思路是规格长期作为主要资产，代码可以标记为由 Spec 生成，提供 MCP 和规格注册机制。
+
+      重点研究：Spec 与代码映射、规格版本化、测试关联。
+      <Cite refs={["turn293874search11","turn293874search13"]}/>
+    </box>
+  </row>
+  <divider color="subtle"/>
+  <row align=start gap={3}>
+    <AsyncImage query="AWS Kiro IDE specification driven development screenshot" aspectRatio="1:1" maxWidth="88px"/>
+    <box flex="1" gap={1}>
+      **4. <Entity value="AWS Kiro" category="software" disambig="AI development IDE with spec-driven workflows"/>**
+      <text color="secondary" size="xs"><Link url="https://kiro.dev/" title="官网"/></text>
+      Requirements → Design → Tasks → Implementation。
+
+      重点研究：需求结构化、验收标准、规格和实现之间的关联。
+      <Cite refs={["turn725161search2","turn725161search0"]}/>
+    </box>
+  </row>
+  <divider color="subtle"/>
+  <row align=start gap={3}>
+    <AsyncImage query="GitHub Spec Kit logo specification driven development" aspectRatio="1:1" maxWidth="88px"/>
+    <box flex="1" gap={1}>
+      **5. <Entity value="GitHub Spec Kit" category="software" disambig="Open-source specification-driven development toolkit"/>**
+      <text color="secondary" size="xs"><Link url="https://github.com/github/spec-kit" title="GitHub"/></text>
+      Constitution → Specify → Plan → Tasks → Implement。
+
+      重点研究：跨 Agent 工作流、规格组织和变更管理。
+      <Cite refs={["turn725161search0","turn725161search1"]}/>
+    </box>
+  </row>
+  <divider color="subtle"/>
+  <row align=start gap={3}>
+    <AsyncImage query="OpenSpec AI specification driven development GitHub logo" aspectRatio="1:1" maxWidth="88px"/>
+    <box flex="1" gap={1}>
+      **6. <Entity value="OpenSpec" category="software" disambig="Open-source change-based specification development toolkit"/>**
+      <text color="secondary" size="xs"><Link url="https://github.com/Fission-AI/OpenSpec" title="GitHub"/></text>
+      通过变更提案、规格差异、设计和任务文件组织开发。
+
+      重点研究：Spec Patch、Change Lifecycle、规格归档。
+      <Cite refs={["turn725161search0","turn725161search11"]}/>
+    </box>
+  </row>
+  <divider color="subtle"/>
+  <row align=start gap={3}>
+    <AsyncImage query="Rishon declarative programming language software compiler website" aspectRatio="1:1" maxWidth="88px"/>
+    <box flex="1" gap={1}>
+      **7. <Entity value="Rishon" category="software" disambig="Declarative business software language and compiler"/>**
+      <text color="secondary" size="xs"><Link url="https://rishon.com/" title="官网"/></text>
+      声明式、静态验证、类型安全的多语言 DSL，编译成业务本体图，并配备 AI 产品和开发 Agent。
+
+      重点研究：业务语义 DSL、Ontology、编译器与 AI 协作。
+      <Cite refs={["turn293874search8"]}/>
+    </box>
+  </row>
+  <divider color="subtle"/>
+  <row align=start gap={3}>
+    <AsyncImage query="Ryngo AI codebase graph compiler interface" aspectRatio="1:1" maxWidth="88px"/>
+    <box flex="1" gap={1}>
+      **8. <Entity value="Ryngo" category="software" disambig="Deterministic codebase graph compiler for AI agents"/>**
+      <text color="secondary" size="xs"><Link url="https://ryngo.ai/" title="官网"/></text>
+      把现有代码库编译成类型化图、紧凑 IR 和局部子图，通过 MCP 提供给 Agent。
+
+      重点研究：代码语义图、上下文压缩、局部依赖查询。
+      <Cite refs={["turn725161search4"]}/>
+    </box>
+  </row>
+  <divider color="subtle"/>
+  <row align=start gap={3}>
+    <AsyncImage query="Telos AI software requirements goal based engineering platform" aspectRatio="1:1" maxWidth="88px"/>
+    <box flex="1" gap={1}>
+      **9. <Entity value="Telos" category="software" disambig="Goal-driven AI software build and maintenance platform"/>**
+      <text color="secondary" size="xs"><Link url="https://usetelos.ai/" title="官网"/></text>
+      把 Goal 作为持久化的软件契约，连接 Claude Code、Codex 等 Agent，管理 Build、Test、Deploy 和持续维护。
+
+      重点研究：长期需求契约、软件持续验证。
+      <Cite refs={["turn293874search10"]}/>
+    </box>
+  </row>
+</box>
+

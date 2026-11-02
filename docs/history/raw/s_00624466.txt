@@ -1,0 +1,24 @@
+```text
+Input
+  |
+  v
+YAML Parser
+  |
+  v
+JSON Normalization
+  |
+  v
+Schema Validation
+  |
+  v
+Reference Validation
+  |
+  v
+Type Validation
+  |
+  v
+Semantic Validation
+  |
+  v
+AST
+```

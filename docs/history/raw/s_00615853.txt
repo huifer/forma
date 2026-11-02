@@ -1,0 +1,22 @@
+```text
+plugins/
+├── frontend/
+│   ├── react
+│   ├── vue
+│   └── svelte
+│
+├── backend/
+│   ├── hono
+│   ├── express
+│   └── rust-axum
+│
+├── database/
+│   ├── sqlite
+│   ├── mysql
+│   └── postgres
+│
+└── integrations/
+    ├── stripe
+    ├── auth
+    └── storage
+```

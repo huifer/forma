@@ -1,0 +1,1 @@
+GitHub - lbotinelly/state-of-agentic-coding: Source-verified survey of the agentic AI coding landscape: frontier & open models, agent harnesses, pricing, privacy/training policies, IDE compatibility, on-prem tiers, and per-use-case recommendations. Versioned editions, cross-model comparisons. Current edition: 2026-07. · GitHub

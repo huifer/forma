@@ -1,0 +1,11 @@
+{
+  "code": "SPEC_FIELD_REFERENCE_NOT_FOUND",
+  "severity": "error",
+  "path": "ui.pages.users.columns[2]",
+  "message": "Referenced field does not exist",
+  "suggestions": [
+    "name",
+    "email",
+    "status"
+  ]
+}

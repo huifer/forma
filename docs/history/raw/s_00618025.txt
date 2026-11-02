@@ -1,0 +1,16 @@
+{
+  "id": "field:user.status",
+  "kind": "DataField",
+  "type": "enum",
+  "owner": "entity:user",
+  "attributes": {
+    "values": [
+      "active",
+      "disabled"
+    ]
+  },
+  "source": {
+    "file": "spec/data/user.data.yaml",
+    "path": "$.entities.User.fields.status"
+  }
+}

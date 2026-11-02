@@ -1,0 +1,11 @@
+User
+  |
+  +-- hasMany --> Order
+  |
+  +-- owns ----> Permission
+  |
+  +-- exposes -> API
+  |
+  +-- renders -> UserTable
+  |
+  +-- validates -> UserForm

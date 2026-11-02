@@ -1,0 +1,255 @@
+## 一、先给结论：有，而且有几个比之前提到的案例更接近
+
+这次检索发现了几个值得重点关注的产品。其中有两个尤其重要：
+
+- **Rishon**：在产品理念上非常接近你，已经采用专用 DSL、Compiler、Ontology Graph 和 Virtual Machine。
+- **fromSpec**：在 AI 生成结构化规格、用户审核规格、确定性编译为完整代码这条链路上非常接近你。
+
+另外，**Loopar、OpenPage、Graphical Agents** 分别覆盖了你构想中的可视化建模、JSON 作为事实来源、图结构编译代码等部分。
+
+这意味着你的想法不是没有先例。但它也不意味着市场上已经有一个产品完整实现了你想做的东西。
+
+## 二、最值得研究的六个产品
+
+### 1. <Entity value="Rishon" category="software" disambig="AI-native custom business software platform"/>：理念上最接近
+
+<badge color="danger">高度重合</badge>
+
+<AsyncImageGroup query={["Rishon AI native business software platform interface","Rishon language IDE visual interface demo"]} aspectRatio="5:4" layout="carousel"/>
+
+官网：<Link url="https://rishon.com/" title="Rishon"/>
+
+它的架构非常值得你研究。
+
+Rishon 公开描述的完整流程是：
+
+```text
+自然语言需求
+    ↓
+AI Product Agent
+    ↓
+详细产品规格
+    ↓
+AI Developer Agent
+    ↓
+Rishon Language（专用 DSL）
+    ↓
+Rishon Compiler
+    ↓
+Ontology Graph
+    ↓
+Rishon Virtual Machine
+    ↓
+业务软件 / 自动化 / UI
+```
+
+几个关键点：
+
+- 有专门为 AI 和人设计的 Rishon Language。
+- 语言描述业务语义，而不是传统编程语言的实现细节。
+- 有静态校验和专门的 Compiler。
+- 编译成 Ontology Graph。
+- Virtual Machine 根据 Graph 决定数据结构、访问逻辑、用户界面和自动化行为。
+- 不是简单地让 AI 生成 React、SQL 或 Python。<Cite refs={["turn427041view2","turn452057search14"]}/>
+
+**与你的差别：**
+
+Rishon 更像一个完整的 AI-native Business Software Platform。它有自己的语言和运行时，重点是让软件在自己的平台中运行。
+
+你现在想要的则更偏向：
+
+> AI 生产 DSL → 可视化编辑 DSL → Compiler 编译成标准程序代码 → 用户拥有程序。
+
+这两者非常接近，但运行时和代码交付策略不同。
+
+**我的判断：这是第一个必须深入研究的产品。**
+
+### 2. <Entity value="fromSpec" category="software" disambig="Spec-driven AI application builder"/>：AI 规格到代码最接近
+
+<badge color="danger">高度重合</badge>
+
+<AsyncImageGroup query={["fromSpec spec driven AI app builder spec json interface","fromSpec AI app builder interactive prototype screens"]} aspectRatio="5:4"/>
+
+官网：<Link url="https://fromspec.io/" title="fromSpec"/>
+
+它的产品逻辑是：
+
+```text
+用户与 AI 对话
+    ↓
+生成 spec.json
+    ↓
+用户审核规格
+    ↓
+生成可交互原型
+    ↓
+用户批准
+    ↓
+Deterministic Build
+    ↓
+React + FastAPI + PostgreSQL
+```
+
+它的规格包括：
+
+- Entities
+- Flows
+- Screens
+- Roles
+- Branding
+- API
+- Stack
+
+还有一个非常重要的产品设计：先从规格生成交互式原型，用户确认后才生成代码。修改需求时，修改规格，再重新编译。<Cite refs={["turn427041view0","turn634844search1"]}/>
+
+**与你的差别：**
+
+| 维度 | fromSpec | 你的构想 |
+|---|---|---|
+| AI 输出 | spec.json | 专用 DSL |
+| 规格载体 | 结构化 JSON | DSL + 多种可视化视图 |
+| 可视化 | 交互式原型 | 原生规格编辑器 |
+| 核心模型 | 实体、流程、页面等 | 统一语义模型 / DSL Graph |
+| 输出 | 标准代码项目 | 标准代码项目 |
+| 编译策略 | 确定性构建 | 可扩展的语义编译系统 |
+
+fromSpec 已经很接近你的商业价值主张：不让用户反复 Prompt 改代码，而是让用户修改规格。
+
+不过，从其公开介绍看，它目前是 Early Access 产品，我没有足够证据确认它是否已经具备你想要的多视图、图形化 DSL 双向编辑能力，也没有独立验证其编译器覆盖范围。<Cite refs={["turn427041view0","turn634844search1"]}/>
+
+**我的判断：这是第二个必须深入研究的产品。**
+
+### 3. <Entity value="Loopar" category="software" disambig="Open-source visual full-stack application framework"/>：传统 Low-Code 路线非常接近
+
+<badge color="warning">架构部分重合</badge>
+
+<AsyncImageGroup query={["Loopar build visual low code framework editor","Loopar visual application builder entity model interface"]} aspectRatio="5:4"/>
+
+官网：<Link url="https://loopar.build/" title="Loopar"/>  
+GitHub：<Link url="https://github.com/alphabit-technology/loopar-framework" title="Loopar Framework"/>
+
+Loopar 的模式：
+
+```text
+可视化设计 / JSON
+       ↓
+Entity Definition
+       ↓
+Loopar Engine
+       ↓
+Database + REST API
+       ↓
+React Forms + Views + Controllers
+       ↓
+可运行应用
+```
+
+它有几个与你的设想高度重合的点：
+
+- 一个 Entity 定义可以生成多个程序层。
+- 可以用可视化界面或者 JSON 定义模型、页面和工作流。
+- 引擎负责解析定义、生成数据库、API、表单、视图和 Controller。
+- 支持保留完整代码访问能力。
+- 开源 MIT。<Cite refs={["turn427041view3","turn452057search18"]}/>
+
+**差别：**
+
+Loopar 更接近传统的可视化全栈开发框架。它的核心不是 AI 产生业务 DSL，而是人通过可视化界面或 JSON 进行建模。
+
+但它证明了一个重要的商业方向：
+
+**一个业务定义可以驱动整个应用的多个层，而不是只生成一个页面。**
+
+### 4. <Entity value="OpenPage" category="software" disambig="Open-source JSON-first AI website builder"/>：AI + JSON + 可视化编辑器
+
+<badge color="warning">UI 领域高度重合</badge>
+
+<AsyncImageGroup query={["OpenPage open source AI website builder visual drag drop editor","OpenPage JSON first visual website builder interface"]} aspectRatio="5:4"/>
+
+GitHub：<Link url="https://github.com/buildingopen/openpage" title="OpenPage"/>
+
+它的核心架构：
+
+```text
+       AI Agent
+          ↕
+Visual Editor ↔ JSON Config
+          ↓
+       Renderer
+          ↓
+       Website
+```
+
+特点：
+
+- JSON 是唯一事实来源。
+- AI 根据自然语言生成 JSON。
+- 可视化编辑器读取和修改相同 JSON。
+- JSON 可以版本管理和 Diff。
+- 支持导出独立 HTML。<Cite refs={["turn427041view1","turn452057search1"]}/>
+
+但有个重要区别：它主要是网站搭建器，JSON 交给 Renderer 渲染，并不等于一个面向完整软件系统的通用 DSL Compiler。
+
+**值得借鉴的是：AI 和可视化编辑器共同操作同一份 JSON。**
+
+### 5. <Entity value="Graphical Agents" category="software" disambig="Open-source visual AI workflow graph compiler"/>：图结构编译程序的直接案例
+
+<badge color="warning">技术路线高度重合</badge>
+
+<AsyncImageGroup query={["Graphical Agents visual workflow builder React Flow editor","Graphical Agents LangGraph Google ADK graph compiler interface"]} aspectRatio="5:4"/>
+
+GitHub：<Link url="https://github.com/neo-fetch/draw-your-agents" title="Graphical Agents"/>
+
+这个项目很值得你看源码，因为它有一套清晰的编译架构：
+
+```text
+Visual Graph / draw.io
+         ↓
+Canonical JSON Graph IR
+         ↓
+Validator
+         ↓
+Compiler
+      ↙     ↘
+Google ADK  LangGraph
+      ↓       ↓
+ Runnable Python Projects
+```
+
+它已经实现：
+
+- React Flow 可视化图编辑。
+- Canonical Graph IR。
+- JSON Schema 验证。
+- 从同一份 IR 编译到 Google ADK 和 LangGraph。
+- 实时生成代码预览。
+- 导出可运行 Python 项目。
+- Golden-file 测试验证生成结果。<Cite refs={["turn634844search2","turn634844search3"]}/>
+
+它和你的方向很接近，但范围只聚焦 AI Agent Workflow，不是通用业务软件 DSL。
+
+**它特别值得借鉴的是：图形编辑器不直接生成代码，而是统一写入 IR，编译器只认 IR。**
+
+### 6. <Entity value="Eclipse Sirius" category="software" disambig="Open-source graphical DSL modeling framework"/>：可视化 DSL 编辑器的底层基础设施
+
+<badge color="info">技术基础设施参考</badge>
+
+<AsyncImageGroup query={["Eclipse Sirius Web graphical DSL editor diagram modeling studio","Eclipse Sirius Web node edge diagram visual modeling interface"]} aspectRatio="5:4"/>
+
+官网：<Link url="https://eclipse.dev/sirius/sirius-web.html" title="Eclipse Sirius Web"/>
+
+Sirius Web 不是一个直接与你竞争的 AI 软件生成产品，而是一个用于构建 DSL 可视化建模工具的框架。
+
+它支持：
+
+- 定义自己的领域语言。
+- 自定义图形符号和节点。
+- 用节点、连线表达模型关系。
+- 使用表单编辑对象属性。
+- 用多个图形视图呈现同一领域模型。
+- 构建可部署在 Web 上的建模工作室。<Cite refs={["turn427041view4","turn452057search3"]}/>
+
+这对你的意义很大：你不一定需要从零研究所有可视化 DSL 编辑器技术，但需要评估这类建模框架的架构。
+
+---
+

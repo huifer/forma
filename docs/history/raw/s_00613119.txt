@@ -1,0 +1,11 @@
+```text
+spec_get
+spec_search
+spec_apply_patch
+spec_validate
+spec_get_ir
+spec_preview
+spec_compile
+spec_verify
+spec_rollback
+```

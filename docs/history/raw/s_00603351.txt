@@ -1,0 +1,69 @@
+```text
+                   HUMAN
+                     |
+                     v
+               REQUIREMENTS
+                     |
+                     v
+          +----------------------+
+          |     AI AGENTS        |
+          |                      |
+          | Codex / Claude / Pi  |
+          +----------------------+
+                     |
+                     v
+          +----------------------+
+          |   SPEC PROTOCOL      |
+          |                      |
+          | Create / Update      |
+          | Patch / Delete       |
+          +----------------------+
+                     |
+                     v
+          +----------------------+
+          |  SPECIFICATION STORE |
+          |                      |
+          | App / Data / UI      |
+          | Logic / API          |
+          +----------------------+
+                     |
+                     v
+          +----------------------+
+          |  SEMANTIC COMPILER   |
+          |                      |
+          | Parse / Validate     |
+          | Type / Reference      |
+          +----------------------+
+                     |
+                     v
+          +----------------------+
+          |   CANONICAL IR       |
+          |                      |
+          | AST / Dependency DAG |
+          +----------------------+
+                     |
+                     v
+          +----------------------+
+          | INCREMENTAL ENGINE   |
+          |                      |
+          | Hash / Cache / Diff  |
+          +----------------------+
+                     |
+                     v
+          +----------------------+
+          |   CODE GENERATOR     |
+          |                      |
+          | Frontend / Backend   |
+          | Database / Tests     |
+          +----------------------+
+                     |
+                     v
+          +----------------------+
+          |  VERIFICATION ENGINE |
+          |                      |
+          | Build / Test / Audit |
+          +----------------------+
+                     |
+                     v
+              EXECUTABLE APP
+```

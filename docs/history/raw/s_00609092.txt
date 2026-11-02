@@ -1,0 +1,35 @@
+# 安装
+speccompiler install
+
+# 初始化项目
+speccompiler init task-manager
+
+# 验证规格
+speccompiler validate
+
+# 查看 IR
+speccompiler ir inspect
+
+# 查看依赖
+speccompiler graph
+
+# 查看变更影响
+speccompiler preview
+
+# 编译
+speccompiler build
+
+# 增量编译
+speccompiler build --incremental
+
+# 测试
+speccompiler verify
+
+# 查看历史
+speccompiler history
+
+# 回滚
+speccompiler rollback chg_001
+
+# 启动 MCP
+speccompiler mcp

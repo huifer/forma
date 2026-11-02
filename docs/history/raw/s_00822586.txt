@@ -1,0 +1,1 @@
+software compiler architecture diagram AI specification DSL parser semantic analysis intermediate representation dependency graph incremental code generation runtime verification dark technical blueprint

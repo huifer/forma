@@ -1,0 +1,13 @@
+Current Spec
+     |
+     v
+Semantic Diff
+     |
+     v
+Minimal Patch
+     |
+     v
+Validation
+     |
+     v
+Incremental Compilation

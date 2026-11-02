@@ -1,0 +1,353 @@
+有，而且不只是一个。
+
+我重新审视了一下你的产品构想，结论是：**你想做的东西已经有多个相邻产品，甚至有产品已经实现了其中一部分核心技术。**
+
+但我认为，目前需要重点研究的不是普通 AI Coding 工具，而是以下五类产品：
+
+1. **Spec-driven Development**：AI 先生成规格，再开发。
+2. **AI-to-DSL / Compiler**：AI 生成结构化描述，由编译器生成代码。
+3. **Visual / Schema-driven App Builder**：通过结构化模型生产完整应用。
+4. **Code Generation Infrastructure**：定义统一协议，生成不同语言的代码。
+5. **Agent Coding Infrastructure**：为 Codex、Claude Code、Pi 提供统一的工程执行和验证能力。
+
+你的产品恰好处于这些领域的交叉位置。
+
+但要区分一个关键问题：
+
+**有人做过 AI 生成 Spec，有人做过 DSL 编译器，也有人做过增量构建。你要验证的是，有没有人把这些能力组合成一个 Agent 无关、Spec 为核心、可增量编译、可验证和回滚的软件生产引擎。**
+
+# 一、最值得关注的竞品：已经发现两个非常接近的产品
+
+**1\. entity["software","Overplane","Spec-driven AI coding build and verification system"]** (高度重合)
+
+image_group{"query":["Overplane AI coding spec driven development software website screenshot"],"aspect_ratio":"16:9","layout":"carousel","num_per_query":1}
+
+官网：urloverplane.devhttps://www.overplane.dev/ · 开源 Apache-2.0
+
+它已经实现了你方案中非常多的关键设计：
+
+- 支持 Codex、Claude Code、OpenCode。
+- Markdown Spec 作为规格来源。
+- Spec 转换成 IR。
+- 使用 Z3 做规格一致性验证。
+- Agent 在隔离容器中运行。
+- 内容 Hash 和增量缓存。
+- 构建结果可追踪、可重放。
+- AI 负责生成软件，系统负责管理生产流程。
+
+它甚至已经有 `raise → verify → codegen` 三阶段编译流程。citeturn293874search0turn293874search2turn293874search4turn293874search5
+
+**判断：这是你必须第一个下载、安装、实际运行的项目。**
+
+不过有一个重要区别：它的 IR 是由 AI 从自然语言规格中提取的形式化模型，后续代码生成仍由 Coding Agent 完成。它不是完全由确定性 Target Compiler 根据统一业务 AST 生成全部源代码。citeturn293874search4turn293874search9
+
+**2\. entity["software","Prodara","AI product specification compiler and incremental code generation"]** (高度重合)
+
+GitHub：urlprodara-ai/prodarahttps://github.com/prodara-ai/prodara
+
+它的项目描述几乎直接命中了你最初的设想：
+
+- AI 生成 `.prd` 规格文件。
+- 编译为 Typed Product Graph。
+- 13 阶段验证流水线。
+- 语义 Diff。
+- 自动分析变更影响。
+- 结构化、增量代码生成。
+- Agent 根据编译器提供的影响范围执行开发。
+
+它描述的核心理念是：Give your AI a compiler, not a pile of markdown。citeturn293874search7
+
+**判断：这是最值得研究的 DSL + IR + Semantic Graph + Incremental Code Generation 方向的直接竞品。**
+
+特别需要研究它的 Product Graph 和 13 阶段 Pipeline，而不是只看它的宣传页面。
+
+这两个项目会显著改变我的建议：你不能再把「Agent + Spec + IR + 增量编译」整体当成尚未有人涉足的创新。
+
+---
+
+# 二、其他值得研究的具体产品
+
+以下按照与你的技术路线的接近程度排列。
+
+image_group{"query":["Tessl AI software specification framework website logo"],"aspect_ratio":"1:1","layout":"carousel","num_per_query":1}
+
+**3\. entity["software","Tessl","Specification-driven AI software development platform"]**
+
+(Spec-as-Source)
+
+url官网https://tessl.io/ · url技术分析https://www.martinfowler.com/articles/exploring-gen-ai/sdd-3-tools.html
+
+核心思路是规格长期作为主要资产，代码可以标记为由 Spec 生成，提供 MCP 和规格注册机制。
+
+重点研究：Spec 与代码映射、规格版本化、测试关联。
+
+citeturn293874search11turn293874search13
+
+---
+
+image_group{"query":["AWS Kiro IDE specification driven development screenshot"],"aspect_ratio":"1:1","layout":"carousel","num_per_query":1}
+
+**4\. entity["software","AWS Kiro","AI development IDE with spec-driven workflows"]**
+
+url官网https://kiro.dev/
+
+Requirements → Design → Tasks → Implementation。
+
+重点研究：需求结构化、验收标准、规格和实现之间的关联。
+
+citeturn725161search2turn725161search0
+
+---
+
+image_group{"query":["GitHub Spec Kit logo specification driven development"],"aspect_ratio":"1:1","layout":"carousel","num_per_query":1}
+
+**5\. entity["software","GitHub Spec Kit","Open-source specification-driven development toolkit"]**
+
+urlGitHubhttps://github.com/github/spec-kit
+
+Constitution → Specify → Plan → Tasks → Implement。
+
+重点研究：跨 Agent 工作流、规格组织和变更管理。
+
+citeturn725161search0turn725161search1
+
+---
+
+image_group{"query":["OpenSpec AI specification driven development GitHub logo"],"aspect_ratio":"1:1","layout":"carousel","num_per_query":1}
+
+**6\. entity["software","OpenSpec","Open-source change-based specification development toolkit"]**
+
+urlGitHubhttps://github.com/Fission-AI/OpenSpec
+
+通过变更提案、规格差异、设计和任务文件组织开发。
+
+重点研究：Spec Patch、Change Lifecycle、规格归档。
+
+citeturn725161search0turn725161search11
+
+---
+
+image_group{"query":["Rishon declarative programming language software compiler website"],"aspect_ratio":"1:1","layout":"carousel","num_per_query":1}
+
+**7\. entity["software","Rishon","Declarative business software language and compiler"]**
+
+url官网https://rishon.com/
+
+声明式、静态验证、类型安全的多语言 DSL，编译成业务本体图，并配备 AI 产品和开发 Agent。
+
+重点研究：业务语义 DSL、Ontology、编译器与 AI 协作。
+
+citeturn293874search8
+
+---
+
+image_group{"query":["Ryngo AI codebase graph compiler interface"],"aspect_ratio":"1:1","layout":"carousel","num_per_query":1}
+
+**8\. entity["software","Ryngo","Deterministic codebase graph compiler for AI agents"]**
+
+url官网https://ryngo.ai/
+
+把现有代码库编译成类型化图、紧凑 IR 和局部子图，通过 MCP 提供给 Agent。
+
+重点研究：代码语义图、上下文压缩、局部依赖查询。
+
+citeturn725161search4
+
+---
+
+image_group{"query":["Telos AI software requirements goal based engineering platform"],"aspect_ratio":"1:1","layout":"carousel","num_per_query":1}
+
+**9\. entity["software","Telos","Goal-driven AI software build and maintenance platform"]**
+
+url官网https://usetelos.ai/
+
+把 Goal 作为持久化的软件契约，连接 Claude Code、Codex 等 Agent，管理 Build、Test、Deploy 和持续维护。
+
+重点研究：长期需求契约、软件持续验证。
+
+citeturn293874search10
+
+# 三、竞品能力矩阵：到底谁已经做到了什么？
+
+这是我认为最有价值的对比。
+
+| 核心能力 | Overplane | Prodara | Tessl | Spec Kit |
+|--------|--------|--------|--------|--------|
+| AI 生成规格 | 是 | 是 | 是 | 是 |
+| 结构化 DSL | 部分 | 是 | 是 | 主要 Markdown |
+| Canonical IR | 是 | Product Graph | 有规格模型 | 非核心 |
+| 语义验证 | 是 | 是 | 规格约束 | 有分析流程 |
+| 依赖图 | 部分 | 是 | 有映射关系 | 非核心 |
+| 增量构建 | 是 | 是 | 有相关能力 | 非核心 |
+| 确定性代码生成 | 部分 | 目标之一 | 目标之一 | 否 |
+| Agent 无关 | 是 | 需要进一步核查 | 是 | 是 |
+| MCP | 需要核查具体版本 | 需要核查 | 是 | 依赖 Agent 集成 |
+| 独立构建验证 | 是 | 需要核查 | 测试关联 | 主要由 Agent 执行 |
+| 回滚与事务构建 | 需进一步验证 | 需进一步验证 | 需进一步验证 | 非核心 |
+
+说明：表格中的「部分」「非核心」不代表产品完全不具备该功能，而是其公开资料没有把它作为核心能力。对于 Prodara、Overplane 等新项目，具体功能和实现成熟度还需要源码级审计，不能把宣传描述等同于已经通过生产验证。
+
+## 四、最重要的发现：你原本的产品定义需要调整
+
+我会把原本的构想分成三个层次：
+
+## Layer 1：Spec-driven Agent Workflow
+
+(竞争已经比较充分)
+
+- AI 生成规格。
+- 规格驱动开发。
+- 多 Agent 接入。
+- 任务管理。
+- 测试与验证。
+
+代表：Spec Kit、OpenSpec、Kiro、Overplane。
+
+---
+
+## Layer 2：Semantic Specification Compiler
+
+(已有直接竞品)
+
+- DSL。
+- AST / IR。
+- Semantic Graph。
+- 影响分析。
+- Incremental Compilation。
+- 结构化代码生产。
+
+代表：Prodara、Overplane、Tessl。
+
+---
+
+## Layer 3：Universal Deterministic Software Production
+
+(建议重点研究)
+
+- AI 输出最小化 Patch。
+- 统一类型化软件模型。
+- 确定性 Target Compiler。
+- 多语言、多平台生成。
+- 生成代码和原生代码混合管理。
+- 独立验证生成结果。
+- 跨 Agent 的软件语义操作协议。
+
+我认为第三层才值得你继续寻找差异化。
+
+但必须强调：这不是已经证明没有竞争者的空白市场。它是从现有产品中提炼出来的差异化假设，需要逐项做竞品验证。
+
+# 五、我建议你重点拆解的三个项目
+
+不要同时研究十几个项目。先深入这三个。
+
+(第一优先级)
+
+**Overplane**
+
+研究它的整个生产流水线：
+
+1. Spec 如何组织？
+2. Raise 如何生成 IR？
+3. Z3 如何验证？
+4. Agent 如何在容器里执行？
+5. 如何进行 Hash 缓存？
+6. 如何控制生成结果的回写？
+
+urlIR Generation 文档https://www.overplane.dev/guide/advanced-topics/ir-generation · urlCodegen 文档https://www.overplane.dev/guide/advanced-topics/codegen
+
+---
+
+(第二优先级)
+
+**Prodara**
+
+研究它的：
+
+1. `.prd` DSL。
+2. Typed Product Graph。
+3. 13 阶段编译流水线。
+4. Semantic Diff。
+5. 影响范围分析。
+6. Incremental Code Generation。
+
+urlGitHub 源码https://github.com/prodara-ai/prodara
+
+---
+
+(第三优先级)
+
+**Tessl**
+
+研究它的：
+
+1. Spec-as-Source。
+2. Spec 与代码映射。
+3. Spec 与测试关联。
+4. MCP 集成。
+5. 规格版本与复用。
+
+urlTessl 官网https://tessl.io/ · urlMartin Fowler 技术分析https://www.martinfowler.com/articles/exploring-gen-ai/sdd-3-tools.html
+
+# 六、最终创业决策
+
+我会修改之前给你的产品战略。
+
+原来的：
+
+> 做一个通用 AI Specification Compiler。
+
+现在我认为还不够差异化。
+
+我建议改为：
+
+# Agent Software Compiler
+
+The deterministic execution layer for AI coding agents.
+
+**核心定位：**
+
+让 Codex、Claude Code、Pi 不再通过大量源代码操作来完成所有软件开发任务，而是通过结构化语义操作，调用确定性编译器完成软件生产。
+
+**三个核心产品创新：**
+
+1. Semantic Patch Protocol：Agent 只提交最小业务变更。
+2. Deterministic Target Compiler：真正由编译器生成标准代码，而不是每次再让 Agent 写代码。
+3. Verified Change Engine：每次修改都有影响分析、构建证据和回滚能力。
+
+我会给这个方向一个明确的研发优先级：
+
+| 研发方向 | 优先级 |
+|--------|--------|
+| Semantic Patch Protocol | P0 |
+| Typed Canonical IR | P0 |
+| 确定性代码生成器 | P0 |
+| Incremental Compilation | P0 |
+| Independent Verification | P0 |
+| Agent Adapter | P1 |
+| 多语言 Target | P2 |
+| 可视化 IDE | P3 |
+
+**最关键的差异：Overplane 更偏向让 Agent 在受控环境中生产和验证代码；你可以尝试让编译器直接生产代码，让 Agent 主要操作软件语义。**
+
+Prodara 已经覆盖了这条路线的相当一部分，因此必须先通过源码和实际运行验证它的实现边界。
+
+---
+
+## 七、我建议下一步做一次真正的竞品源码审计
+
+不要再继续凭概念设计产品了。现在最有价值的是验证 Overplane 和 Prodara 到底实现到了什么程度。
+
+我建议审计这六项：
+
+1. **DSL**：是否真正有类型系统，还是仅仅结构化 Markdown/YAML？
+2. **IR**：是否是可独立操作、可查询、可转换的语义模型？
+3. **Compiler**：是否由确定性生成器产出代码，还是 Agent 仍然承担主要代码生成？
+4. **Incremental**：是否有真实的依赖 DAG、内容寻址和局部重编译？
+5. **Reliability**：是否有事务式生成、独立测试、失败回滚？
+6. **Agent Protocol**：能否让不同 Agent 对同一份 Spec 进行并发、可控的语义修改？
+
+最终输出应该是：逐项源码证据、已实现功能、缺失功能、架构缺陷，以及你可以切入的独立创新点。
+
+**我的建议是：先审计 Overplane 和 Prodara。尤其是 Prodara。它可能比你之前设想的 SpecForge 更接近你真正要做的产品。**
+
+如果审计发现它们已经把核心能力做得足够成熟，那么就不应该再重复造一个，而应该寻找它们没有解决的可靠性和通用软件生产问题。

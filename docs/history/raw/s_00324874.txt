@@ -1,0 +1,350 @@
+## 1. 你的方向与现有产品的真正区别
+
+我把它们重新放在一起比较：
+
+| 方向 | AI 生产什么 | 谁负责生成程序 | 核心载体 |
+|---|---|---|---|
+| 传统 AI Coding | 源代码 | AI | TS、Python、HTML 等 |
+| Spec Kit / Kiro | Markdown 需求、设计和任务 | AI | Markdown |
+| Overplane | 结构化规格、形式化约束 | 主要仍由 AI Agent 编写代码 | YAML、SMT-LIB 等 |
+| 传统 Low-Code | 组件、流程、数据模型 | 平台编译器或运行时 | 可视化编辑器 |
+| **你的方向** | **可编译的 DSL 规格** | **确定性编译器** | **DSL + 可视化编辑器** |
+
+关键差异在于：**你不是让 AI 阅读规格后继续写代码，而是让规格本身成为程序的源代码。**
+
+这意味着你做的不是一个更好的 AI Coding Agent，而是一种新的软件生产范式。
+
+## 2. 我建议你采用的产品模型
+
+<box border radius="lg" gap={3} padding={3}>
+  <title size="lg">AI-Native Software Compiler</title>
+  <text color="secondary" size="xs">从自然语言到可执行程序，AI 不直接编写业务源代码</text>
+  <box background="rgba(59,130,246,0.08)" radius="md" padding={3} align="center" gap={1}>
+    **用户需求 / 自然语言**
+    <text color="secondary" size="xs">What should the software do?</text>
+  </box>
+  <box align="center">
+    <icon name="arrow-down" color="secondary" size="lg"/>
+  </box>
+  <box background="rgba(59,130,246,0.08)" radius="md" padding={3} align="center" gap={1}>
+    **AI Specification Engine**
+    <text color="secondary" size="xs">理解需求、拆解业务、生成 DSL、修改语义节点</text>
+  </box>
+  <box align="center">
+    <icon name="arrow-down" color="secondary" size="lg"/>
+  </box>
+  <box border={{size:1,color:"#3B82F6"}} radius="lg" padding={3} gap={2}>
+    <row align="center" justify="between">
+      **Canonical DSL**
+      <badge color="success">核心资产</badge>
+    </row>
+    <grid columns={2} gap={2}>
+      <grid-item background="surface-secondary" radius="md" padding={2}>
+        <icon name="database" size="lg"/>
+        **Data DSL**
+        <caption>数据模型、关系、约束</caption>
+      </grid-item>
+      <grid-item background="surface-secondary" radius="md" padding={2}>
+        <icon name="layout" size="lg"/>
+        **UI DSL**
+        <caption>页面、组件、布局</caption>
+      </grid-item>
+      <grid-item background="surface-secondary" radius="md" padding={2}>
+        <icon name="workflow" size="lg"/>
+        **Flow DSL**
+        <caption>事件、流程、状态</caption>
+      </grid-item>
+      <grid-item background="surface-secondary" radius="md" padding={2}>
+        <icon name="shield-check" size="lg"/>
+        **Rule DSL**
+        <caption>权限、校验、业务规则</caption>
+      </grid-item>
+    </grid>
+    <divider color="subtle"/>
+    <row align="center" gap={2}>
+      <icon name="monitor" color="secondary"/>
+      **Visual Specification Editor**
+      <spacer/>
+      <badge>DSL 的可视化投影</badge>
+    </row>
+    <caption>画布、流程图、组件树、属性面板、关系图；可视化修改与 DSL 修改保持同步</caption>
+  </box>
+  <box align="center">
+    <icon name="arrow-down" color="secondary" size="lg"/>
+  </box>
+  <box background="rgba(16,185,129,0.08)" radius="md" padding={3} align="center" gap={1}>
+    **Compiler Engine**
+    <text color="secondary" size="xs">Parser → Type Checker → Semantic IR → Dependency Graph → Code Generator</text>
+  </box>
+  <box align="center">
+    <icon name="arrow-down" color="secondary" size="lg"/>
+  </box>
+  <box background="surface-secondary" radius="md" padding={3} align="center" gap={1}>
+    **Executable Software**
+    <text color="secondary" size="xs">React / TypeScript / API / Database / Tests / Deployment Artifacts</text>
+  </box>
+</box>
+
+这里有一个非常重要的架构决定：
+
+**可视化界面不是 DSL 的替代品，而是 DSL 的可视化编辑和展示层。**
+
+DSL 才是唯一的事实来源（Single Source of Truth）。
+
+例如用户在画布上添加一个订单审批节点，系统修改对应 DSL；AI 要增加一个审批条件，也修改相同的 DSL。两者最后进入同一个编译器。
+
+不能让画布保存一套数据、YAML 保存另一套数据，否则迟早出现状态不一致。
+
+## 3. DSL 应该长什么样？
+
+我不建议你从 Markdown 开始，也不建议直接采用通用 YAML 作为最终产品语言。
+
+你应该设计一种面向软件语义的 DSL。
+
+例如用户要求：
+
+> 做一个订单管理系统，支持创建订单、审批订单、取消订单，审批通过后生成发货任务。
+
+AI 不应该输出 React、HTML、SQL，而应该生成类似这样的规格：
+
+```yaml
+app:
+  id: order-management
+  name: Order Management
+
+models:
+  Order:
+    fields:
+      id: uuid
+      amount: decimal
+      status:
+        type: enum
+        values: [pending, approved, rejected, cancelled]
+
+    transitions:
+      - from: pending
+        to: approved
+        event: approve
+        guard: amount <= approval_limit
+
+      - from: pending
+        to: rejected
+        event: reject
+
+      - from: pending
+        to: cancelled
+        event: cancel
+
+workflows:
+  order_approval:
+    trigger: Order.approved
+    steps:
+      - create: Shipment
+        values:
+          order_id: $event.order.id
+
+pages:
+  orders:
+    route: /orders
+    layout: table
+    source: Order
+    actions:
+      - approve
+      - reject
+      - cancel
+```
+
+这只是概念示例，真正的 DSL 需要类型系统、引用约束、事件语义、版本管理和静态检查。
+
+最重要的是：这份 DSL 不应该只是代码生成模板。
+
+它需要表达完整的业务语义。
+
+例如：
+
+- `Order` 是业务实体，而不只是一个 TypeScript interface。
+- `approve` 是状态迁移，而不只是一个按钮点击事件。
+- `guard` 是可以静态检查的业务约束，而不只是随意嵌入的一段代码。
+- `Shipment` 是一个领域对象，而不是某个数据库表名。
+
+这样编译器才能理解业务，而不是机械地替换模板。
+
+## 4. 可视化应该如何设计？
+
+我认为你真正有机会做出差异化的地方就在这里。
+
+不要把它做成传统的拖拽式 Low-Code 编辑器。传统低代码通常要求人手动搭建页面，你的产品应该让 AI 和人共同操作同一个语义模型。
+
+我建议至少设计四种视图：
+
+<box gap={3}>
+  <row align=start gap={3}>
+    <AsyncImage query="modern visual workflow builder node based automation canvas interface" aspectRatio="5:4" maxWidth="116px"/>
+    <box flex="1" gap={1}>
+      **1. Flow View — 流程视图**
+
+      用节点和连线表达业务流程、条件分支、事件和状态迁移。适合 Workflow DSL。
+    </box>
+  </row>
+  <divider color="subtle"/>
+  <row align=start gap={3}>
+    <AsyncImage query="modern visual database entity relationship diagram editor interface" aspectRatio="5:4" maxWidth="116px"/>
+    <box flex="1" gap={1}>
+      **2. Data View — 数据视图**
+
+      用 ER 图表达实体、字段、关系、索引和约束。适合 Data DSL。
+    </box>
+  </row>
+  <divider color="subtle"/>
+  <row align=start gap={3}>
+    <AsyncImage query="modern visual web app page builder component tree properties panel interface" aspectRatio="5:4" maxWidth="116px"/>
+    <box flex="1" gap={1}>
+      **3. UI View — 界面视图**
+
+      通过组件树、布局画布和属性面板定义页面结构、交互和数据绑定。适合 UI DSL。
+    </box>
+  </row>
+  <divider color="subtle"/>
+  <row align=start gap={3}>
+    <AsyncImage query="modern software architecture diagram editor service dependency graph interface" aspectRatio="5:4" maxWidth="116px"/>
+    <box flex="1" gap={1}>
+      **4. Architecture View — 架构视图**
+
+      展示模块、服务、依赖、接口、数据流和权限边界。
+    </box>
+  </row>
+</box>
+
+这四种视图并不是四套规格，而是同一个 DSL Graph 的不同 Projection。
+
+用户可以看流程图，也可以看结构化 DSL，还可以看最终生成的页面预览。它们必须保持双向同步。
+
+## 5. Token 经济学：这才是你最值得研究的地方
+
+你提到的 `Token is dollar` 是一个很好的产品切入点。
+
+但是要注意：DSL 不一定天然比代码省 Token。设计得不好的 DSL 也可能产生大量重复字段。
+
+真正的优化是：
+
+**让 AI 只表达变化，让编译器负责重复劳动。**
+
+举个例子：
+
+传统 AI Coding：
+
+1. 理解需求。
+2. 生成组件。
+3. 写 HTML。
+4. 写 CSS。
+5. 写状态管理。
+6. 写接口。
+7. 写类型。
+8. 写测试。
+9. 修改时重新理解和修改多个文件。
+
+DSL 方式：
+
+1. 理解需求。
+2. 添加一个业务节点。
+3. 修改两个关系。
+4. 编译。
+5. 验证。
+
+例如，已经有一个订单管理系统，用户只要求增加一个审批条件：
+
+传统模式可能要修改多个文件，重新检查相关代码。
+
+你的模式应该只修改：
+
+```yaml
+guard: amount <= 50000
+```
+
+然后编译器自动完成相关实现更新。
+
+当然，真正节省多少 Token，需要用相同需求、相同测试标准做 Benchmark，而不是只比较输出文本长度。
+
+我建议你把产品核心指标定义成：
+
+| 指标 | 衡量什么 |
+|---|---|
+| Tokens per Feature | 完成一个业务功能所需 Token |
+| Spec-to-Code Ratio | 规格输入与代码输出的成本关系 |
+| Change Propagation Cost | 一次规格变化需要修改多少内容 |
+| Build Success Rate | 编译成功率 |
+| Semantic Fidelity | 生成程序是否符合规格 |
+| Recovery Cost | 出错后恢复和修复所需成本 |
+
+## 6. 与传统 Low-Code 的区别
+
+你应该研究 <Entity value="OutSystems" category="software" disambig="Low-code application development platform"/>、<Entity value="Mendix" category="software" disambig="Low-code application development platform"/>、<Entity value="Retool" category="software" disambig="Low-code application platform"/>、<Entity value="FlutterFlow" category="software" disambig="Visual application builder"/>，但不是照搬它们。
+
+| 对比 | 传统 Low-Code | 你的产品 |
+|---|---|---|
+| 主要操作者 | 人 | AI + 人 |
+| 规格输入 | 拖拽、表单、配置 | DSL + 可视化 + 自然语言 |
+| 规格生成 | 人工搭建 | AI 生成 |
+| 程序生成 | 平台引擎 | DSL Compiler |
+| 修改方式 | 人工操作界面 | AI Semantic Patch |
+| 核心价值 | 降低开发门槛 | 提高每个 Token 的软件产出效率 |
+| 代码控制权 | 受平台限制 | 应支持导出、版本管理和独立运行 |
+
+你需要避免成为一个封闭的低代码平台。最好让编译产物是标准代码，用户可以拿走、部署、测试和继续维护。
+
+## 7. 我建议第一版只做什么？
+
+不要一开始设计一个能编译所有软件的通用 DSL。
+
+我会选择一个具体目标：
+
+<badge color="success">建议的 MVP</badge> **AI CRUD / Business Application Compiler**
+
+第一版支持：
+
+| DSL | 功能 | 优先级 |
+|---|---|---|
+| Data DSL | 实体、字段、关系、约束 | P0 |
+| UI DSL | 页面、表格、表单、详情页 | P0 |
+| Flow DSL | CRUD、事件、状态迁移、审批流程 | P0 |
+| Rule DSL | 条件、校验、权限 | P1 |
+| API DSL | REST API、请求、响应 | P1 |
+
+编译目标先固定为：
+
+- React + TypeScript
+- Hono API
+- SQLite
+- 标准测试代码
+
+技术实现可以考虑 Rust Compiler Core + TypeScript Runtime。
+
+第一版不需要支持任意复杂算法。复杂算法、特殊集成可以通过受控的原生代码扩展实现，但必须明确标记为外部扩展，不能让 AI 偷偷绕过 DSL 直接生成一大堆代码。
+
+---
+
+## 8. 我对这个创业方向的最终判断
+
+我会把它定义为：
+
+<box border radius="lg" padding={3} gap={2}>
+  <title size="2xl">AI Software Compiler</title>
+  **An executable specification system for AI-native software development.**
+
+  AI 生产结构化软件规格，可视化界面负责理解和编辑规格，确定性编译器负责生成程序。
+
+  <divider color="subtle"/>
+  **不是：** AI Coding Agent、Markdown Spec 管理器、传统拖拽式 Low-Code。
+
+  **而是：** 用 DSL 取代 AI 直接编写大部分重复性源代码。
+</box>
+
+我认为你真正需要建立的壁垒有三个：
+
+1. **DSL Language Design**：一套足够表达软件业务语义，同时对 AI 友好的语言。
+2. **Visual Specification Editor**：让人和 AI 都能高效读写同一份规格。
+3. **Deterministic Compiler**：让规格真正成为可执行的软件源代码，而不是 AI 继续编程的参考文档。
+
+还有一个非常关键的战略问题：不要把 DSL 做成一套更短的 YAML。它必须有自己的语义、类型系统、依赖关系、版本演进机制和编译规则。
+
+**我建议下一步先不要写完整产品 PRD，而是先做 DSL 语言设计研究。** 这决定了整个产品的上限：DSL 如果设计错了，后面的可视化编辑器和编译器都会变成补丁工程。

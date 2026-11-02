@@ -1,0 +1,9 @@
+```json
+{
+  "error": "INVALID_FIELD_REFERENCE",
+  "path": "ui.pages.users.columns[2]",
+  "expected": "Existing entity field",
+  "actual": "user_status",
+  "available": ["name", "email", "status"]
+}
+```

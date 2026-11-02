@@ -1,0 +1,15 @@
+```text
+User.status
+    |
+    +---- DatabaseSchema
+    |
+    +---- ORMModel
+    |
+    +---- APIValidator
+    |
+    +---- UserForm
+    |
+    +---- UserTable
+    |
+    +---- UserTests
+```

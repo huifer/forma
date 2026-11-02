@@ -1,0 +1,16 @@
+```text
+project/
+├── spec/
+│   └── ...
+│
+├── generated/
+│   ├── frontend/
+│   ├── backend/
+│   ├── database/
+│   └── types/
+│
+└── extensions/
+    ├── services/
+    ├── algorithms/
+    └── custom-components/
+```

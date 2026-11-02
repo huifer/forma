@@ -1,0 +1,9 @@
+```json
+{
+  "component": "DataTable",
+  "props": {
+    "entity": "User",
+    "columns": ["name", "email", "status"]
+  }
+}
+```
