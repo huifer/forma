@@ -1,51 +1,63 @@
-# Forma 路线图
+# Forma 路线图（v0.3 — DSL 中间层）
 
-## Phase 0 — Specification Federation MVP（当前，本仓库）
+> 架构见 [architecture.zh-CN.md](architecture.zh-CN.md) · DSL 语法见 [dsl-spec.zh-CN.md](dsl-spec.zh-CN.md)
 
-目标：证明「现有标准联邦 + 统一语义图 + 跨标准补丁」这条路线端到端成立。
+## 已定案（设计完成，2026-11）
 
-- [x] `forma.yaml` Manifest 加载与校验
-- [x] `forma://` 实体身份协议（x-forma-entity → bindings → 约定匹配）
-- [x] 适配器：SQL DDL（SQLite 子集）、JSON Schema 2020-12、OpenAPI 3.1、JSON Forms、BPMN 2.0 子集
-- [x] Unified Semantic Graph + `affectedBy` 影响闭包
-- [x] 跨标准校验（doctor 8 条规则）
-- [x] 生成器：TS 类型/校验器、Hono 路由、SQLite 迁移、React 表单
-- [x] 文件级增量编译（`.forma/build.json`）
-- [x] Semantic Patch：`add-entity-field` / `rename-entity-field` / `set-entity-field-required`（事务式）
-- [x] CLI：init / validate / doctor / graph / build / patch
-- [x] MCP server：validate / graph / impact / patch
-- [ ] Studio 最小可用：语义图浏览 + 实体跨标准详情 + 诊断面板（Phase 2 提前项，未开始）
-- [x] 端到端示例：order-management（含「付款状态」补丁演示）
+- [x] 定位定案：**一层 DSL 中间层**——一套 DSL 生产前端（Web/移动）+ 后端 + 数据库；更新 DSL → 执行编译器 → 得到新代码
+- [x] 目标矩阵定案：适配层首先做 **Rust 后端（axum + sqlx）+ Web（React + TanStack Router/Query + shadcn/ui）+ MySQL**；移动端（iOS/Android）Phase 2 预留
+- [x] 规则校验定案：DSL 一等公民——字段校验/跨字段检查/守卫/权限/状态迁移，双端同源编译（后端权威 + 前端体验）
+- [x] DSL 语法规范 v0.1（[dsl-spec](dsl-spec.zh-CN.md)）：app/enum/entity/rules/api/page 七构造 + 封闭表达式语言
+- [x] 编译器结构定案：forma-syntax / forma-ir / forma-gen-{mysql,rust,web} / forma-engine / forma-patch / forma-cli
+- [x] 标准联邦（v0.2）降级为生成视图（openapi/JSON Schema 导出），适配器代码转 importer/exporter
 
-## Phase 1 — 语义深化
+## M1 — DSL 内核（进行中）
 
-- [ ] DMN 适配器（决策表 → 规则执行骨架）
-- [ ] AsyncAPI 适配器（事件契约 → 消息类型 + 订阅骨架）
-- [ ] SQL 迁移差异：DDL Diff → `ALTER TABLE` 迁移文件
-- [ ] BPMN 工作流运行时（持久化任务、重试、补偿；MVP 子集之外）
-- [ ] 完整 JSON Schema 2020-12 校验（可选引入 ajv）
-- [ ] `set-entity-field-type` / `add-entity` / `remove-entity-field` 等 patch 操作补全
-- [ ] patch 计划预览模式（`--dry-run` 输出编辑计划，不落盘）
+- [ ] `forma-syntax`：Lexer + Parser + AST（span 保留）
+- [ ] `forma-ir`：AST → 语义图（复用 UnifiedSemanticGraph）+ 类型检查 + 规则表达式检查
+- [ ] `forma check`：全量语义诊断（错误带行号 + did-you-mean）
+- [ ] 示例 `examples/order-management/forma/*.fm` 全量通过
 
-## Phase 2 — Studio 与增量升级
+## M2 — db-mysql 适配层
 
-- [ ] Studio 编辑能力：Data Studio（ER 图改 SQL）、API Studio（改 OpenAPI）、UI Studio（改 JSON Forms）、Workflow Studio（BPMN 图形编辑）
-- [ ] 各 Studio 共享：项目上下文、实体身份、版本、依赖、修改记录、验证结果、编译状态
-- [ ] 节点级增量编译（Dependency DAG + 节点 Hash + 编译缓存，v0.1 蓝图第 9 章落地）
-- [ ] DBML 输入适配器（编译为 SQL DDL）
-- [ ] API Client 生成（fetch/axios 双目标）
+- [ ] MySQL 8 DDL emitter（InnoDB/utf8mb4，类型映射见架构 §3.1）
+- [ ] 基线迁移 `0001_init.sql`
+- [ ] IR diff → `ALTER TABLE` 增量迁移
 
-## Phase 3 — 生态扩展
+## M3 — backend-rust 适配层
 
-- [ ] C4 / Structurizr：Architecture Studio、依赖分析、`forma doctor` 架构规则
-- [ ] Protocol Buffers / GraphQL SDL 适配器
-- [ ] Kubernetes / Terraform 目标
-- [ ] VS Code 扩展（诊断 + 图视图内嵌）
-- [ ] Benchmark：同一业务变更，Forma 补丁 vs 传统 AI 全文重写的 Token 对比（v0.1 蓝图第 15 章思想）
+- [ ] 实体 → struct + serde；枚举 → Rust enum
+- [ ] 规则 → Rust 校验函数（权威执行层）
+- [ ] `api` → axum Router + handler + sqlx repository
+- [ ] `forma build` 产物 `cargo build && cargo test` 可跑
 
-## 成功标准（Phase 0 验收线）
+## M4 — web-react 适配层
 
-1. `forma init && forma build` 零配置跑通，产物为标准 TS/Hono 工程，可直接 `npm run dev`。
-2. 「Order 增加付款状态」一条 patch：SQL / JSON Schema / OpenAPI / JSON Forms 四处同步 + 校验 + 受影响目标增量重编，全程 < 3 秒。
-3. AI 通过 MCP 四个工具完成上述操作，全程不接触文件路径与具体语法。
-4. 生成代码确定性：连续两次 `forma build` 产物 byte 级一致。
+- [ ] `page` → TanStack Router 路由树
+- [ ] `api` 操作 → TanStack Query typed hooks + fetch client
+- [ ] `table/form/detail` 原语 → shadcn/ui 组件组合
+- [ ] 规则 → zod schema（与后端同源）
+- [ ] `pnpm dev` 跑通列表/表单/详情
+
+## M5 — 语义补丁（AI 闭环）
+
+- [ ] patch 操作：add-entity-field / rename / set-required / add-rule …（AST 级编辑）
+- [ ] 影响闭包 → 全目标增量重编
+- [ ] MCP 四工具切换数据源为 DSL
+
+## M6 — 标准视图与生态
+
+- [ ] openapi.yaml / JSON Schema 导出（联邦产物互通）
+- [ ] VS Code 扩展（DSL 语法 + 诊断）
+
+## M7+ — 扩展
+
+- [ ] 移动适配层（iOS/Android 原生或 Expo）
+- [ ] 聚合表达式（sum/count/exists）全端编译
+- [ ] Studio 可视化编辑
+- [ ] Token 经济学 Benchmark（DSL 补丁 vs 传统全量重写）
+
+## 遗留代码处置
+
+- `crates/forma`（联邦引擎：SQL/JSON Schema/OpenAPI/JSON Forms/BPMN 适配器 + Hono 生成器）：M1–M3 期间保留可编译；`graph/patch/engine` 模块被 DSL 内核复用；标准适配器改造为 exporter（M6）。
+- `docs/history/`：全部历史决策归档，只读。

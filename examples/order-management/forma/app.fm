@@ -1,0 +1,169 @@
+// Forma DSL 示例 —— 订单管理（v0.3 架构的目标形态）
+// 一套 DSL：数据 + 规则 + API + 页面；适配层编译为 Rust 后端 / MySQL / React Web。
+// 语法规范：docs/dsl-spec.zh-CN.md
+
+app crm {
+  version = "0.1.0"
+  locale  = ["zh", "en"]
+}
+
+// ───────────────────────── 枚举 ─────────────────────────
+
+enum OrderStatus {
+  pending  @label { zh "待审批" en "Pending" }
+  approved @label { zh "已审批" en "Approved" }
+  rejected @label { zh "已拒绝" en "Rejected" }
+}
+
+// ───────────────────────── 数据层 ─────────────────────────
+
+entity Customer {
+  id    Uuid  @id @default(uuid)
+  name  String(100) @required
+  email Email @required @unique
+  createdAt Timestamp @default(now) @readonly
+}
+
+entity Product {
+  id    Uuid  @id @default(uuid)
+  name  String(200) @required
+  price Decimal(12,2) @required @min(0.01)
+  active Bool @default(true)
+}
+
+entity Order {
+  id            Uuid          @id @default(uuid)
+  customerEmail Email         @required
+  amount        Decimal(12,2) @required @min(0.01)
+  status        OrderStatus   @default(pending)
+  note          Text?
+  createdAt     Timestamp     @default(now) @readonly
+  updatedAt     Timestamp     @default(now) @onUpdate(now)
+
+  index [status, createdAt]
+}
+
+entity OrderItem {
+  id      Uuid    @id @default(uuid)
+  order   Order   @required        // 关系字段 → FK orders
+  product Product @required
+  qty     Int     @required @min(1)
+  price   Decimal(12,2) @required
+}
+
+// ───────────────────────── 规则校验（写一次，双端执行） ─────────────────────────
+
+rules OrderRules {
+
+  // 字段校验：后端权威 + 前端表单即时反馈
+  field Order.amount {
+    min 0.01 { zh "金额必须大于 0" en "Amount must be positive" }
+  }
+  field Order.customerEmail {
+    required { zh "邮箱必填" en "Email is required" }
+  }
+
+  // 跨字段检查
+  check Order "订单金额必须为正" {
+    amount > 0
+  }
+
+  // 守卫：状态保护
+  guard Order.delete {
+    deny status == "approved"
+      reason { zh "已审批订单不可删除" en "Approved orders cannot be deleted" }
+  }
+  guard Order.update {
+    deny old.status == "approved" && status != old.status
+      reason { zh "已审批订单不可修改" en "Approved orders cannot be modified" }
+  }
+
+  // 权限（RBAC）
+  access Order {
+    read   → any
+    create → role in ["admin", "ops"]
+    update → role in ["admin", "ops"]
+    delete → role == "admin"
+  }
+}
+
+// ───────────────────────── API 层 ─────────────────────────
+
+api Orders {
+  entity Order
+  operations [list get create update delete]
+  list {
+    filters [status]
+    search  [customerEmail]
+    sort    [createdAt desc]
+    paginate cursor
+  }
+}
+
+api OrderApprove {
+  POST "/orders/{id}/approve"
+  input {
+    comment Text?
+  }
+  pre  { status == "pending" }
+  effect { set Order.status = approved }
+  audit { action "order.approve" }
+}
+
+// ───────────────────────── 页面层（目标无关原语 → shadcn/ui） ─────────────────────────
+
+page OrderList {
+  route "/orders"
+  title { zh "订单列表" en "Orders" }
+
+  table {
+    query   Orders.list
+    columns [createdAt: datetime, customerEmail, amount: money, status: badge]
+    filter  status as select
+    search  customerEmail
+    actions {
+      create → OrderEdit
+      row    [edit → OrderEdit, delete → Orders.delete confirm]
+    }
+  }
+}
+
+page OrderEdit {
+  route "/orders/{id}"
+  title { zh "编辑订单" en "Edit Order" }
+
+  form Order {
+    layout grid 2 {
+      customerEmail Input email
+      amount        Input money
+      status        Select from OrderStatus
+      note          Textarea
+    }
+    validation [OrderRules]          // 前端校验与后端同源
+    submit → Orders.update redirect "/orders"
+    submit create → Orders.create redirect "/orders"
+  }
+}
+
+page OrderDetail {
+  route "/orders/{id}"
+  title { zh "订单详情" en "Order Detail" }
+
+  detail Order {
+    sections {
+      基本 [customerEmail, amount: money, status: badge, createdAt: datetime]
+    }
+    children [items → OrderItemTable]
+  }
+}
+
+page OrderItemTable {
+  route "/orders/{id}/items"
+  title { zh "订单明细" en "Order Items" }
+
+  table {
+    query   OrderItems.list where order.id == route.id
+    columns [product.name, qty, price: money]
+    actions [create → OrderItemEdit, delete → OrderItems.delete confirm]
+  }
+}

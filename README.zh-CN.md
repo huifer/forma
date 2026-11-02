@@ -9,203 +9,118 @@
  ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝╚═╝  ╚═╝
 ```
 
-# 通用软件规格编译器
+# 一套 DSL，所有平台
 
-**不要为语法付 Token。为语义付费——然后编译。**
+**Forma 是一层 DSL 中间层：一套 DSL 描述前端、后端、数据库与规则，适配层（编译器）把它变成各平台的完整代码。**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org/)
 [![Tests](https://img.shields.io/badge/tests-17%20passing-brightgreen.svg)](#开发)
 [![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet.svg)](#AI-接入mcp)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)]()
+[![Status](https://img.shields.io/badge/status-v0.3%20%E8%AE%BE%E8%AE%A1%20%2B%20M1-blue.svg)](docs/roadmap.zh-CN.md)
 
 [English](README.md) | **简体中文**
 
 </div>
 
-## 为什么需要 Forma
+## 核心思想
 
-一次典型的 AI Coding 会话，大部分 Token 消耗在**语言税**上：分号、配对括号、`public static void`、import、HTML 标签配对——以及最贵的**重复税**。给 `Order` 加一个 `paymentStatus` 字段，模型要把同一个事实在 `schema.sql`、`types.ts`、校验器、API 路由、React 表单、测试里**逐 Token 写六遍**。每一份副本都是全价的 Token、近乎零的语义含量。
+一次典型的 AI Coding 会话，大部分 Token 消耗在**语言税**上：分号、`public static void`、import、HTML 标签配对——以及最贵的**重复税**：加一个字段，要把同一个事实在 SQL、类型、校验器、路由、表单、测试里逐 Token 写六遍。
 
-Forma 把**语义与语法拆开**：
+Forma 在 AI 和代码之间放一层**中间层**：
 
-- AI 只生产**现有标准的规格**（SQL DDL、JSON Schema、OpenAPI、JSON Forms、BPMN）——稠密、可校验，约占传统方式 1% 的 Token；
-- **确定性 Rust 编译器**把规格展开成完整的标准代码库——零 Token，byte 级可复现；
-- **Semantic Patch API** 把一次业务变化传播到所有标准，校验跨标准一致性，只重建受影响的产物。
-
-> 一句话说：**AI 成为意图表达者，Forma 成为打字员**——一个不会打错、不会幻觉出错误 import、而且免费的打字员。
-
-完整论证：[设计理念](docs/philosophy.zh-CN.md) · 项目演化史：[docs/history/](docs/history/README.md)
-
-## 标准（不发明新 DSL）
-
-Forma **不发明**规格语言。给模型发明一门私有 DSL，等于对每个会话重收一次学习税。Forma 组织的是模型本来就「会说」的标准：
-
-| 领域 | 标准（版本） | 状态 | Forma 的角色 |
-|---|---|---|---|
-| 数据库 | SQL DDL（SQLite） | ✅ MVP | 解析、校验、生成迁移 |
-| 数据类型 | JSON Schema 2020-12 | ✅ MVP | 跨模块契约，唯一事实来源 |
-| API | OpenAPI 3.1 | ✅ MVP | 生成 Hono 路由 + 类型化校验器 |
-| 表单 | JSON Forms（UI Schema） | ✅ MVP | 生成 React 表单 |
-| 流程 | BPMN 2.0（子集） | ✅ MVP | 流程图数据 + 执行骨架 |
-| 决策 | DMN | 🗓 Phase 1 | 决策表 → 规则执行 |
-| 事件 | AsyncAPI | 🗓 Phase 1 | 事件契约 → 订阅骨架 |
-| 架构 | C4 / Structurizr | 🗓 Phase 2 | 依赖分析 |
-| 部署 | K8s / Terraform | 🗓 Phase 3 | 环境与运行 |
-
-## 快速开始
-
-```bash
-# 1. 构建（Rust，无重依赖）
-cargo build --release          # → target/release/forma（单二进制：CLI + MCP server）
-
-# 2. 跑端到端示例
-cd examples/order-management
-../../target/release/forma doctor     # 跨标准一致性诊断
-../../target/release/forma graph      # 语义图：谁定义/引用了 Order
-../../target/release/forma build      # → generated/：TS 类型、Hono 路由、SQLite 迁移、React 表单
-
-# 3. 一条补丁，同步四处标准
-../../target/release/forma patch patches/add-payment-status.json
+```text
+AI 只写 DSL（纯语义，约占传统方式 1% 的 Token）
+        │
+        ▼
+┌─────────────────────────────────────────────┐
+│           Forma 编译器（Rust）                │
+│  parse → 语义图 → check → emit               │
+└──────┬───────────────┬──────────────┬───────┘
+       ▼               ▼              ▼
+   MySQL DDL      Rust 后端        React Web
+   （含迁移）      （axum + sqlx）  （TanStack + shadcn/ui）
+                                     （iOS/Android → 后续适配层）
 ```
 
-补丁文件是纯业务意图：
+**一套 DSL 是数据、规则、API、页面的唯一事实来源。更新 DSL → 执行编译器 → 得到新代码**——所有平台同步。规则是一等公民：DSL 里写一次，编译为**后端权威校验（Rust）**与**同源前端校验（zod）**。
 
-```jsonc
-{
-  "operations": [{
-    "op": "add-entity-field",
-    "entity": "Order",
-    "field": {
-      "name": "paymentStatus",
-      "type": "string",
-      "enum": ["unpaid", "paid", "refunded"],
-      "required": false
-    }
-  }]
+> 一句话说：**AI 成为意图表达者，适配层成为打字员**——确定性的、增量的、免费的。
+
+深入阅读：[设计理念](docs/philosophy.zh-CN.md) · [架构蓝图 v0.3](docs/architecture.zh-CN.md) · [DSL 语言规范](docs/dsl-spec.zh-CN.md)
+
+## 一个文件看懂 DSL
+
+```fm
+entity Order {
+  id            Uuid          @id @default(uuid)
+  customerEmail Email         @required
+  amount        Decimal(12,2) @required @min(0.01)
+  status        OrderStatus   @default(pending)
+  createdAt     Timestamp     @default(now) @readonly
 }
-```
 
-Forma 以事务方式把它应用到所有标准：
+rules OrderRules {
+  field Order.amount {
+    min 0.01 { zh "金额必须大于 0" en "Amount must be positive" }
+  }
+  guard Order.delete {
+    deny status == "approved"
+      reason { zh "已审批订单不可删除" en "Approved orders cannot be deleted" }
+  }
+}
 
-```text
-✓ sql:         add-column           orders.payment_status TEXT      (schema.sql)
-✓ json-schema: add-property         Order.paymentStatus enum[3]     (order.schema.json)
-✓ openapi:     add-schema-property  components.schemas.Order        (openapi.yaml)
-✓ json-forms:  add-control          #/properties/paymentStatus      (order-form.ui.json)
-build: 4 file(s) regenerated   ✓ no cross-standard issues
-```
+api Orders {
+  entity Order
+  operations [list get create update delete]
+  list { filters [status] search [customerEmail] sort [createdAt desc] }
+}
 
-任一编辑失败会回滚**全部**文件——规格目录永远不会处于半写状态。
-
-## 工作原理
-
-```text
-                ┌──────────────────────────────┐
-                │      AI Specification Agent   │
-                │  (Codex / Claude Code / Pi …) │
-                └──────────────┬───────────────┘
-                               │ Semantic Patch / MCP 工具
-                               ▼
-┌───────────┐   ┌──────────────────────────────────────────────┐
-│ specs/    │   │                Forma Engine (Rust)            │
-│           │   │  ┌────────────┐  ┌────────────────────────┐  │
-│ schema.sql│──▶│  │  Adapters  │─▶│  Unified Semantic Graph │  │
-│ *.json    │   │  │ sql/js/oas │  │  身份 · 引用 · 依赖 ·   │  │
-│ openapi   │   │  │ forms/bpmn │  │  影响分析               │  │
-│ *.bpmn    │   │  └────────────┘  └───────────┬────────────┘  │
-└───────────┘   │  ┌────────────┐  ┌───────────▼────────────┐  │
-                │  │  Validate  │  │   Deterministic Build  │  │
-forma.yaml ────▶│  │  (doctor)  │  │  （增量 · 缓存）        │  │
-                │  └────────────┘  └───────────┬────────────┘  │
-                └──────────────────────────────┼───────────────┘
-                                               ▼
-                 generated/ — 标准代码：TypeScript · Hono · SQL · React
-```
-
-Forma 自身只拥有四样东西（**也仅有**这四样）：
-
-| 资产 | 是什么 |
-|---|---|
-| `forma.yaml` Manifest | 项目有哪些规格、标准与版本、编译目标——不含业务语义 |
-| `forma://` 实体身份协议 | 跨标准绑定同一业务实体的稳定 URI（`x-forma-entity` → Manifest 绑定 → 名称约定如 `orders ≡ Order`） |
-| Unified Semantic Graph | 从所有标准归一的节点/边；`affectedBy()` 确定性计算变更影响 |
-| Semantic Patch API | 唯一写入路径：事务式、跨标准、先校验 |
-
-## AI 接入（MCP）
-
-```bash
-forma mcp <project-dir>        # stdio MCP server
-```
-
-在任何 MCP 客户端（Codex、Claude Code、Pi…）注册：
-
-```jsonc
-{
-  "mcpServers": {
-    "forma": {
-      "command": "/path/to/forma",
-      "args": ["mcp", "/path/to/project"]
-    }
+page OrderList {
+  route "/orders"
+  title { zh "订单列表" en "Orders" }
+  table {
+    query   Orders.list
+    columns [createdAt: datetime, customerEmail, amount: money, status: badge]
+    actions { create → OrderEdit, row [edit, delete confirm] }
   }
 }
 ```
 
-四个工具。AI 的工作流被**协议约束**为 `graph → impact → patch → validate`——不读整个文件、不写代码、不靠猜评估影响面：
+DSL 里没有 axum、没有 React、没有 SQL——页面是目标无关的抽象原语（`table`/`form`/`detail`），组件偏好是 target 配置。完整语法：[DSL 规范](docs/dsl-spec.zh-CN.md)。
 
-| 工具 | 返回 |
-|---|---|
-| `forma_validate` | 全部跨标准诊断 |
-| `forma_graph` | 实体级语义摘要（不是源代码） |
-| `forma_impact` | 确定性的受影响节点闭包 |
-| `forma_patch` | 事务式补丁执行 + 重编译报告 |
+## 适配层目标
 
-Token 经济学在这里兑现：AI 的上下文里是语义摘要而不是源码树，输出是 40 Token 的补丁而不是重写 4 个文件。
+| 目标 | 技术栈（当前） | 生成产物 |
+|---|---|---|
+| 数据库 | **MySQL 8**（InnoDB, utf8mb4） | DDL + 迁移 |
+| 后端 | **Rust**（axum + sqlx） | models、validators、routes、repositories |
+| Web | **React + TanStack Router/Query + shadcn/ui** | 类型化路由、Query hooks、表单、zod schema |
+| 移动端 | iOS / Android | 规划中（同一页面原语 → 原生或 Expo） |
 
-## 确定性构造
+## 状态与路线图
 
-- 同一输入 → byte 级相同输出（有测试保证）；
-- 生成文件带 `@generated` 头，手改生成物会被增量缓存检出；
-- 人工审阅面从「代码 diff」缩小为「规格 diff」——补丁本身就是 review 单位。
+**v0.3（当前）**——DSL 中间层架构定案；DSL 规范 v0.1 发布；编译器里程碑推进中：
 
-## 仓库结构
+- **M1** DSL 内核（lexer/parser/AST/IR/check）← *进行中*
+- **M2** MySQL 适配层 · **M3** Rust 后端适配层 · **M4** React 适配层
+- **M5** DSL 语义补丁（AI 闭环）· **M6** OpenAPI/JSON Schema 导出
 
-```text
-Cargo.toml                  cargo workspace
-crates/forma/               引擎 + 适配器 + 编译器 + CLI + MCP（Rust，单一 crate）
-  src/adapters/             sql | jsonschema | openapi | jsonforms | bpmn
-  src/graph.rs              Unified Semantic Graph
-  src/validate.rs           doctor 跨标准校验规则
-  src/generators.rs         ts-types | hono-routes | sqlite-migration | react-forms
-  src/engine.rs             load → validate → build（增量）
-  src/patch.rs              Semantic Patch（事务式）
-  src/mcp.rs                stdio MCP server
-examples/order-management/  端到端示例（5 种标准 + 补丁演示）
-docs/                       架构 · 设计理念 · 决策史
-```
+仓库当前含一个可运行的**标准联邦原型**（v0.2，Rust：适配器 + doctor + 增量构建 + 事务式补丁 + MCP，17 个测试全绿）。其语义图、补丁与构建引擎被 DSL 编译器复用；标准适配器转为导出视图（M6）。演化史：[docs/history/](docs/history/README.md)。
 
-## 路线图
+完整路线图：[docs/roadmap.zh-CN.md](docs/roadmap.zh-CN.md)。
 
-**Phase 0（当前）** — 联邦 MVP：5 种标准、doctor、patch、MCP、CLI。
-**Phase 1** — DMN、AsyncAPI、DDL 差异迁移、工作流运行时、更多补丁操作。
-**Phase 2** — Studio（各标准可视化编辑器）、节点级增量编译、DBML 输入。
-**Phase 3** — C4/Structurizr、Protobuf/GraphQL、K8s/Terraform 目标、Token 经济学 Benchmark。
-
-详见：[docs/roadmap.zh-CN.md](docs/roadmap.zh-CN.md) · 架构：[docs/architecture.zh-CN.md](docs/architecture.zh-CN.md)
-
-## 开发
+## 开发（当前原型）
 
 ```bash
-cargo test            # 17 个集成测试：SQL 解析 / 语义图 / 构建 / 补丁
+cargo test            # 17 个集成测试
 cargo build --release
-rustup component add rustfmt clippy   # PR 需通过 fmt + clippy
+cargo run -- doctor examples/order-management    # 联邦时期示例命令
 ```
-
-设计原则一句话版：标准优先于发明 · AI 不直接写文件 · 输出确定性 · 一切增量 · 补丁事务式 · 不在标准之上加私有语法。
 
 ## 参与贡献
 
-欢迎 PR——见 [CONTRIBUTING.md](CONTRIBUTING.md)。请遵守[行为准则](CODE_OF_CONDUCT.md)。安全问题：[SECURITY.md](SECURITY.md)。
+欢迎 PR——见 [CONTRIBUTING.md](CONTRIBUTING.md)（含设计宪法）。请遵守[行为准则](CODE_OF_CONDUCT.md)。安全问题：[SECURITY.md](SECURITY.md)。变更记录：[CHANGELOG.md](CHANGELOG.md)。
 
 ## 开源协议
 

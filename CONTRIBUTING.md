@@ -1,6 +1,6 @@
 # Contributing to Forma
 
-Thanks for your interest in contributing! Forma is a **Specification Federation** compiler: it organizes existing standards (SQL DDL, JSON Schema, OpenAPI, JSON Forms, BPMN) into a unified semantic graph and compiles them deterministically.
+Thanks for your interest in contributing! Forma is a **DSL middle-layer compiler**: one DSL (`.fm`) is the single source of truth for data, rules, API and pages; adapter layers compile it into MySQL, Rust backend and React web targets.
 
 > 文档与讨论同时支持中文。Issues 和 PR 请随意使用中文或英文。
 
@@ -8,7 +8,7 @@ Thanks for your interest in contributing! Forma is a **Specification Federation*
 
 These rules are why Forma exists. A PR that violates them will be asked to change:
 
-1. **No new DSL.** Never add private syntax inside standard files. Cross-standard linking happens only via `x-forma-*` extensions, manifest bindings, or name conventions.
+1. **The DSL is the only source of truth.** All business semantics live in `.fm` files; target code is always generated. Never encode semantics in targets or manifests.
 2. **AI never writes files.** The Semantic Patch API is the only write path to `specs/`. No feature should require an agent to hand-edit specs.
 3. **Deterministic output.** Same input → byte-identical output. Every generator change must keep `build_generates_all_four_targets_deterministically` green.
 4. **Incremental by default.** New generators must participate in the build cache (`.forma/build.json`).

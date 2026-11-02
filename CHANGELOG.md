@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (design)
+- **Architecture v0.3 — DSL middle layer.** Forma is repositioned: one DSL is the single
+  source of truth for data, rules, API and pages; adapter layers compile it to MySQL,
+  Rust backend (axum + sqlx) and React web (TanStack + shadcn/ui). The v0.2
+  standards-federation prototype is kept as a working reference and its standard
+  adapters become generated export views (M6).
+- DSL spec v0.1 published (`docs/dsl-spec.zh-CN.md`): app/enum/entity/rules/api/page,
+  closed rule-expression language compiled to both backend (Rust) and frontend (zod).
+
 ### Planned
 - DMN adapter (decision tables → rule execution)
 - AsyncAPI adapter (event contracts → subscriptions)
