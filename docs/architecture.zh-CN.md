@@ -111,6 +111,8 @@ page OrderList {
 
 ## 3. 适配层目标（Targets）
 
+> 首批三个目标详述如下。**完整技术接入矩阵**（PostgreSQL / Node / Python / Vue / Expo / Spring Boot / GraphQL / Auth / 能力模块 / 工程化等全部波次）见 [roadmap.zh-CN.md §2](roadmap.zh-CN.md)。
+
 ### 3.1 db-mysql（当前）
 
 | 项 | 决策 |

@@ -100,15 +100,16 @@ DSL 里没有 axum、没有 React、没有 SQL——页面是目标无关的抽�
 
 ## 状态与路线图
 
-**v0.3（当前）**——DSL 中间层架构定案；DSL 规范 v0.1 发布；编译器里程碑推进中：
+**v0.3（当前）**——DSL 中间层架构定案；DSL 规范 v0.1 发布。**完整适配层矩阵**——数据库（MySQL → PostgreSQL/SQLite）、后端（Rust → NestJS/Hono/FastAPI → Spring/Go/.NET）、前端（React → Vue/Next.js）、移动（Expo → Flutter/原生/小程序）、API 风格（REST → OpenAPI/GraphQL/gRPC）、能力模块（认证/上传/i18n/搜索/定时任务/实时/审计/多租户）——已按波次规划：
 
-- **M1** DSL 内核（lexer/parser/AST/IR/check）← *进行中*
-- **M2** MySQL 适配层 · **M3** Rust 后端适配层 · **M4** React 适配层
-- **M5** DSL 语义补丁（AI 闭环）· **M6** OpenAPI/JSON Schema 导出
+- **Wave 1（M1–M4）** 端到端闭环：DSL 内核 → MySQL → Rust 后端 → React Web
+- **Wave 2（M5–M7）** Auth 模块 · AI 闭环（语义补丁）· OpenAPI/Docker/导出视图
+- **Wave 3（M8–M9）** 横向扩栈：PostgreSQL/SQLite、Node/Python 后端、Vue/Next.js、Expo、GraphQL、多租户、实时
+- **Wave 4（M10–M11）** 企业级：Spring/Go/.NET、原生移动、小程序、工作流运行时
 
-仓库当前含一个可运行的**标准联邦原型**（v0.2，Rust：适配器 + doctor + 增量构建 + 事务式补丁 + MCP，17 个测试全绿）。其语义图、补丁与构建引擎被 DSL 编译器复用；标准适配器转为导出视图（M6）。演化史：[docs/history/](docs/history/README.md)。
+仓库当前含一个可运行的**标准联邦原型**（v0.2，Rust：适配器 + doctor + 增量构建 + 事务式补丁 + MCP，17 个测试全绿）。其语义图、补丁与构建引擎被 DSL 编译器复用；标准适配器转为导出视图（M7）。演化史：[docs/history/](docs/history/README.md)。
 
-完整路线图：[docs/roadmap.zh-CN.md](docs/roadmap.zh-CN.md)。
+完整路线图（含每个里程碑的验收标准）：[docs/roadmap.zh-CN.md](docs/roadmap.zh-CN.md)。
 
 ## 开发（当前原型）
 
