@@ -39,11 +39,12 @@ impl AdapterRegistry {
     }
 
     pub fn register(&mut self, adapter: Box<dyn SpecAdapter>) {
-        self.adapters.insert(adapter.standard().as_str().to_string(), adapter);
+        self.adapters
+            .insert(adapter.standard().as_str().to_string(), adapter);
     }
 
-    pub fn get(&self, standard: &str) -> Option<&Box<dyn SpecAdapter>> {
-        self.adapters.get(standard)
+    pub fn get(&self, standard: &str) -> Option<&dyn SpecAdapter> {
+        self.adapters.get(standard).map(|b| b.as_ref())
     }
 
     pub fn default_registry() -> Self {

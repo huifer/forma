@@ -71,9 +71,7 @@ pub mod ts_types {
                 .nodes_by_kind(crate::graph::NodeKind::Type)
                 .into_iter()
                 .filter(|n| n.standard == crate::graph::Standard::JsonSchema)
-                .filter(|n| {
-                    entity_in_scope(ctx, n.data.get("entityUri").and_then(|v| v.as_str()))
-                })
+                .filter(|n| entity_in_scope(ctx, n.data.get("entityUri").and_then(|v| v.as_str())))
                 .collect();
             if types.is_empty() {
                 return Ok(vec![]);
@@ -84,14 +82,22 @@ pub mod ts_types {
             let mut names: Vec<String> = Vec::new();
 
             for node in &types {
-                let id = node.data.get("$id").and_then(|v| v.as_str()).unwrap_or("Entity");
+                let id = node
+                    .data
+                    .get("$id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Entity");
                 let ts_name = crate::identity::to_pascal_case(id);
                 names.push(ts_name.clone());
                 let required: Vec<String> = node
                     .data
                     .get("required")
                     .and_then(|v| v.as_array())
-                    .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|x| x.as_str().map(String::from))
+                            .collect()
+                    })
                     .unwrap_or_default();
                 let props: Vec<serde_json::Value> = node
                     .data
@@ -117,8 +123,16 @@ pub mod ts_types {
             );
 
             Ok(vec![
-                GeneratedFile { path: format!("{out_dir}/types.ts"), content: types_ts, generator: self.id().into() },
-                GeneratedFile { path: format!("{out_dir}/validators.ts"), content: validators_ts, generator: self.id().into() },
+                GeneratedFile {
+                    path: format!("{out_dir}/types.ts"),
+                    content: types_ts,
+                    generator: self.id().into(),
+                },
+                GeneratedFile {
+                    path: format!("{out_dir}/validators.ts"),
+                    content: validators_ts,
+                    generator: self.id().into(),
+                },
             ])
         }
     }
@@ -133,7 +147,10 @@ pub mod ts_types {
                 return parts.join(" | ");
             }
         }
-        let t = prop.get("type").and_then(|v| v.as_str()).unwrap_or("unknown");
+        let t = prop
+            .get("type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown");
         match t {
             "string" => "string".into(),
             "integer" | "number" => "number".into(),
@@ -163,7 +180,9 @@ pub mod ts_types {
             .next()
             .map(|c| c.is_ascii_alphabetic() || c == '_' || c == '$')
             .unwrap_or(false);
-        let rest_ok = name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$');
+        let rest_ok = name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$');
         if first_ok && rest_ok {
             name.to_string()
         } else {
@@ -174,7 +193,10 @@ pub mod ts_types {
     fn render_interface(ts_name: &str, props: &[serde_json::Value], required: &[String]) -> String {
         let mut lines = vec![format!("export interface {ts_name} {{")];
         for prop in props {
-            let name = prop.get("name").and_then(|v| v.as_str()).unwrap_or_default();
+            let name = prop
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
             let is_required = required.iter().any(|r| r == name);
             let optional = if is_required { "" } else { "?" };
             let description = prop.get("description").and_then(|v| v.as_str());
@@ -198,9 +220,11 @@ pub mod ts_types {
             "  const v = value as Record<string, unknown>;".to_string(),
         ];
         for prop in props {
-            let name = prop.get("name").and_then(|v| v.as_str()).unwrap_or_default();
+            let name = prop
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
             let is_required = required.iter().any(|r| r == name);
-            let key = safe_prop_name(name);
             if is_required {
                 checks.push(format!("  if (!('{name}' in v)) return false;"));
             }
@@ -256,7 +280,7 @@ pub mod ts_types {
 
 pub mod hono_routes {
     use super::*;
-    use crate::graph::{NodeKind, Standard};
+    use crate::graph::NodeKind;
     use crate::identity::{singularize, to_pascal_case};
 
     pub struct HonoRoutesGenerator;
@@ -293,8 +317,10 @@ pub mod hono_routes {
             }
 
             // 分组：实体 → 操作
-            let mut by_entity: std::collections::BTreeMap<String, Vec<&crate::graph::SemanticNode>> =
-                Default::default();
+            let mut by_entity: std::collections::BTreeMap<
+                String,
+                Vec<&crate::graph::SemanticNode>,
+            > = Default::default();
             for op in &ops {
                 by_entity.entry(infer_entity(ctx, op)).or_default().push(op);
             }
@@ -332,11 +358,15 @@ pub mod hono_routes {
                 imports.join("\n"),
                 blocks.join("\n\n")
             );
-            Ok(vec![GeneratedFile { path: format!("{out_dir}/routes.ts"), content, generator: self.id().into() }])
+            Ok(vec![GeneratedFile {
+                path: format!("{out_dir}/routes.ts"),
+                content,
+                generator: self.id().into(),
+            }])
         }
     }
 
-    fn infer_entity(ctx: &GenerateContext<'_>, op: &crate::graph::SemanticNode) -> String {
+    fn infer_entity(_ctx: &GenerateContext<'_>, op: &crate::graph::SemanticNode) -> String {
         let data = &op.data;
         let mut refs: Vec<String> = Vec::new();
         if let Some(r) = data.get("requestSchemaRef").and_then(|v| v.as_str()) {
@@ -354,8 +384,13 @@ pub mod hono_routes {
                 return name.to_string();
             }
         }
-        let operation_id = data.get("operationId").and_then(|v| v.as_str()).unwrap_or("");
-        for prefix in ["create", "add", "list", "get", "update", "patch", "delete", "remove"] {
+        let operation_id = data
+            .get("operationId")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        for prefix in [
+            "create", "add", "list", "get", "update", "patch", "delete", "remove",
+        ] {
             if let Some(rest) = operation_id.strip_prefix(prefix) {
                 if let Some(first) = rest.chars().next() {
                     if first.is_uppercase() {
@@ -382,29 +417,24 @@ pub mod hono_routes {
         let data = &op.data;
         let method = data.get("method").and_then(|v| v.as_str()).unwrap_or("get");
         let path = data.get("path").and_then(|v| v.as_str()).unwrap_or("/");
-        let hono_path = {
-            // {id} → :id
-            let mut out = String::new();
-            let mut in_braces = false;
-            for c in path.chars() {
-                match c {
-                    '{' => {
-                        in_braces = true;
-                        out.push(':');
-                    }
-                    '}' => in_braces = false,
-                    _ => out.push(c),
-                }
-            }
-            out
-        };
-        let operation_id = data.get("operationId").and_then(|v| v.as_str()).unwrap_or("handler");
-        let handler_var = format!(
-            "{}{}",
-            operation_id[..1].to_lowercase(),
-            &operation_id[1..]
-        );
-        let summary = data.get("summary").and_then(|v| v.as_str()).unwrap_or(operation_id);
+        // {id} → :id
+        let hono_path: String = path
+            .chars()
+            .filter_map(|c| match c {
+                '{' => Some(':'),
+                '}' => None,
+                other => Some(other),
+            })
+            .collect();
+        let operation_id = data
+            .get("operationId")
+            .and_then(|v| v.as_str())
+            .unwrap_or("handler");
+        let handler_var = format!("{}{}", operation_id[..1].to_lowercase(), &operation_id[1..]);
+        let summary = data
+            .get("summary")
+            .and_then(|v| v.as_str())
+            .unwrap_or(operation_id);
         let path_params: Vec<String> = data
             .get("parameters")
             .and_then(|v| v.as_array())
@@ -416,24 +446,39 @@ pub mod hono_routes {
             })
             .unwrap_or_default();
 
-        let mut lines = vec![format!("/** {summary} — {} {path} */", method.to_uppercase())];
+        let mut lines = vec![format!(
+            "/** {summary} — {} {path} */",
+            method.to_uppercase()
+        )];
         match method {
             "post" | "put" | "patch" => {
-                lines.push(format!("{route_var}.{method}('{hono_path}', async (c) => {{"));
+                lines.push(format!(
+                    "{route_var}.{method}('{hono_path}', async (c) => {{"
+                ));
                 lines.push("  const body = (await c.req.json()) as unknown;".to_string());
                 lines.push(format!("  if (!{validator}(body)) {{"));
-                lines.push(format!("    return c.json({{ error: 'invalid {} payload' }}, 400);", ts_name.to_lowercase()));
+                lines.push(format!(
+                    "    return c.json({{ error: 'invalid {} payload' }}, 400);",
+                    ts_name.to_lowercase()
+                ));
                 lines.push("  }".to_string());
                 lines.push(format!("  const {handler_var} = body as {ts_name};"));
-                lines.push(format!("  // TODO: implement {operation_id} business logic"));
+                lines.push(format!(
+                    "  // TODO: implement {operation_id} business logic"
+                ));
                 let code = if method == "post" { 201 } else { 200 };
-                lines.push(format!("  return c.json({{ ok: true, {handler_var} }}, {code});"));
+                lines.push(format!(
+                    "  return c.json({{ ok: true, {handler_var} }}, {code});"
+                ));
                 lines.push("});".to_string());
             }
             "delete" => {
                 lines.push(format!("{route_var}.delete('{hono_path}', async (c) => {{"));
                 if !path_params.is_empty() {
-                    lines.push(format!("  const {{ {} }} = c.req.param();", path_params.join(", ")));
+                    lines.push(format!(
+                        "  const {{ {} }} = c.req.param();",
+                        path_params.join(", ")
+                    ));
                 }
                 lines.push(format!("  // TODO: implement {operation_id}"));
                 lines.push("  return c.json({ ok: true }, 200);".to_string());
@@ -442,7 +487,10 @@ pub mod hono_routes {
             _ => {
                 lines.push(format!("{route_var}.get('{hono_path}', async (c) => {{"));
                 if !path_params.is_empty() {
-                    lines.push(format!("  const {{ {} }} = c.req.param();", path_params.join(", ")));
+                    lines.push(format!(
+                        "  const {{ {} }} = c.req.param();",
+                        path_params.join(", ")
+                    ));
                 }
                 lines.push(format!("  // TODO: implement {operation_id}"));
                 lines.push("  return c.json({ ok: true });".to_string());
@@ -532,7 +580,15 @@ pub mod sqlite_migration {
     }
 
     fn render_column(c: &SqlColumn) -> String {
-        let mut def = format!("  {} {}", c.name, if c.type_text.is_empty() { c.base_type.clone() } else { c.type_text.clone() });
+        let mut def = format!(
+            "  {} {}",
+            c.name,
+            if c.type_text.is_empty() {
+                c.base_type.clone()
+            } else {
+                c.type_text.clone()
+            }
+        );
         if c.primary_key {
             def.push_str(" PRIMARY KEY");
         }
@@ -621,19 +677,29 @@ pub mod react_forms {
 
             let mut files = Vec::new();
             for form in ctx.graph.nodes_by_kind(NodeKind::UiForm) {
-                let bound = form.data.get("boundSchemaId").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-                let Some(schema_node) = ctx
-                    .graph
-                    .nodes_by_kind(NodeKind::Type)
-                    .into_iter()
-                    .find(|n| {
-                        n.standard == Standard::JsonSchema
-                            && n.data.get("$id").and_then(|v| v.as_str()) == Some(bound.as_str())
-                    })
+                let bound = form
+                    .data
+                    .get("boundSchemaId")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                let Some(schema_node) =
+                    ctx.graph
+                        .nodes_by_kind(NodeKind::Type)
+                        .into_iter()
+                        .find(|n| {
+                            n.standard == Standard::JsonSchema
+                                && n.data.get("$id").and_then(|v| v.as_str())
+                                    == Some(bound.as_str())
+                        })
                 else {
                     continue; // doctor 已报错
                 };
-                let entity_uri = schema_node.data.get("entityUri").and_then(|v| v.as_str()).map(String::from);
+                let entity_uri = schema_node
+                    .data
+                    .get("entityUri")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
                 if !entity_in_scope(ctx, entity_uri.as_deref()) {
                     continue;
                 }
@@ -651,7 +717,11 @@ pub mod react_forms {
                     .data
                     .get("required")
                     .and_then(|v| v.as_array())
-                    .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|x| x.as_str().map(String::from))
+                            .collect()
+                    })
                     .unwrap_or_default();
                 let controls: Vec<serde_json::Value> = form
                     .data
@@ -703,7 +773,10 @@ pub mod react_forms {
     }
 
     fn render_field(prop: &serde_json::Value, label: &str, required: bool) -> String {
-        let name = prop.get("name").and_then(|v| v.as_str()).unwrap_or_default();
+        let name = prop
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
         let req_attr = if required { " required" } else { "" };
         let star = if required { " *" } else { "" };
 
@@ -725,7 +798,10 @@ pub mod react_forms {
             }
         }
 
-        let t = prop.get("type").and_then(|v| v.as_str()).unwrap_or("string");
+        let t = prop
+            .get("type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("string");
         match t {
             "boolean" => format!(
                 "      <label className=\"forma-form__field forma-form__field--check\">\n        <input\n          type=\"checkbox\"\n          checked={{Boolean(value.{name})}}\n          onChange={{(e) => set('{name}', e.target.checked as never)}}\n        />\n        <span>{label}</span>\n      </label>"
@@ -761,8 +837,15 @@ pub mod react_forms {
         let mut covered: Vec<String> = Vec::new();
 
         for control in controls {
-            let name = control.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-            let Some(prop) = props.iter().find(|p| p.get("name").and_then(|v| v.as_str()) == Some(name.as_str())) else {
+            let name = control
+                .get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
+            let Some(prop) = props
+                .iter()
+                .find(|p| p.get("name").and_then(|v| v.as_str()) == Some(name.as_str()))
+            else {
                 continue;
             };
             covered.push(name.clone());
@@ -775,7 +858,11 @@ pub mod react_forms {
             fields.push(render_field(prop, &escape_jsx(&label), is_required));
         }
         for prop in props {
-            let name = prop.get("name").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+            let name = prop
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
             if covered.contains(&name) {
                 continue;
             }

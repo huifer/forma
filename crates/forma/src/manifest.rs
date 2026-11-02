@@ -41,9 +41,9 @@ pub fn spec_group(group: &str) -> Option<(&'static str, SpecFormat, u8)> {
 }
 
 pub const NOT_YET_SUPPORTED_GROUPS: [&str; 3] = [
-    "decisions",     // DMN — Phase 1
-    "events",        // AsyncAPI — Phase 1
-    "architecture",  // C4/Structurizr — Phase 2
+    "decisions",    // DMN — Phase 1
+    "events",       // AsyncAPI — Phase 1
+    "architecture", // C4/Structurizr — Phase 2
 ];
 
 pub const GROUP_ORDER: [&str; 5] = ["schemas", "api", "ui", "database", "workflows"];
@@ -119,7 +119,7 @@ pub fn load_manifest(project_dir: &Path) -> anyhow::Result<LoadedManifest> {
     let raw: serde_yaml::Value =
         serde_yaml::from_str(&crate::util::read_text(&file)?).context("forma.yaml parse error")?;
     let manifest = normalize_manifest(&raw, &mut issues)?;
-    check_entries(&manifest, &file.parent().unwrap().to_path_buf(), &mut issues)?;
+    check_entries(&manifest, file.parent().unwrap(), &mut issues)?;
     Ok(LoadedManifest {
         manifest,
         dir: file.parent().unwrap().to_path_buf(),
@@ -152,7 +152,10 @@ fn normalize_manifest(
         .to_string();
 
     let mut specifications: Vec<(String, Vec<SpecEntry>)> = Vec::new();
-    if let Some(specs) = root.get(serde_yaml::Value::String("specifications".into())).and_then(|v| v.as_mapping()) {
+    if let Some(specs) = root
+        .get(serde_yaml::Value::String("specifications".into()))
+        .and_then(|v| v.as_mapping())
+    {
         for (key, value) in specs {
             let group_name = key.as_str().unwrap_or_default().to_string();
             if NOT_YET_SUPPORTED_GROUPS.contains(&group_name.as_str()) {
@@ -186,10 +189,21 @@ fn normalize_manifest(
     }
 
     let mut bindings = Vec::new();
-    if let Some(list) = root.get(serde_yaml::Value::String("bindings".into())).and_then(|v| v.as_sequence()) {
+    if let Some(list) = root
+        .get(serde_yaml::Value::String("bindings".into()))
+        .and_then(|v| v.as_sequence())
+    {
         for item in list {
-            let uri = item.get("uri").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-            let table = item.get("table").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+            let uri = item
+                .get("uri")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
+            let table = item
+                .get("table")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
             if uri.is_empty() || table.is_empty() {
                 issues.push(ManifestIssue {
                     severity: "warning".into(),
@@ -202,7 +216,10 @@ fn normalize_manifest(
     }
 
     let mut targets = Targets::default();
-    if let Some(t) = root.get(serde_yaml::Value::String("targets".into())).and_then(|v| v.as_mapping()) {
+    if let Some(t) = root
+        .get(serde_yaml::Value::String("targets".into()))
+        .and_then(|v| v.as_mapping())
+    {
         targets.typescript = t
             .get(serde_yaml::Value::String("typescript".into()))
             .and_then(|v| v.as_str())
@@ -212,7 +229,10 @@ fn normalize_manifest(
             ("database", &mut targets.database),
             ("frontend", &mut targets.frontend),
         ] {
-            if let Some(cfg) = t.get(serde_yaml::Value::String(name.into())).and_then(|v| v.as_mapping()) {
+            if let Some(cfg) = t
+                .get(serde_yaml::Value::String(name.into()))
+                .and_then(|v| v.as_mapping())
+            {
                 *slot = Some(TargetConfig {
                     framework: cfg
                         .get(serde_yaml::Value::String("framework".into()))
@@ -260,12 +280,22 @@ fn normalize_spec_entry(
     Some(SpecEntry {
         path: path.to_string(),
         format,
-        dialect: item.get("dialect").and_then(|v| v.as_str()).map(String::from),
-        version: item.get("version").and_then(|v| v.as_str()).map(String::from),
+        dialect: item
+            .get("dialect")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        version: item
+            .get("version")
+            .and_then(|v| v.as_str())
+            .map(String::from),
     })
 }
 
-fn check_entries(manifest: &FormaManifest, dir: &Path, issues: &mut Vec<ManifestIssue>) -> anyhow::Result<()> {
+fn check_entries(
+    manifest: &FormaManifest,
+    dir: &Path,
+    issues: &mut Vec<ManifestIssue>,
+) -> anyhow::Result<()> {
     for (group, entries) in &manifest.specifications {
         for entry in entries {
             let abs = dir.join(&entry.path);

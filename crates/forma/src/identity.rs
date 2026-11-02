@@ -50,7 +50,13 @@ pub fn local_uri(standard: &str, file: &str, kind: &str, name: &str) -> String {
 
 fn sanitize(s: &str) -> String {
     s.chars()
-        .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') { c } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect()
 }
 
@@ -59,7 +65,9 @@ pub fn normalize_name(name: &str) -> String {
     let mut out = String::new();
     let chars: Vec<char> = name.chars().collect();
     for (i, c) in chars.iter().enumerate() {
-        if c.is_ascii_uppercase() && i > 0 && (chars[i - 1].is_ascii_lowercase() || chars[i - 1].is_ascii_digit())
+        if c.is_ascii_uppercase()
+            && i > 0
+            && (chars[i - 1].is_ascii_lowercase() || chars[i - 1].is_ascii_digit())
         {
             out.push('-');
         }
@@ -76,7 +84,9 @@ pub fn to_snake_case(name: &str) -> String {
     let mut out = String::new();
     let chars: Vec<char> = name.chars().collect();
     for (i, c) in chars.iter().enumerate() {
-        if c.is_ascii_uppercase() && i > 0 && (chars[i - 1].is_ascii_lowercase() || chars[i - 1].is_ascii_digit())
+        if c.is_ascii_uppercase()
+            && i > 0
+            && (chars[i - 1].is_ascii_lowercase() || chars[i - 1].is_ascii_digit())
         {
             out.push('_');
         }
@@ -120,7 +130,10 @@ pub fn singularize(name: &str) -> String {
     if lower.ends_with("ies") && lower.len() > 3 {
         return format!("{}y", &name[..name.len() - 3]);
     }
-    if ["ses", "xes", "zes", "ches", "shes"].iter().any(|s| lower.ends_with(s)) && lower.len() > 3
+    if ["ses", "xes", "zes", "ches", "shes"]
+        .iter()
+        .any(|s| lower.ends_with(s))
+        && lower.len() > 3
     {
         return name[..name.len() - 2].to_string();
     }

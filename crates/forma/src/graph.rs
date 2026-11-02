@@ -164,17 +164,26 @@ impl UnifiedSemanticGraph {
         if !self.nodes.contains_key(&edge.to) {
             anyhow::bail!("edge.to unknown node: {}", edge.to);
         }
-        self.out_edges.entry(edge.from.clone()).or_default().push(edge.clone());
+        self.out_edges
+            .entry(edge.from.clone())
+            .or_default()
+            .push(edge.clone());
         self.in_edges.entry(edge.to.clone()).or_default().push(edge);
         Ok(())
     }
 
     pub fn edges_from(&self, uri: &str) -> Vec<&SemanticEdge> {
-        self.out_edges.get(uri).map(|v| v.iter().collect()).unwrap_or_default()
+        self.out_edges
+            .get(uri)
+            .map(|v| v.iter().collect())
+            .unwrap_or_default()
     }
 
     pub fn edges_to(&self, uri: &str) -> Vec<&SemanticEdge> {
-        self.in_edges.get(uri).map(|v| v.iter().collect()).unwrap_or_default()
+        self.in_edges
+            .get(uri)
+            .map(|v| v.iter().collect())
+            .unwrap_or_default()
     }
 
     /// 反向影响闭包：跨标准语义变更传播的引擎。
@@ -189,8 +198,10 @@ impl UnifiedSemanticGraph {
         while let Some(current) = queue.pop() {
             if let Some(out) = self.out_edges.get(&current) {
                 for edge in out {
-                    if matches!(edge.kind, EdgeKind::Defines | EdgeKind::Binds | EdgeKind::Generates)
-                        && visited.insert(edge.to.clone())
+                    if matches!(
+                        edge.kind,
+                        EdgeKind::Defines | EdgeKind::Binds | EdgeKind::Generates
+                    ) && visited.insert(edge.to.clone())
                     {
                         queue.push(edge.to.clone());
                         if let Some(n) = self.nodes.get(&edge.to) {

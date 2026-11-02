@@ -1,94 +1,216 @@
-# Forma
+<div align="center">
 
-**Universal Specification Compiler — The integration and compilation layer for AI-native software development.**
+```
+ ███████╗ ██████╗ ██████╗ ███╗   ███╗ █████╗
+ ██╔════╝██╔═══██╗██╔══██╗████╗ ████║██╔══██╗
+ █████╗  ██║   ██║██████╔╝██╔████╔██║███████║
+ ██╔══╝  ██║   ██║██╔══██╗██║╚██╔╝██║██╔══██║
+ ██║     ╚██████╔╝██║  ██║██║ ╚═╝ ██║██║  ██║
+ ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝╚═╝  ╚═╝
+```
 
-Forma 不发明新的软件规格语言。它把现有成熟标准组织成一套 **AI 可操作、可视化、可编译** 的软件规格系统：
+# Universal Specification Compiler
 
-| 领域 | 标准 | Forma 的处理 |
-|---|---|---|
-| 数据库 | SQL DDL（SQLite） | 解析、校验、生成迁移 |
-| 数据类型 | JSON Schema 2020-12 | 跨模块数据契约（唯一事实来源） |
-| API | OpenAPI 3.1 | 生成 Hono 路由 + 客户端类型 |
-| UI 表单 | JSON Forms | 生成 React 表单 |
-| 业务流程 | BPMN 2.0（子集） | 流程图数据与执行骨架 |
+**Don't pay tokens for syntax. Pay for meaning — then compile.**
 
-Forma 自身只拥有四样东西：**Manifest（forma.yaml）**、**实体身份协议（`forma://` URI）**、**Unified Semantic Graph**、**Semantic Patch API**。
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org/)
+[![Tests](https://img.shields.io/badge/tests-17%20passing-brightgreen.svg)](#development)
+[![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet.svg)](#ai-integration-mcp)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)]()
 
-核心差异化能力：**跨标准语义变更传播** —— 「Order 增加一个付款状态」一条语义补丁，同步 SQL / JSON Schema / OpenAPI / JSON Forms 四处规格，校验一致性，增量编译受影响产物。
+**English** | [简体中文](README.zh-CN.md)
 
-## 快速开始
+</div>
+
+<!-- 🔧 After publishing to GitHub, replace YOUR_GH_USER in the CI badge below with your org/username:
+[![CI](https://github.com/YOUR_GH_USER/forma/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_GH_USER/forma/actions/workflows/ci.yml)
+-->
+
+## Why Forma exists
+
+A typical AI-coding session burns most of its tokens on **language tax**: semicolons, paired braces, `public static void`, imports, HTML tag pairs, and — worst of all — **repetition**. Adding one field `paymentStatus` means the model re-writes the same fact six times across `schema.sql`, `types.ts`, a validator, an API route, a React form, and tests. Every copy is full-price tokens for near-zero semantic content.
+
+Forma splits **semantics from syntax**:
+
+- The AI produces **specifications in existing standards** (SQL DDL, JSON Schema, OpenAPI, JSON Forms, BPMN) — dense, machine-checkable, ~1% of the tokens.
+- A **deterministic Rust compiler** expands those specs into a complete, standard codebase — zero tokens, byte-for-byte reproducible.
+- A **Semantic Patch API** propagates one business change across every standard, validates cross-standard consistency, and rebuilds only what's affected.
+
+> Formally: **AI becomes the intent expresser. Forma becomes the typewriter** — one that never mistypes, never hallucinates an import, and works for free.
+
+Full reasoning: [Design Philosophy](docs/philosophy.zh-CN.md) (中文) · project history archive: [docs/history/](docs/history/README.md).
+
+## The standards (no new DSL)
+
+Forma does **not** invent a specification language. Teaching a model a private DSL is itself a per-session token tax. Instead, Forma organizes the standards models already speak:
+
+| Domain | Standard (version) | Status | Forma's role |
+|---|---|---|---|
+| Database | SQL DDL (SQLite) | ✅ MVP | parse, validate, emit migrations |
+| Data types | JSON Schema 2020-12 | ✅ MVP | cross-module contracts — single source of truth |
+| API | OpenAPI 3.1 | ✅ MVP | generate Hono routes + typed validators |
+| Forms | JSON Forms (UI Schema) | ✅ MVP | generate React forms |
+| Workflow | BPMN 2.0 (subset) | ✅ MVP | process graph + execution skeleton |
+| Decisions | DMN | 🗓 Phase 1 | decision tables → rule execution |
+| Events | AsyncAPI | 🗓 Phase 1 | message contracts → subscriptions |
+| Architecture | C4 / Structurizr | 🗓 Phase 2 | dependency analysis |
+| Deploy | K8s / Terraform | 🗓 Phase 3 | environments |
+
+## Quick start
 
 ```bash
-# 1. 构建（Rust，无重依赖）
-cargo build --release
-# 二进制：target/release/forma
+# 1. Build (Rust, no heavy dependencies)
+cargo build --release          # → target/release/forma (single binary: CLI + MCP server)
 
-# 2. 在示例项目上体验全流程
+# 2. Run the end-to-end example
 cd examples/order-management
-../../target/debug/forma doctor     # 跨标准一致性诊断
-../../target/debug/forma graph      # 语义图：谁定义/引用了 Order
-../../target/debug/forma build      # 生成 TS 类型 / Hono 路由 / SQLite 迁移 / React 表单
-../../target/debug/forma patch patches/add-payment-status.json
-#   → 一条补丁同步四处标准 + 重校验 + 增量重编译
+../../target/release/forma doctor     # cross-standard consistency report
+../../target/release/forma graph      # semantic graph: who defines / references Order
+../../target/release/forma build      # → generated/: TS types, Hono routes, SQLite migration, React form
 
-# 3. 起一个新项目
-../../target/debug/forma init my-app
+# 3. One patch, four standards
+../../target/release/forma patch patches/add-payment-status.json
 ```
 
-## AI 接入（MCP）
+The patch file is pure business intent:
 
-```bash
-forma mcp <project-dir>   # stdio MCP server
+```jsonc
+{
+  "operations": [{
+    "op": "add-entity-field",
+    "entity": "Order",
+    "field": {
+      "name": "paymentStatus",
+      "type": "string",
+      "enum": ["unpaid", "paid", "refunded"],
+      "required": false
+    }
+  }]
+}
 ```
 
-四个工具，AI 的工作流被约束为 `graph → impact → patch → validate`，全程不接触文件路径与具体语法：
+Forma applies it everywhere, transactionally:
 
-| 工具 | 作用 |
+```text
+✓ sql:         add-column           orders.payment_status TEXT      (schema.sql)
+✓ json-schema: add-property         Order.paymentStatus enum[3]     (order.schema.json)
+✓ openapi:     add-schema-property  components.schemas.Order        (openapi.yaml)
+✓ json-forms:  add-control          #/properties/paymentStatus      (order-form.ui.json)
+build: 4 file(s) regenerated   ✓ no cross-standard issues
+```
+
+Any failed edit rolls back **all** files — the spec tree is never left half-written.
+
+## How it works
+
+```text
+                ┌──────────────────────────────┐
+                │      AI Specification Agent   │
+                │  (Codex / Claude Code / Pi …) │
+                └──────────────┬───────────────┘
+                               │ Semantic Patch / MCP tools
+                               ▼
+┌───────────┐   ┌──────────────────────────────────────────────┐
+│ specs/    │   │                Forma Engine (Rust)            │
+│           │   │  ┌────────────┐  ┌────────────────────────┐  │
+│ schema.sql│──▶│  │  Adapters  │─▶│  Unified Semantic Graph │  │
+│ *.json    │   │  │ sql/js/oas │  │  identity · references  │  │
+│ openapi   │   │  │ forms/bpmn │  │  dependency · impact    │  │
+│ *.bpmn    │   │  └────────────┘  └───────────┬────────────┘  │
+└───────────┘   │  ┌────────────┐  ┌───────────▼────────────┐  │
+                │  │  Validate  │  │   Deterministic Build  │  │
+forma.yaml ────▶│  │  (doctor)  │  │  (incremental · cache) │  │
+                │  └────────────┘  └───────────┬────────────┘  │
+                └──────────────────────────────┼───────────────┘
+                                               ▼
+                 generated/ — standard code: TypeScript · Hono · SQL · React
+```
+
+What Forma owns (and the **only** things it owns):
+
+| Asset | What it is |
 |---|---|
-| `forma_validate` | 项目跨标准诊断 |
-| `forma_graph` | 语义图摘要（实体 × 关联标准） |
-| `forma_impact` | 变更影响闭包 |
-| `forma_patch` | 事务式语义补丁 |
+| `forma.yaml` Manifest | which specs exist, standards + versions, build targets — no business semantics |
+| `forma://` identity protocol | stable URIs binding the same business entity across standards (`x-forma-entity` → manifest bindings → name conventions like `orders ≡ Order`) |
+| Unified Semantic Graph | normalized nodes/edges from all standards; `affectedBy()` computes exact change impact |
+| Semantic Patch API | the only write path: transactional, cross-standard, validated |
 
-适用于 Codex / Claude Code / Pi 等任何支持 MCP 的 Agent。
-
-## 架构一览
-
-```
-specs/（标准文件）→ Adapters（逐标准解析）→ Unified Semantic Graph
-                                              ↓
-              Semantic Patch API ← AI Agent   doctor（跨标准校验）
-                                              ↓
-                              Deterministic Build（增量编译）→ generated/
-```
-
-- 架构蓝图（v0.2，Specification Federation）：[ARCHITECTURE.md](ARCHITECTURE.md)
-- 路线图：[ROADMAP.md](ROADMAP.md)
-- 项目演化史与 v0.1 自研 DSL 蓝图（已废弃的决策档案）：[docs/history/](docs/history/)
-
-## 仓库结构
-
-```
-Cargo.toml                 cargo workspace
-crates/forma/              引擎 + 适配器 + 编译器 + CLI + MCP（Rust，单一 crate）
-apps/studio/               Forma Studio（React，最小可用：语义图浏览 + 诊断）
-examples/order-management/ 端到端示例（五种标准 + 语义补丁演示）
-docs/history/              全部历史决策归档
-```
-
-## 设计原则
-
-1. **Polyglot Specification**：每个领域用最成熟的标准，Forma 不重复定义。
-2. **AI 不直接写文件**：AI 通过 Semantic Patch 表达业务变化，Forma 负责跨标准传播、校验、编译。
-3. **确定性编译**：同一输入必产生同一输出；生成文件带 `@generated` 头。
-4. **增量优先**：一切编译以变更影响分析为入口，只重算受影响的子图。
-5. **事务式补丁**：任一编辑失败 → 全部回滚，规格目录永远自洽。
-
-## 开发
+## AI integration (MCP)
 
 ```bash
-cargo test        # 17 个集成测试：SQL 解析 / 语义图 / 构建 / 补丁
-cargo build --release
+forma mcp <project-dir>        # stdio MCP server
 ```
 
-License: MIT
+Register it with any MCP client (Codex, Claude Code, Pi, …):
+
+```jsonc
+{
+  "mcpServers": {
+    "forma": {
+      "command": "/path/to/forma",
+      "args": ["mcp", "/path/to/project"]
+    }
+  }
+}
+```
+
+Four tools. The AI workflow is **constrained by protocol** to `graph → impact → patch → validate` — it never reads whole files, never writes code, never guesses impact:
+
+| Tool | Returns |
+|---|---|
+| `forma_validate` | all cross-standard diagnostics |
+| `forma_graph` | entity-level semantic summary (not source code) |
+| `forma_impact` | deterministic affected-node closure |
+| `forma_patch` | transactional patch application + rebuild report |
+
+This is where the token economics pay off: the AI's context holds semantic summaries instead of source trees, and its output is a 40-token patch instead of 4 rewritten files.
+
+## Deterministic by construction
+
+- Same input → byte-identical output (tested).
+- Generated files carry `@generated` headers; manual edits are detected by the incremental cache.
+- The review surface shrinks from a code diff to a spec diff — the patch *is* the review unit.
+
+## Project layout
+
+```text
+Cargo.toml                  cargo workspace
+crates/forma/               engine + adapters + compiler + CLI + MCP (Rust, single crate)
+  src/adapters/             sql | jsonschema | openapi | jsonforms | bpmn
+  src/graph.rs              Unified Semantic Graph
+  src/validate.rs           cross-standard doctor rules
+  src/generators.rs         ts-types | hono-routes | sqlite-migration | react-forms
+  src/engine.rs             load → validate → build (incremental)
+  src/patch.rs              Semantic Patch (transactional)
+  src/mcp.rs                stdio MCP server
+examples/order-management/  end-to-end example (5 standards + patch demo)
+docs/                       architecture · philosophy · decision history
+```
+
+## Roadmap
+
+**Phase 0 (now)** — Federation MVP: 5 standards, doctor, patch, MCP, CLI.
+**Phase 1** — DMN, AsyncAPI, DDL-diff migrations, workflow runtime, more patch ops.
+**Phase 2** — Studio (visual editors per standard), node-level incremental compilation, DBML input.
+**Phase 3** — C4/Structurizr, Protobuf/GraphQL, K8s/Terraform targets, token-economics benchmark.
+
+Details: [docs/roadmap.zh-CN.md](docs/roadmap.zh-CN.md) (中文) · Architecture: [docs/architecture.zh-CN.md](docs/architecture.zh-CN.md) (中文)
+
+## Development
+
+```bash
+cargo test            # 17 integration tests: SQL parsing / graph / build / patch
+cargo build --release
+rustup component add rustfmt clippy   # PRs are expected to pass fmt + clippy
+```
+
+Design principles in one line each: standards over invention · AI never writes files · deterministic output · incremental everything · transactional patches · no private syntax on top of standards.
+
+## Contributing
+
+PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Please follow our [Code of Conduct](CODE_OF_CONDUCT.md). Security issues: [SECURITY.md](SECURITY.md).
+
+## License
+
+[MIT](LICENSE) © Forma Contributors

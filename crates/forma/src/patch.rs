@@ -40,9 +40,20 @@ pub struct SqlFieldSpec {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "op", rename_all = "kebab-case")]
 pub enum PatchOperation {
-    AddEntityField { entity: String, field: PatchFieldSpec },
-    RenameEntityField { entity: String, from: String, to: String },
-    SetEntityFieldRequired { entity: String, field: String, required: bool },
+    AddEntityField {
+        entity: String,
+        field: PatchFieldSpec,
+    },
+    RenameEntityField {
+        entity: String,
+        from: String,
+        to: String,
+    },
+    SetEntityFieldRequired {
+        entity: String,
+        field: String,
+        required: bool,
+    },
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -55,16 +66,44 @@ pub struct PatchDocument {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
-enum EditKind {
-    AddColumn { table: String, column: String, sql_type: String, not_null: bool },
-    AddJsonProperty { field: PatchFieldSpec },
-    AddOpenApiProperty { schema: String, field: PatchFieldSpec },
-    AddFormControl { field: String },
-    RenameColumn { from: String, to: String },
-    RenameProperty { from: String, to: String },
-    RenameControl { from: String, to: String },
-    ToggleNotNull { table: String, column: String, not_null: bool },
-    ToggleRequired { field: String, required: bool },
+pub enum EditKind {
+    AddColumn {
+        table: String,
+        column: String,
+        sql_type: String,
+        not_null: bool,
+    },
+    AddJsonProperty {
+        field: PatchFieldSpec,
+    },
+    AddOpenApiProperty {
+        schema: String,
+        field: PatchFieldSpec,
+    },
+    AddFormControl {
+        field: String,
+    },
+    RenameColumn {
+        from: String,
+        to: String,
+    },
+    RenameProperty {
+        from: String,
+        to: String,
+    },
+    RenameControl {
+        from: String,
+        to: String,
+    },
+    ToggleNotNull {
+        table: String,
+        column: String,
+        not_null: bool,
+    },
+    ToggleRequired {
+        field: String,
+        required: bool,
+    },
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -112,7 +151,7 @@ pub fn apply_patch(project_dir: &Path, patch: &PatchDocument) -> Result<PatchRep
         build: None,
     };
     let mut snapshots: HashMap<PathBuf, String> = HashMap::new();
-    let mut rollback = |snapshots: &HashMap<PathBuf, String>| -> Result<()> {
+    let rollback = |snapshots: &HashMap<PathBuf, String>| -> Result<()> {
         for (abs, content) in snapshots {
             crate::util::write_text(abs, content)?;
         }
@@ -140,7 +179,9 @@ pub fn apply_patch(project_dir: &Path, patch: &PatchDocument) -> Result<PatchRep
                 entity: entity_name.clone(),
                 status: "failed".into(),
                 edits: vec![],
-                message: Some(format!("entity \"{entity_name}\" not found in project specifications")),
+                message: Some(format!(
+                    "entity \"{entity_name}\" not found in project specifications"
+                )),
             });
             continue;
         };
@@ -152,9 +193,9 @@ pub fn apply_patch(project_dir: &Path, patch: &PatchDocument) -> Result<PatchRep
             PatchOperation::RenameEntityField { from, to, .. } => {
                 plan_rename_field(&load, &entity_uri, from, to)
             }
-            PatchOperation::SetEntityFieldRequired { field, required, .. } => {
-                plan_set_required(&load, &entity_uri, field, *required)
-            }
+            PatchOperation::SetEntityFieldRequired {
+                field, required, ..
+            } => plan_set_required(&load, &entity_uri, field, *required),
         };
 
         if edits.is_empty() {
@@ -258,9 +299,12 @@ pub fn apply_patch(project_dir: &Path, patch: &PatchDocument) -> Result<PatchRep
 
 fn apply_edit(src: &str, edit: &PlannedEdit) -> Result<String> {
     match &edit.kind {
-        EditKind::AddColumn { table, column, sql_type, not_null } => {
-            insert_column_into_create_table(src, table, column, sql_type, *not_null)
-        }
+        EditKind::AddColumn {
+            table,
+            column,
+            sql_type,
+            not_null,
+        } => insert_column_into_create_table(src, table, column, sql_type, *not_null),
         EditKind::AddJsonProperty { field } => add_property_to_json_schema(src, field),
         EditKind::AddOpenApiProperty { schema, field } => {
             add_property_to_openapi_schema(src, schema, field)
@@ -276,9 +320,11 @@ fn apply_edit(src: &str, edit: &PlannedEdit) -> Result<String> {
             }
             Ok(src.replace(&old, &new))
         }
-        EditKind::ToggleNotNull { table, column, not_null } => {
-            toggle_not_null(src, table, column, *not_null)
-        }
+        EditKind::ToggleNotNull {
+            table,
+            column,
+            not_null,
+        } => toggle_not_null(src, table, column, *not_null),
         EditKind::ToggleRequired { field, required } => toggle_required(src, field, *required),
     }
 }
@@ -287,8 +333,8 @@ fn apply_edit(src: &str, edit: &PlannedEdit) -> Result<String> {
 // 编辑计划
 // ---------------------------------------------------------------------------
 
-fn find_entity_table<'a>(
-    load: &'a crate::engine::LoadOutcome,
+fn find_entity_table(
+    load: &crate::engine::LoadOutcome,
     entity_uri: &str,
 ) -> Option<crate::graph::SemanticNode> {
     load.graph
@@ -314,7 +360,10 @@ fn find_entity_schema_type(
         .cloned()
 }
 
-fn find_entity_form(load: &crate::engine::LoadOutcome, entity_uri: &str) -> Option<crate::graph::SemanticNode> {
+fn find_entity_form(
+    load: &crate::engine::LoadOutcome,
+    entity_uri: &str,
+) -> Option<crate::graph::SemanticNode> {
     load.graph
         .nodes_by_kind(NodeKind::UiForm)
         .into_iter()
@@ -386,7 +435,9 @@ fn plan_add_field(
                     format!(" enum[{}]", field.r#enum.len())
                 }
             ),
-            kind: EditKind::AddJsonProperty { field: field.clone() },
+            kind: EditKind::AddJsonProperty {
+                field: field.clone(),
+            },
         });
     }
 
@@ -409,7 +460,9 @@ fn plan_add_field(
             standard: "json-forms".into(),
             action: "add-control".into(),
             detail: format!("control #/properties/{}", field.name),
-            kind: EditKind::AddFormControl { field: field.name.clone() },
+            kind: EditKind::AddFormControl {
+                field: field.name.clone(),
+            },
         });
     }
 
@@ -429,7 +482,10 @@ fn plan_rename_field(
             standard: "sql".into(),
             action: "rename-column".into(),
             detail: format!("{}: {} → {}", table.name, to_snake(from), to_snake(to)),
-            kind: EditKind::RenameColumn { from: from.into(), to: to.into() },
+            kind: EditKind::RenameColumn {
+                from: from.into(),
+                to: to.into(),
+            },
         });
     }
     if let Some(schema_type) = find_entity_schema_type(load, entity_uri, Standard::JsonSchema) {
@@ -438,7 +494,10 @@ fn plan_rename_field(
             standard: "json-schema".into(),
             action: "rename-property".into(),
             detail: format!("{}: {from} → {to}", schema_type.name),
-            kind: EditKind::RenameProperty { from: from.into(), to: to.into() },
+            kind: EditKind::RenameProperty {
+                from: from.into(),
+                to: to.into(),
+            },
         });
     }
     if let Some(api_type) = find_entity_schema_type(load, entity_uri, Standard::Openapi) {
@@ -447,7 +506,10 @@ fn plan_rename_field(
             standard: "openapi".into(),
             action: "rename-schema-property".into(),
             detail: format!("components.schemas.{}: {from} → {to}", api_type.name),
-            kind: EditKind::RenameProperty { from: from.into(), to: to.into() },
+            kind: EditKind::RenameProperty {
+                from: from.into(),
+                to: to.into(),
+            },
         });
     }
     if let Some(form) = find_entity_form(load, entity_uri) {
@@ -456,7 +518,10 @@ fn plan_rename_field(
             standard: "json-forms".into(),
             action: "rename-control".into(),
             detail: format!("{}: #/properties/{from} → #/properties/{to}", form.name),
-            kind: EditKind::RenameControl { from: from.into(), to: to.into() },
+            kind: EditKind::RenameControl {
+                from: from.into(),
+                to: to.into(),
+            },
         });
     }
     edits
@@ -473,7 +538,11 @@ fn plan_set_required(
         edits.push(PlannedEdit {
             file: table.source.file.clone(),
             standard: "sql".into(),
-            action: if required { "set-not-null".into() } else { "drop-not-null".into() },
+            action: if required {
+                "set-not-null".into()
+            } else {
+                "drop-not-null".into()
+            },
             detail: format!(
                 "{}.{} {}",
                 table.name,
@@ -491,14 +560,21 @@ fn plan_set_required(
         edits.push(PlannedEdit {
             file: schema_type.source.file.clone(),
             standard: "json-schema".into(),
-            action: if required { "add-to-required".into() } else { "remove-from-required".into() },
+            action: if required {
+                "add-to-required".into()
+            } else {
+                "remove-from-required".into()
+            },
             detail: format!(
                 "{}.required {} {}",
                 schema_type.name,
                 if required { "+=" } else { "-=" },
                 field
             ),
-            kind: EditKind::ToggleRequired { field: field.into(), required },
+            kind: EditKind::ToggleRequired {
+                field: field.into(),
+                required,
+            },
         });
     }
     edits
@@ -526,7 +602,9 @@ fn find_create_table_start(sql: &str, table: &str) -> Option<usize> {
         let rest = &sql[p..];
         let token: String = rest
             .chars()
-            .take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '"' | '`' | '[' | ']' | '.'))
+            .take_while(|c| {
+                c.is_ascii_alphanumeric() || matches!(c, '_' | '"' | '`' | '[' | ']' | '.')
+            })
             .collect();
         let bare = token.replace(['"', '`', '[', ']'], "");
         let bare_last = bare.rsplit('.').next().unwrap_or("").to_string();
@@ -638,8 +716,8 @@ fn insert_column_into_create_table(
         .find('(')
         .with_context(|| format!("malformed CREATE TABLE {table}"))?
         + create;
-    let close =
-        matching_paren(sql, open).ok_or_else(|| anyhow::anyhow!("unbalanced parens in CREATE TABLE {table}"))?;
+    let close = matching_paren(sql, open)
+        .ok_or_else(|| anyhow::anyhow!("unbalanced parens in CREATE TABLE {table}"))?;
 
     let mut insert_at = close;
     while insert_at > open + 1 && sql[..insert_at].ends_with(char::is_whitespace) {
@@ -647,17 +725,20 @@ fn insert_column_into_create_table(
     }
     let prev_char = sql[..insert_at].chars().last().unwrap_or('(');
     let needs_comma = prev_char != ',' && prev_char != '(';
-    let col_def = format!("  {column} {sql_type}{}", if not_null { " NOT NULL" } else { "" });
+    let col_def = format!(
+        "  {column} {sql_type}{}",
+        if not_null { " NOT NULL" } else { "" }
+    );
     let tail_inside = &sql[insert_at..close];
 
-    Ok(format!(
-        "{}{}{}{}{}",
-        &sql[..insert_at],
-        if needs_comma { ",\n" } else { "\n" },
-        col_def,
-        if tail_inside.contains('\n') { "" } else { "\n" },
-        format!("{tail_inside}{}", &sql[close..])
-    ))
+    let mut out = String::with_capacity(sql.len() + col_def.len());
+    out.push_str(&sql[..insert_at]);
+    out.push_str(if needs_comma { ",\n" } else { "\n" });
+    out.push_str(&col_def);
+    out.push_str(if tail_inside.contains('\n') { "" } else { "\n" });
+    out.push_str(tail_inside);
+    out.push_str(&sql[close..]);
+    Ok(out)
 }
 
 fn add_property_to_json_schema(src: &str, field: &PatchFieldSpec) -> Result<String> {
@@ -675,19 +756,23 @@ fn add_property_to_json_schema(src: &str, field: &PatchFieldSpec) -> Result<Stri
         attrs.push(format!("        \"format\": \"{f}\""));
     }
     if let Some(d) = &field.description {
-        attrs.push(format!("        \"description\": {}", serde_json::to_string(d)?));
+        attrs.push(format!(
+            "        \"description\": {}",
+            serde_json::to_string(d)?
+        ));
     }
-    let prop_text = format!("      \"{}\": {{\n{}\n      }}", field.name, attrs.join(",\n"));
+    let prop_text = format!(
+        "      \"{}\": {{\n{}\n      }}",
+        field.name,
+        attrs.join(",\n")
+    );
 
     let props_idx = src
         .find("\"properties\"")
         .ok_or_else(|| anyhow::anyhow!("\"properties\" not found"))?;
-    let open = src[props_idx..]
-        .find('{')
-        .context("malformed properties")?
-        + props_idx;
-    let close =
-        matching_brace(src, open).ok_or_else(|| anyhow::anyhow!("unbalanced braces in properties"))?;
+    let open = src[props_idx..].find('{').context("malformed properties")? + props_idx;
+    let close = matching_brace(src, open)
+        .ok_or_else(|| anyhow::anyhow!("unbalanced braces in properties"))?;
 
     let mut insert_at = close;
     while insert_at > open + 1 && src[..insert_at].ends_with(char::is_whitespace) {
@@ -708,7 +793,11 @@ fn add_property_to_json_schema(src: &str, field: &PatchFieldSpec) -> Result<Stri
     ))
 }
 
-fn add_property_to_openapi_schema(src: &str, schema: &str, field: &PatchFieldSpec) -> Result<String> {
+fn add_property_to_openapi_schema(
+    src: &str,
+    schema: &str,
+    field: &PatchFieldSpec,
+) -> Result<String> {
     let lines: Vec<&str> = src.lines().collect();
     // 定位 components.schemas 下的 4 空格缩进 schema 键
     let mut in_schemas = false;
@@ -729,13 +818,12 @@ fn add_property_to_openapi_schema(src: &str, schema: &str, field: &PatchFieldSpe
             }
         }
     }
-    let schema_line = schema_line
-        .ok_or_else(|| anyhow::anyhow!("schema {schema} not found in openapi yaml"))?;
+    let schema_line =
+        schema_line.ok_or_else(|| anyhow::anyhow!("schema {schema} not found in openapi yaml"))?;
 
     // 在该 schema 块内找 6 空格缩进的 properties:
     let mut props_line = None;
-    for i in schema_line + 1..lines.len() {
-        let l = lines[i];
+    for (i, l) in lines.iter().enumerate().skip(schema_line + 1) {
         if l.trim_end() == "      properties:" {
             props_line = Some(i);
             break;
@@ -749,8 +837,7 @@ fn add_property_to_openapi_schema(src: &str, schema: &str, field: &PatchFieldSpe
 
     // properties 块结束 = 下一个缩进 ≤ 6 的非空行
     let mut end_line = lines.len();
-    for i in props_line + 1..lines.len() {
-        let l = lines[i];
+    for (i, l) in lines.iter().enumerate().skip(props_line + 1) {
         if l.trim().is_empty() {
             continue;
         }
@@ -787,8 +874,8 @@ fn add_control_to_json_forms(src: &str, field_name: &str) -> Result<String> {
         .find('[')
         .context("malformed elements")?
         + elements_idx;
-    let close =
-        matching_bracket(src, open).ok_or_else(|| anyhow::anyhow!("unbalanced brackets in elements"))?;
+    let close = matching_bracket(src, open)
+        .ok_or_else(|| anyhow::anyhow!("unbalanced brackets in elements"))?;
 
     let mut insert_at = close;
     while insert_at > open + 1 && src[..insert_at].ends_with(char::is_whitespace) {
@@ -942,18 +1029,20 @@ fn toggle_not_null(src: &str, table: &str, column: &str, not_null: bool) -> Resu
     for line in block.lines() {
         let t = line.trim_start();
         if t.starts_with(&format!("{column} ")) || t.starts_with(&format!("{column}\t")) {
-            let mut new_line;
-            if not_null {
-                new_line = line.to_string();
-                if !t.to_uppercase().contains("NOT NULL") && !t.to_uppercase().contains("PRIMARY KEY") {
-                    let trimmed = new_line.trim_end();
+            let new_line = if not_null {
+                let mut nl = line.to_string();
+                if !t.to_uppercase().contains("NOT NULL")
+                    && !t.to_uppercase().contains("PRIMARY KEY")
+                {
+                    let trimmed = nl.trim_end();
                     let had_comma = trimmed.ends_with(',');
                     let base = trimmed.trim_end_matches(',');
-                    new_line = format!("{base} NOT NULL{}", if had_comma { "," } else { "" });
+                    nl = format!("{base} NOT NULL{}", if had_comma { "," } else { "" });
                 }
+                nl
             } else {
-                new_line = remove_not_null(line);
-            }
+                remove_not_null(line)
+            };
             new_block.push_str(&new_line);
             new_block.push('\n');
             replaced = true;
@@ -1027,11 +1116,20 @@ fn toggle_required(src: &str, field: &str, required: bool) -> Result<String> {
             new_items.push(item);
         }
     }
-    if required && !new_items.iter().any(|i| i.trim_matches(['"', '\'']) == field) {
+    if required
+        && !new_items
+            .iter()
+            .any(|i| i.trim_matches(['"', '\'']) == field)
+    {
         new_items.push(format!("\"{field}\""));
     }
 
-    Ok(format!("{}{}{}", &src[..open + 1], new_items.join(", "), &src[close..]))
+    Ok(format!(
+        "{}{}{}",
+        &src[..open + 1],
+        new_items.join(", "),
+        &src[close..]
+    ))
 }
 
 fn to_snake(name: &str) -> String {

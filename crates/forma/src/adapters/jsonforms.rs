@@ -2,7 +2,7 @@
 //! 通过 `schema` 字段关联 JSON Schema；实体关联由引擎后置匹配。
 
 use crate::adapters::{AdapterContext, AdapterResult, SpecAdapter};
-use crate::graph::{EdgeKind, NodeKind, SemanticEdge, SemanticNode, Standard, SourceRef};
+use crate::graph::{EdgeKind, NodeKind, SemanticEdge, SemanticNode, SourceRef, Standard};
 use crate::identity::{ui_control_uri, ui_form_uri};
 use anyhow::Result;
 
@@ -44,7 +44,10 @@ impl SpecAdapter for JsonFormsAdapter {
             kind: NodeKind::UiForm,
             name: form_id.clone(),
             standard: Standard::JsonForms,
-            source: SourceRef { file: ctx.file.clone(), line: None },
+            source: SourceRef {
+                file: ctx.file.clone(),
+                line: None,
+            },
             data: serde_json::json!({
                 "formId": form_id,
                 "boundSchemaId": bound_schema_id,
@@ -53,7 +56,10 @@ impl SpecAdapter for JsonFormsAdapter {
         });
 
         for control in &controls {
-            let cid = control.get("id").and_then(|v| v.as_str()).unwrap_or_default();
+            let cid = control
+                .get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
             let control_uri = ui_control_uri(&project, &form_id, cid);
             let _ = &control_uri;
             result.nodes.push(SemanticNode {
@@ -63,7 +69,10 @@ impl SpecAdapter for JsonFormsAdapter {
                 standard: Standard::JsonForms,
                 source: SourceRef {
                     file: ctx.file.clone(),
-                    line: control.get("line").and_then(|v| v.as_u64()).map(|v| v as usize),
+                    line: control
+                        .get("line")
+                        .and_then(|v| v.as_u64())
+                        .map(|v| v as usize),
                 },
                 data: control.clone(),
             });

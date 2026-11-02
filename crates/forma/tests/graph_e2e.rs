@@ -53,7 +53,10 @@ fn load_project_builds_the_semantic_graph_from_all_standards() {
                 .unwrap_or(false)
         })
         .count();
-    assert!(field_count >= 5, "json-schema fields registered: {field_count}");
+    assert!(
+        field_count >= 5,
+        "json-schema fields registered: {field_count}"
+    );
 
     // bound columns (binds edges)
     let binds = outcome
@@ -78,11 +81,17 @@ fn load_project_builds_the_semantic_graph_from_all_standards() {
     assert_eq!(workflows.len(), 1);
     let wf = workflows[0];
     assert_eq!(
-        wf.data.get("steps").and_then(|v| v.as_array()).map(|a| a.len()),
+        wf.data
+            .get("steps")
+            .and_then(|v| v.as_array())
+            .map(|a| a.len()),
         Some(5)
     );
     assert_eq!(
-        wf.data.get("flows").and_then(|v| v.as_array()).map(|a| a.len()),
+        wf.data
+            .get("flows")
+            .and_then(|v| v.as_array())
+            .map(|a| a.len()),
         Some(5)
     );
 
@@ -105,13 +114,19 @@ fn affected_by_changing_a_field_propagates_across_standards() {
         .map(|n| n.standard.as_str().to_string())
         .collect();
     assert!(standards.contains("sql"), "SQL column affected");
-    assert!(standards.contains("json-schema"), "JSON Schema type affected");
+    assert!(
+        standards.contains("json-schema"),
+        "JSON Schema type affected"
+    );
 }
 
 #[test]
 fn doctor_reports_no_type_mismatches_on_the_consistent_example() {
     let outcome = load_project(&example_dir()).unwrap();
     let diagnostics = run_doctor(&outcome.graph);
-    let errors: Vec<_> = diagnostics.iter().filter(|d| d.severity == "error").collect();
+    let errors: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.severity == "error")
+        .collect();
     assert!(errors.is_empty(), "unexpected errors: {errors:?}");
 }

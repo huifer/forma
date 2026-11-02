@@ -14,7 +14,7 @@
 - [x] Semantic Patch：`add-entity-field` / `rename-entity-field` / `set-entity-field-required`（事务式）
 - [x] CLI：init / validate / doctor / graph / build / patch
 - [x] MCP server：validate / graph / impact / patch
-- [x] Studio 最小可用：语义图浏览 + 实体跨标准详情 + 诊断面板
+- [ ] Studio 最小可用：语义图浏览 + 实体跨标准详情 + 诊断面板（Phase 2 提前项，未开始）
 - [x] 端到端示例：order-management（含「付款状态」补丁演示）
 
 ## Phase 1 — 语义深化

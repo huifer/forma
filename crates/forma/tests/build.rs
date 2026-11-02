@@ -23,7 +23,11 @@ fn build_generates_all_four_targets_deterministically() {
     })
     .unwrap();
     assert_eq!(
-        first.diagnostics.iter().filter(|d| d.severity == "error").count(),
+        first
+            .diagnostics
+            .iter()
+            .filter(|d| d.severity == "error")
+            .count(),
         0,
         "{:?}",
         first.diagnostics
@@ -47,7 +51,11 @@ fn build_generates_all_four_targets_deterministically() {
     .unwrap();
     for f in &second.files {
         let prev = first.files.iter().find(|x| x.path == f.path).unwrap();
-        assert_eq!(prev.content, f.content, "nondeterministic output: {}", f.path);
+        assert_eq!(
+            prev.content, f.content,
+            "nondeterministic output: {}",
+            f.path
+        );
     }
 }
 
@@ -68,7 +76,11 @@ fn incremental_build_skips_unchanged_outputs() {
         dry_run: false,
     })
     .unwrap();
-    assert!(second.files.is_empty(), "nothing to regenerate: {:?}", second.files);
+    assert!(
+        second.files.is_empty(),
+        "nothing to regenerate: {:?}",
+        second.files
+    );
     assert!(second.skipped > 0);
 }
 
@@ -82,7 +94,11 @@ fn generated_types_shape() {
         dry_run: false,
     })
     .unwrap();
-    let types = outcome.files.iter().find(|f| f.path.ends_with("types/types.ts")).unwrap();
+    let types = outcome
+        .files
+        .iter()
+        .find(|f| f.path.ends_with("types/types.ts"))
+        .unwrap();
     assert!(types.content.contains("export interface User {"));
     assert!(types
         .content
@@ -96,7 +112,9 @@ fn generated_types_shape() {
     assert!(validators
         .content
         .contains("[\"active\", \"suspended\", \"closed\"].includes"));
-    assert!(validators.content.contains("import type { User } from './types.js';"));
+    assert!(validators
+        .content
+        .contains("import type { User } from './types.js';"));
 }
 
 #[test]

@@ -68,7 +68,11 @@ pub fn start_mcp_server(project_dir: PathBuf) -> Result<()> {
         let Ok(req) = serde_json::from_str::<serde_json::Value>(trimmed) else {
             continue;
         };
-        let method = req.get("method").and_then(|m| m.as_str()).unwrap_or_default().to_string();
+        let method = req
+            .get("method")
+            .and_then(|m| m.as_str())
+            .unwrap_or_default()
+            .to_string();
         let id = req.get("id").cloned();
 
         let response = match method.as_str() {
@@ -134,7 +138,11 @@ pub fn start_mcp_server(project_dir: PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn call_tool(project_dir: &Path, name: &str, args: &serde_json::Map<String, serde_json::Value>) -> Result<serde_json::Value> {
+fn call_tool(
+    project_dir: &Path,
+    name: &str,
+    args: &serde_json::Map<String, serde_json::Value>,
+) -> Result<serde_json::Value> {
     match name {
         "forma_validate" => {
             let outcome = load_project(project_dir)?;
@@ -144,7 +152,9 @@ fn call_tool(project_dir: &Path, name: &str, args: &serde_json::Map<String, serd
                 .chain(run_doctor(&outcome.graph).iter())
                 .map(|d| serde_json::to_value(d).map_err(|e| anyhow::anyhow!(e)))
                 .collect::<Result<_>>()?;
-            let ok = all.iter().all(|d| d.get("severity").and_then(|s| s.as_str()) != Some("error"));
+            let ok = all
+                .iter()
+                .all(|d| d.get("severity").and_then(|s| s.as_str()) != Some("error"));
             Ok(serde_json::json!({
                 "ok": ok,
                 "diagnostics": all,
@@ -206,7 +216,9 @@ fn call_tool(project_dir: &Path, name: &str, args: &serde_json::Map<String, serd
                     })
                 })
                 .collect();
-            Ok(serde_json::json!({ "target": uri, "affectedCount": nodes.len(), "affected": nodes }))
+            Ok(
+                serde_json::json!({ "target": uri, "affectedCount": nodes.len(), "affected": nodes }),
+            )
         }
         "forma_patch" => {
             let patch: crate::patch::PatchDocument =

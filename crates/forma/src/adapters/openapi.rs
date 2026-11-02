@@ -3,7 +3,7 @@
 //! x-forma-entity / $ref 关联实体。
 
 use crate::adapters::{AdapterContext, AdapterResult, SpecAdapter};
-use crate::graph::{EdgeKind, NodeKind, SemanticEdge, SemanticNode, Standard, SourceRef};
+use crate::graph::{EdgeKind, NodeKind, SemanticEdge, SemanticNode, SourceRef, Standard};
 use crate::identity::{api_operation_uri, api_schema_uri, entity_uri, normalize_name};
 use anyhow::Result;
 
@@ -37,7 +37,11 @@ impl SpecAdapter for OpenApiAdapter {
             let required: Vec<String> = schema
                 .get("required")
                 .and_then(|v| v.as_sequence())
-                .map(|s| s.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+                .map(|s| {
+                    s.iter()
+                        .filter_map(|x| x.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
 
             let mut properties: Vec<serde_json::Value> = Vec::new();
@@ -109,17 +113,29 @@ impl SpecAdapter for OpenApiAdapter {
         }
 
         // paths → operations
-        let paths = doc.get("paths").and_then(|v| v.as_mapping()).cloned().unwrap_or_default();
+        let paths = doc
+            .get("paths")
+            .and_then(|v| v.as_mapping())
+            .cloned()
+            .unwrap_or_default();
         for (path_key, path_item) in &paths {
             let p = path_key.as_str().unwrap_or_default().to_string();
             for method in ["get", "post", "put", "patch", "delete"] {
-                let Some(op) = path_item.get(method) else { continue };
+                let Some(op) = path_item.get(method) else {
+                    continue;
+                };
                 let operation_id = op
                     .get("operationId")
                     .and_then(|v| v.as_str())
                     .map(String::from)
                     .unwrap_or_else(|| {
-                        format!("{}{}", method, p.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect::<String>())
+                        format!(
+                            "{}{}",
+                            method,
+                            p.chars()
+                                .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+                                .collect::<String>()
+                        )
                     });
 
                 let request_ref = op

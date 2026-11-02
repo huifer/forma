@@ -66,10 +66,18 @@ fn run(argv: &[String]) -> Result<i32> {
             for d in &outcome.diagnostics {
                 eprintln!("{}", forma::validate::format_diagnostic(d));
             }
-            let errors = outcome.diagnostics.iter().filter(|d| d.severity == "error").count();
+            let errors = outcome
+                .diagnostics
+                .iter()
+                .filter(|d| d.severity == "error")
+                .count();
             println!(
                 "{} {} nodes, {} diagnostics ({errors} errors)",
-                if errors == 0 { "✓ valid —" } else { "✗ invalid —" },
+                if errors == 0 {
+                    "✓ valid —"
+                } else {
+                    "✗ invalid —"
+                },
                 outcome.graph.all_nodes().len(),
                 outcome.diagnostics.len()
             );
@@ -126,7 +134,11 @@ fn run(argv: &[String]) -> Result<i32> {
             if outcome.skipped > 0 {
                 println!("  = {} file(s) up-to-date, skipped", outcome.skipped);
             }
-            let errors = outcome.diagnostics.iter().filter(|d| d.severity == "error").count();
+            let errors = outcome
+                .diagnostics
+                .iter()
+                .filter(|d| d.severity == "error")
+                .count();
             for d in &outcome.diagnostics {
                 eprintln!("{}", forma::validate::format_diagnostic(d));
             }
@@ -169,7 +181,14 @@ fn run(argv: &[String]) -> Result<i32> {
                 eprintln!("{}", forma::validate::format_diagnostic(d));
             }
             let failed = report.operations.iter().any(|o| o.status == "failed");
-            println!("{}", if failed { "\n✗ patch completed with failures" } else { "\n✓ patch applied" });
+            println!(
+                "{}",
+                if failed {
+                    "\n✗ patch completed with failures"
+                } else {
+                    "\n✓ patch applied"
+                }
+            );
             Ok(if failed { 1 } else { 0 })
         }
         "mcp" => {
@@ -191,10 +210,11 @@ fn run(argv: &[String]) -> Result<i32> {
     }
 }
 
-fn render_graph_text(
-    summary: &forma::graph::GraphSummary,
-) -> String {
-    let mut lines = vec!["Unified Semantic Graph".to_string(), "======================".to_string()];
+fn render_graph_text(summary: &forma::graph::GraphSummary) -> String {
+    let mut lines = vec![
+        "Unified Semantic Graph".to_string(),
+        "======================".to_string(),
+    ];
     for entity in summary.nodes.iter().filter(|n| n.kind == "entity") {
         lines.push(String::new());
         lines.push(format!("▣ {}  ({})", entity.name, entity.uri));

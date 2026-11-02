@@ -3,7 +3,7 @@
 > Forma = Universal Specification Compiler
 > The integration and compilation layer for AI-native software development.
 >
-> v0.1 蓝图（自研 8 类 DSL，见 `docs/history/04-forma-dsl-blueprint-v0.1.md`）已被本蓝图取代。
+> v0.1 蓝图（自研 8 类 DSL，见 `history/04-forma-dsl-blueprint-v0.1.md`）已被本蓝图取代。
 > 本文是当前代码库实现的规范。凡代码与本文冲突，以本文为准并修代码。
 
 ---

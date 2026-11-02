@@ -14,7 +14,8 @@ pub fn write_text(path: &Path, content: &str) -> anyhow::Result<()> {
         fs::create_dir_all(parent)
             .with_context(|| format!("cannot create dir {}", parent.display()))?;
     }
-    let mut f = fs::File::create(path).with_context(|| format!("cannot write {}", path.display()))?;
+    let mut f =
+        fs::File::create(path).with_context(|| format!("cannot write {}", path.display()))?;
     f.write_all(content.as_bytes())?;
     Ok(())
 }
@@ -59,7 +60,11 @@ pub fn hash_value(value: &serde_json::Value) -> String {
 
 /// 字符偏移 → 1-based 行号。
 pub fn line_of(text: &str, offset: usize) -> usize {
-    text[..offset.min(text.len())].bytes().filter(|b| *b == b'\n').count() + 1
+    text[..offset.min(text.len())]
+        .bytes()
+        .filter(|b| *b == b'\n')
+        .count()
+        + 1
 }
 
 /// 项目相对路径（POSIX 风格）。

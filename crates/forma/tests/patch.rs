@@ -53,9 +53,10 @@ fn add_entity_field_propagates_to_all_standards() {
     let sql = fs::read_to_string(dir.join("specs/database/schema.sql")).unwrap();
     assert!(sql.contains("payment_status TEXT"), "{sql}");
 
-    let schema: serde_json::Value =
-        serde_json::from_str(&fs::read_to_string(dir.join("specs/schemas/user.schema.json")).unwrap())
-            .unwrap();
+    let schema: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(dir.join("specs/schemas/user.schema.json")).unwrap(),
+    )
+    .unwrap();
     let payment = schema.pointer("/properties/paymentStatus").unwrap();
     assert_eq!(
         payment.get("enum").unwrap(),
@@ -81,7 +82,11 @@ fn add_entity_field_propagates_to_all_standards() {
         .collect();
     assert!(scopes.contains(&"#/properties/paymentStatus"));
 
-    assert!(report.build.as_ref().map(|b| !b.files.is_empty()).unwrap_or(false));
+    assert!(report
+        .build
+        .as_ref()
+        .map(|b| !b.files.is_empty())
+        .unwrap_or(false));
 
     // 新字段出现在语义图
     let outcome = load_project(&dir).unwrap();
@@ -110,14 +115,19 @@ fn rename_entity_field_renames_everywhere() {
         },
     )
     .unwrap();
-    assert_eq!(report.operations[0].status, "applied", "{:?}", report.operations[0]);
+    assert_eq!(
+        report.operations[0].status, "applied",
+        "{:?}",
+        report.operations[0]
+    );
     let sql = fs::read_to_string(dir.join("specs/database/schema.sql")).unwrap();
     assert!(sql.contains("account_status"));
     assert!(!sql.contains("\n    status TEXT"));
 
-    let schema: serde_json::Value =
-        serde_json::from_str(&fs::read_to_string(dir.join("specs/schemas/user.schema.json")).unwrap())
-            .unwrap();
+    let schema: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(dir.join("specs/schemas/user.schema.json")).unwrap(),
+    )
+    .unwrap();
     assert!(schema.pointer("/properties/accountStatus").is_some());
     assert!(schema.pointer("/properties/status").is_none());
     let required: Vec<&str> = schema
@@ -148,13 +158,18 @@ fn set_entity_field_required_toggles_not_null_and_required() {
         },
     )
     .unwrap();
-    assert_eq!(report.operations[0].status, "applied", "{:?}", report.operations[0]);
+    assert_eq!(
+        report.operations[0].status, "applied",
+        "{:?}",
+        report.operations[0]
+    );
     let sql = fs::read_to_string(dir.join("specs/database/schema.sql")).unwrap();
     assert!(!sql.contains("name TEXT NOT NULL"));
 
-    let schema: serde_json::Value =
-        serde_json::from_str(&fs::read_to_string(dir.join("specs/schemas/user.schema.json")).unwrap())
-            .unwrap();
+    let schema: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(dir.join("specs/schemas/user.schema.json")).unwrap(),
+    )
+    .unwrap();
     let required: Vec<&str> = schema
         .get("required")
         .unwrap()

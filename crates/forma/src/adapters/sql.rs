@@ -20,12 +20,61 @@ pub struct Token {
 }
 
 const KEYWORDS: [&str; 55] = [
-    "CREATE", "TABLE", "INDEX", "UNIQUE", "IF", "NOT", "EXISTS", "ON", "PRIMARY", "KEY",
-    "FOREIGN", "REFERENCES", "DEFAULT", "CHECK", "CONSTRAINT", "NULL", "AUTOINCREMENT", "ASC",
-    "DESC", "COLLATE", "WHERE", "WITHOUT", "ROWID", "STRICT", "AND", "OR", "IN", "IS", "LIKE",
-    "BETWEEN", "SELECT", "FROM", "AS", "CONFLICT", "ROLLBACK", "ABORT", "FAIL", "IGNORE",
-    "REPLACE", "DEFERRABLE", "INITIALLY", "DEFERRED", "IMMEDIATE", "MATCH", "NO", "ACTION",
-    "SET", "NULLS", "FIRST", "LAST", "GENERATED", "ALWAYS", "STORED", "VIRTUAL", "TO",
+    "CREATE",
+    "TABLE",
+    "INDEX",
+    "UNIQUE",
+    "IF",
+    "NOT",
+    "EXISTS",
+    "ON",
+    "PRIMARY",
+    "KEY",
+    "FOREIGN",
+    "REFERENCES",
+    "DEFAULT",
+    "CHECK",
+    "CONSTRAINT",
+    "NULL",
+    "AUTOINCREMENT",
+    "ASC",
+    "DESC",
+    "COLLATE",
+    "WHERE",
+    "WITHOUT",
+    "ROWID",
+    "STRICT",
+    "AND",
+    "OR",
+    "IN",
+    "IS",
+    "LIKE",
+    "BETWEEN",
+    "SELECT",
+    "FROM",
+    "AS",
+    "CONFLICT",
+    "ROLLBACK",
+    "ABORT",
+    "FAIL",
+    "IGNORE",
+    "REPLACE",
+    "DEFERRABLE",
+    "INITIALLY",
+    "DEFERRED",
+    "IMMEDIATE",
+    "MATCH",
+    "NO",
+    "ACTION",
+    "SET",
+    "NULLS",
+    "FIRST",
+    "LAST",
+    "GENERATED",
+    "ALWAYS",
+    "STORED",
+    "VIRTUAL",
+    "TO",
 ];
 
 pub fn tokenize(sql: &str) -> Vec<Token> {
@@ -75,7 +124,11 @@ pub fn tokenize(sql: &str) -> Vec<Token> {
                     i += ch_len;
                 }
             }
-            tokens.push(Token { kind: TokKind::Str, value, offset: start });
+            tokens.push(Token {
+                kind: TokKind::Str,
+                value,
+                offset: start,
+            });
             continue;
         }
         // quoted identifier
@@ -90,11 +143,20 @@ pub fn tokenize(sql: &str) -> Vec<Token> {
                 i += ch_len;
             }
             i = (i + 1).min(n);
-            tokens.push(Token { kind: TokKind::Quoted, value, offset: start });
+            tokens.push(Token {
+                kind: TokKind::Quoted,
+                value,
+                offset: start,
+            });
             continue;
         }
         // number
-        if c.is_ascii_digit() || (c == '.' && bytes.get(i + 1).is_some_and(|b| (*b as char).is_ascii_digit())) {
+        if c.is_ascii_digit()
+            || (c == '.'
+                && bytes
+                    .get(i + 1)
+                    .is_some_and(|b| (*b as char).is_ascii_digit()))
+        {
             let start = i;
             while i < n {
                 let ch = bytes[i] as char;
@@ -111,7 +173,11 @@ pub fn tokenize(sql: &str) -> Vec<Token> {
                     break;
                 }
             }
-            tokens.push(Token { kind: TokKind::Number, value: sql[start..i].to_string(), offset: start });
+            tokens.push(Token {
+                kind: TokKind::Number,
+                value: sql[start..i].to_string(),
+                offset: start,
+            });
             continue;
         }
         // identifier / keyword
@@ -131,11 +197,19 @@ pub fn tokenize(sql: &str) -> Vec<Token> {
             } else {
                 TokKind::Ident
             };
-            tokens.push(Token { kind, value: word.to_string(), offset: start });
+            tokens.push(Token {
+                kind,
+                value: word.to_string(),
+                offset: start,
+            });
             continue;
         }
         // punctuation & operators（DEFAULT 表达式内的运算符按单字符处理）
-        tokens.push(Token { kind: TokKind::Punct, value: c.to_string(), offset: i });
+        tokens.push(Token {
+            kind: TokKind::Punct,
+            value: c.to_string(),
+            offset: i,
+        });
         i += 1;
     }
     tokens
@@ -202,15 +276,15 @@ pub struct ParsedSql {
     pub indexes: Vec<SqlIndex>,
 }
 
-struct Parser<'a> {
+struct Parser {
     tokens: Vec<Token>,
     pos: usize,
-    src: &'a str,
     tables: Vec<SqlTable>,
     indexes: Vec<SqlIndex>,
+    pending_close: Option<usize>,
 }
 
-impl<'a> Parser<'a> {
+impl Parser {
     fn peek(&self) -> Option<&Token> {
         self.tokens.get(self.pos)
     }
@@ -224,11 +298,13 @@ impl<'a> Parser<'a> {
     }
 
     fn is_kw(&self, kw: &str) -> bool {
-        self.peek().is_some_and(|t| t.kind == TokKind::Keyword && t.value.to_uppercase() == kw)
+        self.peek()
+            .is_some_and(|t| t.kind == TokKind::Keyword && t.value.to_uppercase() == kw)
     }
 
     fn is_punct(&self, p: &str) -> bool {
-        self.peek().is_some_and(|t| t.kind == TokKind::Punct && t.value == p)
+        self.peek()
+            .is_some_and(|t| t.kind == TokKind::Punct && t.value == p)
     }
 
     fn expect_kw(&mut self, kw: &str) -> anyhow::Result<()> {
@@ -316,8 +392,15 @@ impl<'a> Parser<'a> {
         self.peek().is_some_and(|t| {
             t.kind == TokKind::Keyword
                 && [
-                    "PRIMARY", "NOT", "NULL", "UNIQUE", "DEFAULT", "CHECK", "REFERENCES",
-                    "COLLATE", "CONSTRAINT",
+                    "PRIMARY",
+                    "NOT",
+                    "NULL",
+                    "UNIQUE",
+                    "DEFAULT",
+                    "CHECK",
+                    "REFERENCES",
+                    "COLLATE",
+                    "CONSTRAINT",
                 ]
                 .contains(&t.value.to_uppercase().as_str())
         })
@@ -326,17 +409,17 @@ impl<'a> Parser<'a> {
     /// 消费到约束关键字 / ',' / ')' 之前的类型 token，并返回规范类型文本。
     fn read_type_parts(&mut self) -> Vec<String> {
         let mut parts: Vec<String> = Vec::new();
-        loop {
-            let Some(t) = self.peek() else { break };
-            if (t.kind == TokKind::Punct && (t.value == "," || t.value == ")")) || self.is_constraint_start() {
+        while let Some(t) = self.peek() {
+            if (t.kind == TokKind::Punct && (t.value == "," || t.value == ")"))
+                || self.is_constraint_start()
+            {
                 break;
             }
             let t = self.next().unwrap();
             parts.push(t.value.clone());
             if self.is_punct("(") {
                 let mut depth = 0usize;
-                loop {
-                    let Some(p) = self.next() else { break };
+                while let Some(p) = self.next() {
                     parts.push(p.value.clone());
                     if p.kind == TokKind::Punct && p.value == "(" {
                         depth += 1;
@@ -352,7 +435,10 @@ impl<'a> Parser<'a> {
         parts
     }
 
-    fn parse_column(&mut self, table_constraints: &mut Vec<SqlTableConstraint>) -> anyhow::Result<SqlColumn> {
+    fn parse_column(
+        &mut self,
+        table_constraints: &mut Vec<SqlTableConstraint>,
+    ) -> anyhow::Result<SqlColumn> {
         let (name, offset) = self.read_name()?;
         let type_parts = self.read_type_parts();
         let type_text = canonical_type_text(&type_parts);
@@ -401,8 +487,7 @@ impl<'a> Parser<'a> {
             } else if self.is_kw("DEFAULT") {
                 self.next();
                 let mut parts: Vec<String> = Vec::new();
-                loop {
-                    let Some(t) = self.peek() else { break };
+                while let Some(t) = self.peek() {
                     if (t.kind == TokKind::Punct && (t.value == "," || t.value == ")"))
                         || self.is_constraint_start()
                     {
@@ -412,8 +497,7 @@ impl<'a> Parser<'a> {
                     parts.push(d.value.clone());
                     if self.is_punct("(") {
                         let mut depth = 0usize;
-                        loop {
-                            let Some(p) = self.next() else { break };
+                        while let Some(p) = self.next() {
                             parts.push(p.value.clone());
                             if p.kind == TokKind::Punct && p.value == "(" {
                                 depth += 1;
@@ -478,11 +562,12 @@ impl<'a> Parser<'a> {
             self.expect_punct("(")?;
             let mut columns: Vec<SqlColumn> = Vec::new();
             let mut constraints: Vec<SqlTableConstraint> = Vec::new();
-            let mut close_paren_offset = 0usize;
 
             loop {
                 if self.is_punct(")") {
-                    close_paren_offset = self.next().unwrap().offset;
+                    let close_paren_offset = self.next().unwrap().offset;
+                    // 右括号位置随 columns/constraints 一起保存
+                    self.pending_close = Some(close_paren_offset);
                     break;
                 }
                 if self.is_kw("CONSTRAINT") {
@@ -510,7 +595,11 @@ impl<'a> Parser<'a> {
                             c.primary_key = true;
                         }
                     }
-                    constraints.push(SqlTableConstraint { kind: "primary-key", columns: cols, references: None });
+                    constraints.push(SqlTableConstraint {
+                        kind: "primary-key",
+                        columns: cols,
+                        references: None,
+                    });
                 } else if self.is_kw("UNIQUE") {
                     self.next();
                     self.expect_punct("(")?;
@@ -522,7 +611,11 @@ impl<'a> Parser<'a> {
                         }
                     }
                     self.next();
-                    constraints.push(SqlTableConstraint { kind: "unique", columns: cols, references: None });
+                    constraints.push(SqlTableConstraint {
+                        kind: "unique",
+                        columns: cols,
+                        references: None,
+                    });
                 } else if self.is_kw("FOREIGN") {
                     self.next();
                     self.expect_kw("KEY")?;
@@ -557,7 +650,11 @@ impl<'a> Parser<'a> {
                 } else if self.is_kw("CHECK") {
                     self.next();
                     self.skip_balanced_parens()?;
-                    constraints.push(SqlTableConstraint { kind: "check", columns: vec![], references: None });
+                    constraints.push(SqlTableConstraint {
+                        kind: "check",
+                        columns: vec![],
+                        references: None,
+                    });
                 } else {
                     columns.push(self.parse_column(&mut constraints)?);
                 }
@@ -571,7 +668,7 @@ impl<'a> Parser<'a> {
                 name: table_name,
                 columns,
                 constraints,
-                close_paren_offset,
+                close_paren_offset: self.pending_close.take().unwrap_or(statement_start),
                 statement_start,
             });
             return Ok(());
@@ -599,7 +696,10 @@ impl<'a> Parser<'a> {
                 }
             }
             self.next(); // )
-            while self.peek().is_some_and(|t| !(t.kind == TokKind::Punct && t.value == ";")) {
+            while self
+                .peek()
+                .is_some_and(|t| !(t.kind == TokKind::Punct && t.value == ";"))
+            {
                 self.next();
             }
             self.indexes.push(SqlIndex {
@@ -613,7 +713,10 @@ impl<'a> Parser<'a> {
         }
 
         // 不支持的 CREATE（VIEW/TRIGGER/…）— 跳到 ';'
-        while self.peek().is_some_and(|t| !(t.kind == TokKind::Punct && t.value == ";")) {
+        while self
+            .peek()
+            .is_some_and(|t| !(t.kind == TokKind::Punct && t.value == ";"))
+        {
             self.next();
         }
         Ok(())
@@ -624,9 +727,9 @@ pub fn parse_sql_ddl(sql: &str) -> anyhow::Result<ParsedSql> {
     let mut parser = Parser {
         tokens: tokenize(sql),
         pos: 0,
-        src: sql,
         tables: Vec::new(),
         indexes: Vec::new(),
+        pending_close: None,
     };
     while parser.pos < parser.tokens.len() {
         if parser.is_punct(";") {
@@ -681,13 +784,12 @@ fn canonical_type_text(parts: &[String]) -> String {
     out.trim().to_string()
 }
 
-
 // ---------------------------------------------------------------------------
 // Adapter
 // ---------------------------------------------------------------------------
 
 use crate::adapters::{AdapterContext, AdapterResult, SpecAdapter};
-use crate::graph::{EdgeKind, NodeKind, SemanticEdge, SemanticNode, Standard, SourceRef};
+use crate::graph::{EdgeKind, NodeKind, SemanticEdge, SemanticNode, SourceRef, Standard};
 use crate::identity::{local_uri, normalize_name};
 
 pub struct SqlAdapter;
@@ -758,9 +860,7 @@ impl SpecAdapter for SqlAdapter {
 
         for table in &parsed.tables {
             let table_uri = local_uri("sql", &ctx.file, "table", &table.name);
-            let entity = binding_by_table
-                .get(&normalize_name(&table.name))
-                .cloned();
+            let entity = binding_by_table.get(&normalize_name(&table.name)).cloned();
 
             result.nodes.push(SemanticNode {
                 uri: table_uri.clone(),
@@ -781,12 +881,7 @@ impl SpecAdapter for SqlAdapter {
                                 table
                                     .columns
                                     .iter()
-                                    .map(|c| {
-                                        column_json(
-                                            c,
-                                            crate::util::line_of(&sql, c.offset),
-                                        )
-                                    })
+                                    .map(|c| column_json(c, crate::util::line_of(&sql, c.offset)))
                                     .collect(),
                             ),
                         );
@@ -796,8 +891,12 @@ impl SpecAdapter for SqlAdapter {
             });
 
             for col in &table.columns {
-                let col_uri =
-                    local_uri("sql", &ctx.file, "column", &format!("{}.{}", table.name, col.name));
+                let col_uri = local_uri(
+                    "sql",
+                    &ctx.file,
+                    "column",
+                    &format!("{}.{}", table.name, col.name),
+                );
                 result.nodes.push(SemanticNode {
                     uri: col_uri.clone(),
                     kind: NodeKind::TableColumn,

@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Design questions
+    url: https://github.com/YOUR_GH_USER/forma/discussions
+    about: Ask about the Specification Federation architecture, token economics, or roadmap before opening a feature request.

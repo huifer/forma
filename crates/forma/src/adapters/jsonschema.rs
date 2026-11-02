@@ -2,7 +2,7 @@
 //! 顶层对象定义（$id）→ type 节点；x-forma-entity 绑定 → entity 节点。
 
 use crate::adapters::{AdapterContext, AdapterResult, SpecAdapter};
-use crate::graph::{EdgeKind, NodeKind, SemanticEdge, SemanticNode, Standard, SourceRef};
+use crate::graph::{EdgeKind, NodeKind, SemanticEdge, SemanticNode, SourceRef, Standard};
 use crate::identity::{entity_field_uri, entity_uri, normalize_name, type_uri};
 use anyhow::Result;
 
@@ -30,7 +30,10 @@ impl SpecAdapter for JsonSchemaAdapter {
         let project = &ctx.loaded.manifest.project_name;
         let type_uri = type_uri(project, &id);
 
-        let explicit_entity = raw.get("x-forma-entity").and_then(|v| v.as_str()).map(String::from);
+        let explicit_entity = raw
+            .get("x-forma-entity")
+            .and_then(|v| v.as_str())
+            .map(String::from);
 
         // 实体身份：x-forma-entity > bindings > $id 本身作为实体名
         let binding_match = ctx
@@ -38,10 +41,7 @@ impl SpecAdapter for JsonSchemaAdapter {
             .manifest
             .bindings
             .iter()
-            .find(|b| {
-                normalize_name(b.uri.rsplit('/').next().unwrap_or(""))
-                    == normalize_name(&id)
-            })
+            .find(|b| normalize_name(b.uri.rsplit('/').next().unwrap_or("")) == normalize_name(&id))
             .map(|b| b.uri.clone());
 
         let entity_name = match (&explicit_entity, &binding_match) {
@@ -54,9 +54,17 @@ impl SpecAdapter for JsonSchemaAdapter {
         let required: Vec<String> = raw
             .get("required")
             .and_then(|v| v.as_array())
-            .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
-        let props = raw.get("properties").and_then(|v| v.as_object()).cloned().unwrap_or_default();
+        let props = raw
+            .get("properties")
+            .and_then(|v| v.as_object())
+            .cloned()
+            .unwrap_or_default();
 
         let mut properties: Vec<serde_json::Value> = Vec::new();
         for (name, prop) in &props {
@@ -91,7 +99,10 @@ impl SpecAdapter for JsonSchemaAdapter {
             kind: NodeKind::Type,
             name: id.clone(),
             standard: Standard::JsonSchema,
-            source: SourceRef { file: ctx.file.clone(), line: None },
+            source: SourceRef {
+                file: ctx.file.clone(),
+                line: None,
+            },
             data: serde_json::json!({
                 "$id": id,
                 "entityUri": entity_uri,
@@ -112,7 +123,10 @@ impl SpecAdapter for JsonSchemaAdapter {
         });
 
         for prop in &properties {
-            let prop_name = prop.get("name").and_then(|v| v.as_str()).unwrap_or_default();
+            let prop_name = prop
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
             let field_uri = entity_field_uri(project, &entity_name, prop_name);
             result.nodes.push(SemanticNode {
                 uri: field_uri.clone(),
@@ -121,7 +135,10 @@ impl SpecAdapter for JsonSchemaAdapter {
                 standard: Standard::Core,
                 source: SourceRef {
                     file: ctx.file.clone(),
-                    line: prop.get("line").and_then(|v| v.as_u64()).map(|v| v as usize),
+                    line: prop
+                        .get("line")
+                        .and_then(|v| v.as_u64())
+                        .map(|v| v as usize),
                 },
                 data: serde_json::json!({ "from": "json-schema", "property": prop }),
             });

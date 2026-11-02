@@ -4,7 +4,7 @@
 //! 自研轻量 XML 解析（元素、属性、文本内容），不引入完整 XML 依赖。
 
 use crate::adapters::{AdapterContext, AdapterResult, SpecAdapter};
-use crate::graph::{EdgeKind, NodeKind, SemanticEdge, SemanticNode, Standard, SourceRef};
+use crate::graph::{EdgeKind, NodeKind, SemanticEdge, SemanticNode, SourceRef, Standard};
 use crate::identity::{workflow_step_uri, workflow_uri};
 use anyhow::Result;
 
@@ -52,7 +52,11 @@ impl SpecAdapter for BpmnAdapter {
 
         for child in &process.children {
             if STEP_ELEMENTS.contains(&child.name.as_str()) {
-                let id = child.attrs.get("id").cloned().unwrap_or_else(|| child.name.clone());
+                let id = child
+                    .attrs
+                    .get("id")
+                    .cloned()
+                    .unwrap_or_else(|| child.name.clone());
                 steps.push(serde_json::json!({
                     "id": id,
                     "name": child.attrs.get("name"),
@@ -81,7 +85,10 @@ impl SpecAdapter for BpmnAdapter {
                 .cloned()
                 .unwrap_or_else(|| process_id.clone()),
             standard: Standard::Bpmn,
-            source: SourceRef { file: ctx.file.clone(), line: Some(process.line) },
+            source: SourceRef {
+                file: ctx.file.clone(),
+                line: Some(process.line),
+            },
             data: serde_json::json!({
                 "processId": process_id,
                 "processName": process.attrs.get("name"),
@@ -102,7 +109,10 @@ impl SpecAdapter for BpmnAdapter {
                     .unwrap_or(sid)
                     .to_string(),
                 standard: Standard::Bpmn,
-                source: SourceRef { file: ctx.file.clone(), line: None },
+                source: SourceRef {
+                    file: ctx.file.clone(),
+                    line: None,
+                },
                 data: step.clone(),
             });
             result.edges.push(SemanticEdge {
@@ -164,7 +174,9 @@ pub fn parse_xml_elements(xml: &str) -> Vec<XmlElement> {
     let line_at = |offset: usize| xml[..offset.min(n)].bytes().filter(|b| *b == b'\n').count() + 1;
 
     while i < n {
-        let Some(lt_rel) = xml[i..].find('<') else { break };
+        let Some(lt_rel) = xml[i..].find('<') else {
+            break;
+        };
         let lt = i + lt_rel;
         if xml[lt..].starts_with("<!--") {
             i = match xml[lt..].find("-->") {
@@ -180,7 +192,9 @@ pub fn parse_xml_elements(xml: &str) -> Vec<XmlElement> {
             };
             continue;
         }
-        let Some(tag_end_rel) = xml[lt..].find('>') else { break };
+        let Some(tag_end_rel) = xml[lt..].find('>') else {
+            break;
+        };
         let tag_end = lt + tag_end_rel;
         let tag_content = &xml[lt + 1..tag_end];
 
@@ -200,12 +214,20 @@ pub fn parse_xml_elements(xml: &str) -> Vec<XmlElement> {
         }
 
         let self_closing = tag_content.ends_with('/');
-        let inner = if self_closing { &tag_content[..tag_content.len() - 1] } else { tag_content };
+        let inner = if self_closing {
+            &tag_content[..tag_content.len() - 1]
+        } else {
+            tag_content
+        };
         let raw_name: String = inner
             .chars()
             .take_while(|c| c.is_ascii_alphanumeric() || matches!(c, ':' | '.' | '-' | '_'))
             .collect();
-        let name = if raw_name.is_empty() { "unknown".to_string() } else { raw_name };
+        let name = if raw_name.is_empty() {
+            "unknown".to_string()
+        } else {
+            raw_name
+        };
 
         let mut attrs = HashMap::new();
         parse_attrs(inner, &mut attrs);
@@ -234,10 +256,7 @@ pub fn parse_xml_elements(xml: &str) -> Vec<XmlElement> {
     }
 
     // 从 arena 组装最终树（含 child_texts）
-    fn build(
-        arena: &[NodeBuilder],
-        idx: usize,
-    ) -> XmlElement {
+    fn build(arena: &[NodeBuilder], idx: usize) -> XmlElement {
         let node = &arena[idx];
         let mut child_texts: HashMap<String, Vec<String>> = HashMap::new();
         let children: Vec<XmlElement> = node
@@ -247,7 +266,10 @@ pub fn parse_xml_elements(xml: &str) -> Vec<XmlElement> {
                 let child = build(arena, *c);
                 if child.children.is_empty() {
                     if let Some(t) = &child.text {
-                        child_texts.entry(child.name.clone()).or_default().push(t.clone());
+                        child_texts
+                            .entry(child.name.clone())
+                            .or_default()
+                            .push(t.clone());
                         if child.name == "conditionExpression" {
                             // condition 提升到父元素
                         }

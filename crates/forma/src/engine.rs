@@ -2,7 +2,7 @@
 
 use crate::adapters::{AdapterRegistry, AdapterResult};
 use crate::graph::{EdgeKind, NodeKind, SemanticEdge, Standard, UnifiedSemanticGraph};
-use crate::manifest::{load_manifest, resolve_spec_path, GROUP_ORDER, LoadedManifest};
+use crate::manifest::{load_manifest, resolve_spec_path, LoadedManifest, GROUP_ORDER};
 use crate::validate::{run_doctor, Diagnostic};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -21,10 +21,7 @@ pub fn load_project(project_dir: &Path) -> Result<LoadOutcome> {
     load_project_with(project_dir, &AdapterRegistry::default_registry())
 }
 
-pub fn load_project_with(
-    project_dir: &Path,
-    registry: &AdapterRegistry,
-) -> Result<LoadOutcome> {
+pub fn load_project_with(project_dir: &Path, registry: &AdapterRegistry) -> Result<LoadOutcome> {
     let loaded = load_manifest(project_dir)?;
     let mut diagnostics: Vec<Diagnostic> = loaded
         .issues
@@ -46,7 +43,9 @@ pub fn load_project_with(
     // 固定顺序：schemas → api → ui → database → workflows
     for group in GROUP_ORDER {
         let (_, format, _) = crate::manifest::spec_group(group).unwrap();
-        let Some(adapter) = registry.get(format.as_str()) else { continue };
+        let Some(adapter) = registry.get(format.as_str()) else {
+            continue;
+        };
         for entry in loaded.manifest.group(group) {
             if entry.format != format {
                 continue;
@@ -58,7 +57,9 @@ pub fn load_project_with(
                 absolute_path,
             };
             match adapter.parse(&ctx) {
-                Ok(result) => merge_into_graph(&mut graph, result, &mut entity_sources, &mut seen_edges),
+                Ok(result) => {
+                    merge_into_graph(&mut graph, result, &mut entity_sources, &mut seen_edges)
+                }
                 Err(err) => diagnostics.push(Diagnostic {
                     severity: "error".into(),
                     code: "parse-failed".into(),
@@ -128,7 +129,10 @@ fn merge_into_graph(
     }
 }
 
-fn match_entities_by_convention(graph: &mut UnifiedSemanticGraph, diagnostics: &mut Vec<Diagnostic>) {
+fn match_entities_by_convention(
+    graph: &mut UnifiedSemanticGraph,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
     let entity_uris: Vec<(String, String)> = graph
         .entities()
         .into_iter()
@@ -136,7 +140,12 @@ fn match_entities_by_convention(graph: &mut UnifiedSemanticGraph, diagnostics: &
         .collect();
     let by_normalized: HashMap<String, String> = entity_uris
         .into_iter()
-        .map(|(name, uri)| (crate::identity::normalize_name(&crate::identity::singularize(&name)), uri))
+        .map(|(name, uri)| {
+            (
+                crate::identity::normalize_name(&crate::identity::singularize(&name)),
+                uri,
+            )
+        })
         .collect();
 
     let table_uris: Vec<String> = graph
@@ -147,7 +156,11 @@ fn match_entities_by_convention(graph: &mut UnifiedSemanticGraph, diagnostics: &
 
     for table_uri in table_uris {
         let table = graph.get(&table_uri).unwrap();
-        let bound = table.data.get("entityUri").and_then(|v| v.as_str()).map(String::from);
+        let bound = table
+            .data
+            .get("entityUri")
+            .and_then(|v| v.as_str())
+            .map(String::from);
         if bound.is_some() {
             // 已有 binding — 引擎补列绑定
             if let Some(e) = bound {
@@ -162,11 +175,16 @@ fn match_entities_by_convention(graph: &mut UnifiedSemanticGraph, diagnostics: &
             }
             continue;
         }
-        let Some(matched) = by_normalized.get(&crate::identity::normalize_name(&crate::identity::singularize(&table.name))) else {
+        let Some(matched) = by_normalized.get(&crate::identity::normalize_name(
+            &crate::identity::singularize(&table.name),
+        )) else {
             diagnostics.push(Diagnostic {
                 severity: "warning".into(),
                 code: "table-entity-unbound".into(),
-                message: format!("SQL 表 \"{}\" 未绑定到任何实体（缺 x-forma-entity / bindings / 约定匹配）", table.name),
+                message: format!(
+                    "SQL 表 \"{}\" 未绑定到任何实体（缺 x-forma-entity / bindings / 约定匹配）",
+                    table.name
+                ),
                 file: Some(table.source.file.clone()),
                 line: table.source.line,
                 nodes: Some(vec![table_uri.clone()]),
@@ -179,7 +197,12 @@ fn match_entities_by_convention(graph: &mut UnifiedSemanticGraph, diagnostics: &
             to: table_uri.clone(),
             kind: EdgeKind::Defines,
         });
-        for edge in graph.edges_from(&table_uri).into_iter().cloned().collect::<Vec<_>>() {
+        for edge in graph
+            .edges_from(&table_uri)
+            .into_iter()
+            .cloned()
+            .collect::<Vec<_>>()
+        {
             if edge.kind == EdgeKind::BelongsTo {
                 let _ = graph.add_edge(SemanticEdge {
                     from: entity.clone(),
@@ -192,7 +215,11 @@ fn match_entities_by_convention(graph: &mut UnifiedSemanticGraph, diagnostics: &
     }
 }
 
-fn match_columns_by_convention(graph: &mut UnifiedSemanticGraph, entity_uri: &str, table_uri: &str) {
+fn match_columns_by_convention(
+    graph: &mut UnifiedSemanticGraph,
+    entity_uri: &str,
+    table_uri: &str,
+) {
     // 实体字段（json-schema 来源）
     let field_uris: Vec<String> = graph
         .edges_from(entity_uri)
@@ -243,18 +270,22 @@ fn bind_forms_to_entities(graph: &mut UnifiedSemanticGraph) {
         let Some(bound) = form.data.get("boundSchemaId").and_then(|v| v.as_str()) else {
             continue;
         };
-        if graph.edges_to(&form_uri).iter().any(|e| e.kind == EdgeKind::References) {
+        if graph
+            .edges_to(&form_uri)
+            .iter()
+            .any(|e| e.kind == EdgeKind::References)
+        {
             continue;
         }
-        let schema_type = graph
-            .nodes_by_kind(NodeKind::Type)
-            .into_iter()
-            .find(|n| {
-                n.standard == Standard::JsonSchema
-                    && crate::identity::normalize_name(n.data.get("$id").and_then(|v| v.as_str()).unwrap_or(""))
-                        == crate::identity::normalize_name(bound)
-            });
-        let Some(schema_type) = schema_type else { continue };
+        let schema_type = graph.nodes_by_kind(NodeKind::Type).into_iter().find(|n| {
+            n.standard == Standard::JsonSchema
+                && crate::identity::normalize_name(
+                    n.data.get("$id").and_then(|v| v.as_str()).unwrap_or(""),
+                ) == crate::identity::normalize_name(bound)
+        });
+        let Some(schema_type) = schema_type else {
+            continue;
+        };
         if let Some(entity) = schema_type.data.get("entityUri").and_then(|v| v.as_str()) {
             if graph.has(entity) {
                 let _ = graph.add_edge(SemanticEdge {
@@ -308,7 +339,11 @@ pub fn build_project(options: &BuildOptions) -> Result<BuildOutcome> {
         .filter(|d| d.severity == "error")
         .cloned()
         .collect();
-    hard_errors.extend(run_doctor(&load.graph).into_iter().filter(|d| d.severity == "error"));
+    hard_errors.extend(
+        run_doctor(&load.graph)
+            .into_iter()
+            .filter(|d| d.severity == "error"),
+    );
 
     let cache_path = options.project_dir.join(".forma").join("build.json");
     let mut cache = read_cache(&cache_path);
@@ -345,7 +380,10 @@ pub fn build_project(options: &BuildOptions) -> Result<BuildOutcome> {
                     crate::util::write_text(&abs, &file.content)?;
                     cache.entries.insert(
                         file.path.clone(),
-                        CacheEntry { output_hash, inputs: HashMap::new() },
+                        CacheEntry {
+                            output_hash,
+                            inputs: HashMap::new(),
+                        },
                     );
                 }
                 files.push(file);
@@ -384,5 +422,8 @@ fn read_cache(path: &Path) -> BuildCache {
             }
         }
     }
-    BuildCache { version: 1, entries: HashMap::new() }
+    BuildCache {
+        version: 1,
+        entries: HashMap::new(),
+    }
 }

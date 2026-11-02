@@ -96,5 +96,8 @@ fn parse_composite_primary_key_and_check() {
     assert!(t.columns[0].primary_key);
     assert!(t.columns[1].primary_key);
     assert!(t.constraints.iter().any(|c| c.kind == "primary-key"));
-    assert!(t.constraints.iter().any(|c| c.kind == "check" && c.columns.contains(&"c".to_string())));
+    assert!(t
+        .constraints
+        .iter()
+        .any(|c| c.kind == "check" && c.columns.contains(&"c".to_string())));
 }

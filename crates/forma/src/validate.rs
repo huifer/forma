@@ -25,7 +25,13 @@ pub fn format_diagnostic(d: &Diagnostic) -> String {
             None => format!("{f} "),
         })
         .unwrap_or_default();
-    format!("[{}] {} {}— {}", d.severity.to_uppercase(), d.code, loc, d.message)
+    format!(
+        "[{}] {} {}— {}",
+        d.severity.to_uppercase(),
+        d.code,
+        loc,
+        d.message
+    )
 }
 
 pub fn run_doctor(graph: &UnifiedSemanticGraph) -> Vec<Diagnostic> {
@@ -71,22 +77,41 @@ fn check_field_consistency(graph: &UnifiedSemanticGraph) -> Vec<Diagnostic> {
             .unwrap_or_default();
 
         for column in &columns {
-            let cname = column.get("name").and_then(|v| v.as_str()).unwrap_or_default();
-            let line = column.get("line").and_then(|v| v.as_u64()).map(|v| v as usize);
-            let not_null = column.get("notNull").and_then(|v| v.as_bool()).unwrap_or(false);
-            let primary = column.get("primaryKey").and_then(|v| v.as_bool()).unwrap_or(false);
-            let sql_type = column.get("type").and_then(|v| v.as_str()).unwrap_or_default();
+            let cname = column
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+            let line = column
+                .get("line")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as usize);
+            let not_null = column
+                .get("notNull")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let primary = column
+                .get("primaryKey")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let sql_type = column
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
 
-            let prop = schema_props
-                .iter()
-                .find(|p| crate::identity::normalize_name(p.get("name").and_then(|v| v.as_str()).unwrap_or_default())
-                    == crate::identity::normalize_name(cname));
+            let prop = schema_props.iter().find(|p| {
+                crate::identity::normalize_name(
+                    p.get("name").and_then(|v| v.as_str()).unwrap_or_default(),
+                ) == crate::identity::normalize_name(cname)
+            });
 
             let Some(prop) = prop else {
                 out.push(Diagnostic {
                     severity: "warning".into(),
                     code: "field-schema-missing".into(),
-                    message: format!("列 {cname} 在 JSON Schema \"{}\" 中没有对应属性", schema_type.name),
+                    message: format!(
+                        "列 {cname} 在 JSON Schema \"{}\" 中没有对应属性",
+                        schema_type.name
+                    ),
                     file: Some(table.source.file.clone()),
                     line,
                     nodes: Some(vec![entity.uri.clone()]),
@@ -94,16 +119,28 @@ fn check_field_consistency(graph: &UnifiedSemanticGraph) -> Vec<Diagnostic> {
                 continue;
             };
 
-            let pname = prop.get("name").and_then(|v| v.as_str()).unwrap_or_default();
-            let prop_required = prop.get("required").and_then(|v| v.as_bool()).unwrap_or(false);
-            let prop_type = prop.get("type").and_then(|v| v.as_str()).unwrap_or_default();
+            let pname = prop
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+            let prop_required = prop
+                .get("required")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let prop_type = prop
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
 
             // 命名风格
             if cname != crate::identity::to_snake_case(pname) {
                 out.push(Diagnostic {
                     severity: "info".into(),
                     code: "field-name-style".into(),
-                    message: format!("列 \"{cname}\" 与属性 \"{pname}\" 命名风格不同（建议 {}）", crate::identity::to_snake_case(pname)),
+                    message: format!(
+                        "列 \"{cname}\" 与属性 \"{pname}\" 命名风格不同（建议 {}）",
+                        crate::identity::to_snake_case(pname)
+                    ),
                     file: Some(table.source.file.clone()),
                     line,
                     nodes: Some(vec![entity.uri.clone()]),
@@ -136,15 +173,25 @@ fn check_field_consistency(graph: &UnifiedSemanticGraph) -> Vec<Diagnostic> {
         // 反向：schema 属性缺列
         let col_names: Vec<String> = columns
             .iter()
-            .map(|c| crate::identity::normalize_name(c.get("name").and_then(|v| v.as_str()).unwrap_or_default()))
+            .map(|c| {
+                crate::identity::normalize_name(
+                    c.get("name").and_then(|v| v.as_str()).unwrap_or_default(),
+                )
+            })
             .collect();
         for prop in &schema_props {
-            let pname = prop.get("name").and_then(|v| v.as_str()).unwrap_or_default();
+            let pname = prop
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
             if !col_names.contains(&crate::identity::normalize_name(pname)) {
                 out.push(Diagnostic {
                     severity: "warning".into(),
                     code: "field-column-missing".into(),
-                    message: format!("JSON Schema 属性 \"{pname}\" 在表 {} 中没有对应列", table.name),
+                    message: format!(
+                        "JSON Schema 属性 \"{pname}\" 在表 {} 中没有对应列",
+                        table.name
+                    ),
                     file: Some(schema_type.source.file.clone()),
                     line: None,
                     nodes: Some(vec![entity.uri.clone()]),
@@ -161,15 +208,27 @@ fn check_form_bindings(graph: &UnifiedSemanticGraph) -> Vec<Diagnostic> {
     let known: Vec<String> = graph
         .nodes_by_kind(NodeKind::Type)
         .into_iter()
-        .filter_map(|n| n.data.get("$id").and_then(|v| v.as_str()).map(crate::identity::normalize_name))
+        .filter_map(|n| {
+            n.data
+                .get("$id")
+                .and_then(|v| v.as_str())
+                .map(crate::identity::normalize_name)
+        })
         .collect();
     for form in graph.nodes_by_kind(NodeKind::UiForm) {
-        let bound = form.data.get("boundSchemaId").and_then(|v| v.as_str()).unwrap_or_default();
+        let bound = form
+            .data
+            .get("boundSchemaId")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
         if !bound.is_empty() && !known.contains(&crate::identity::normalize_name(bound)) {
             out.push(Diagnostic {
                 severity: "error".into(),
                 code: "form-binding-missing".into(),
-                message: format!("表单 \"{}\" 绑定的 JSON Schema \"{bound}\" 不存在于项目规格中", form.name),
+                message: format!(
+                    "表单 \"{}\" 绑定的 JSON Schema \"{bound}\" 不存在于项目规格中",
+                    form.name
+                ),
                 file: Some(form.source.file.clone()),
                 line: None,
                 nodes: Some(vec![form.uri.clone()]),
@@ -188,19 +247,36 @@ fn check_workflow_references(graph: &UnifiedSemanticGraph) -> Vec<Diagnostic> {
         .map(|f| crate::identity::normalize_name(f.name.rsplit('.').next().unwrap_or("")))
         .collect();
     for wf in graph.nodes_by_kind(NodeKind::Workflow) {
-        let steps = wf.data.get("steps").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+        let steps = wf
+            .data
+            .get("steps")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
         for step in &steps {
-            let condition = step.get("condition").and_then(|v| v.as_str()).unwrap_or_default();
+            let condition = step
+                .get("condition")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
             if condition.is_empty() {
                 continue;
             }
-            let mentioned: Vec<&String> = field_names.iter().filter(|f| condition.contains(f.as_str())).collect();
+            let mentioned: Vec<&String> = field_names
+                .iter()
+                .filter(|f| condition.contains(f.as_str()))
+                .collect();
             if !mentioned.is_empty() {
-                let list = mentioned.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ");
+                let list = mentioned
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 out.push(Diagnostic {
                     severity: "info".into(),
                     code: "workflow-reference-soft".into(),
-                    message: format!("BPMN 条件引用了实体字段（{list}）— 建议通过 bindings 建立正式关联"),
+                    message: format!(
+                        "BPMN 条件引用了实体字段（{list}）— 建议通过 bindings 建立正式关联"
+                    ),
                     file: Some(wf.source.file.clone()),
                     line: None,
                     nodes: Some(vec![wf.uri.clone()]),
