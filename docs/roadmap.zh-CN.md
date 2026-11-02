@@ -1,186 +1,173 @@
 # Forma 完整路线图（v0.3 — DSL 中间层）
 
 > 架构见 [architecture.zh-CN.md](architecture.zh-CN.md) · DSL 语法见 [dsl-spec.zh-CN.md](dsl-spec.zh-CN.md)
-> 本文档回答两个问题：**接什么**（适配层完整矩阵）、**按什么顺序接**（里程碑与验收）。
-
----
 
 ## 0. 接入决策原则
 
-一个目标技术是否接入、何时接入，按三个维度打分：
+目标技术按三个维度排期：**真实业务覆盖面**（CRUD → 中后台 → 多端 → 企业级）、**LLM 生态成熟度**（模型训练数据越多，生成越可靠）、**适配层成本**（IR 到该目标的映射复杂度与复用率）。
 
-1. **真实业务覆盖面**：CRUD 管理系统 → 中后台 → 多端产品 → 企业级，逐波覆盖。
-2. **LLM 生态成熟度**：模型对该栈的训练数据越多，生成的目标代码越可靠（Rust/TS/Python/Java 是第一梯队）。
-3. **适配层成本**：IR → 该目标的映射复杂度；与已有 emitter 的复用率。
+首批目标：Rust（axum + sqlx）、Web（React + TanStack + shadcn/ui）、MySQL。
 
-**当前首批目标（用户定案）**：Rust（axum + sqlx）后端、Web（React + TanStack + shadcn/ui）、MySQL。其余按下方矩阵分波接入。
-
----
-
-## 1. 里程碑总览
+## 1. 阶段总览
 
 ```text
-Wave 1 — 端到端闭环（单栈纵深）
+Wave 1 — 端到端闭环
 M1 DSL 内核 → M2 db-mysql → M3 backend-rust → M4 web-react
-                                                │
-Wave 2 — 业务必备 + AI 闭环                     ▼
-M5 Auth 模块 → M6 语义补丁(AI 闭环) → M7 标准视图 + 工程化产物
 
-Wave 3 — 横向扩栈（同一 IR，多 emitter）
-M8 数据库: PostgreSQL / SQLite ｜ 后端: Node(NestJS/Hono) / Python(FastAPI)
-M9 前端: Vue 3 生态 ｜ 移动: Expo (React Native) ｜ GraphQL
+Wave 2 — 可视化 + 生态互通 + AI 闭环
+M5 Auth 模块 → M6 Forma Studio 可视化 → M7 生态互通(Swagger/SQL/Postman)
+→ M8 AI 语义补丁闭环
+
+Wave 3 — 工程化 + 横向扩栈
+M9 工程化产物 + 能力模块 + Studio 双向编辑
+M10 数据库/后端/前端多栈（PostgreSQL、Node、Python、Vue、Expo、GraphQL）
 
 Wave 4 — 企业级与长尾
-M10 Java(Spring Boot) / Go / .NET / PHP ｜ 原生移动(SwiftUI/Compose) ｜ 小程序
-M11 数据工程与高阶能力（搜索/队列/多租户/审计完善/数据仓库导出）
+M11 Spring/Go/.NET、原生移动、小程序、工作流运行时、支付
 ```
-
----
 
 ## 2. 适配层完整矩阵
 
-> ✅ 已实现 · 🔨 规划中（里程碑标注）· 👁 观察（有需求再排期）
-> 每个目标 = 一个 emitter crate（`forma-gen-*`），实现统一接口契约（见 §5）。
+每个目标 = 一个 emitter crate（`forma-gen-*`），实现统一接口契约（见 §6.1）。
 
 ### 2.1 数据库
 
 | 优先级 | 技术 | 里程碑 | 说明 |
 |---|---|---|---|
 | ✅ 首批 | **MySQL 8** | M2 | InnoDB/utf8mb4；DDL + 基线迁移 → IR diff 增量迁移 |
-| 🔨 P1 | **PostgreSQL** | M8 | jsonb/数组/丰富约束；与 MySQL 共享 90% 映射逻辑 |
-| 🔨 P1 | **SQLite** | M8 | 本地/嵌入式场景；复用联邦期解析经验 |
-| 👁 P2 | SQL Server / Oracle | M11 | 企业遗留系统 |
-| 👁 P2 | MongoDB | M11 | 文档模型与实体映射需专项设计 |
-| 🔨 P1 | **Redis**（非持久化目标） | M7 | 会话/缓存/限流的键设计从 DSL 派生 |
+| 🔨 P1 | **PostgreSQL** | M10 | jsonb/数组/丰富约束，与 MySQL 共享映射逻辑 |
+| 🔨 P1 | **SQLite** | M10 | 嵌入式/本地场景 |
+| 🔨 P1 | **Redis**（键设计派生） | M9 | 会话/缓存/限流 |
+| 👁 P2 | SQL Server / Oracle / MongoDB | M11 | 企业遗留 / 文档模型专项设计 |
 
 ### 2.2 后端
 
 | 优先级 | 技术 | 里程碑 | 说明 |
 |---|---|---|---|
 | ✅ 首批 | **Rust：axum + sqlx** | M3 | models / validators / routes / repositories |
-| 🔨 P1 | **Node：NestJS** | M8 | 企业 TS 后端主流；TypeORM/Prisma 二选一 |
-| 🔨 P1 | **Node：Hono** | M8 | 轻量边缘友好；复用联邦期 Hono 生成器经验 |
-| 🔨 P1 | **Python：FastAPI** | M8 | SQLAlchemy 2.0 + Pydantic（Pydantic 与规则校验天然同构） |
-| 👁 P2 | **Java：Spring Boot** | M10 | JPA/Spring Security；企业市场最大 |
-| 👁 P2 | **Go：Gin + GORM** | M10 | |
-| 👁 P2 | PHP：Laravel / .NET：ASP.NET Core | M11 | |
+| 🔨 P1 | **Node：NestJS** | M10 | TypeORM 或 Prisma |
+| 🔨 P1 | **Node：Hono** | M10 | 轻量、边缘友好 |
+| 🔨 P1 | **Python：FastAPI** | M10 | SQLAlchemy 2.0 + Pydantic（与规则校验同构） |
+| 👁 P2 | Java：Spring Boot | M11 | JPA + Spring Security |
+| 👁 P2 | Go：Gin + GORM / PHP：Laravel / .NET | M11 | |
 
-### 2.3 API 风格（与后端 emitter 正交）
+### 2.3 API 风格
 
 | 优先级 | 风格 | 里程碑 | 说明 |
 |---|---|---|---|
 | ✅ 首批 | REST | M3 | `api` 块 → REST 路由 |
-| 🔨 P1 | **OpenAPI 规范导出** | M7 | `openapi.yaml` 生成视图（生态互通） |
-| 🔨 P1 | **GraphQL** | M9 | schema + resolver 从实体/api 派生 |
-| 👁 P2 | gRPC（Protobuf 导出） | M10 | 服务间通信 |
-| 👁 P2 | tRPC | M9 | TS 全栈场景 |
+| ✅ 首批 | **OpenAPI 3.1 导出 + Swagger UI** | M7 | 生成视图 + 本地文档站 |
+| 🔨 P1 | **OpenAPI 导入** | M7 | 既有 Swagger 项目 → DSL（逆向工程） |
+| 🔨 P1 | GraphQL（schema + resolver） | M10 | |
+| 👁 P2 | gRPC（Protobuf 导出）/ tRPC | M11 | |
 
 ### 2.4 前端 Web
 
 | 优先级 | 技术 | 里程碑 | 说明 |
 |---|---|---|---|
-| ✅ 首批 | **React + TanStack Router/Query/Table + shadcn/ui + Tailwind** | M4 | 表单校验 zod（与后端同源） |
-| 🔨 P1 | **React Hook Form 适配** | M7 | 复杂表单场景；zod resolver |
-| 🔨 P1 | **Vue 3 + Vue Router + Pinia** | M9 | 组件库：Element Plus / Naive UI 二选一 |
-| 🔨 P1 | **Next.js** | M9 | React 的 SSR/全栈变体（app router） |
+| ✅ 首批 | **React + TanStack Router/Query/Table + shadcn/ui + Tailwind** | M4 | 校验 zod 与后端同源 |
+| ✅ 首批 | **i18n 资源生成**（react-i18next） | M4 | DSL 内 message → 语言包 |
+| 🔨 P1 | React Hook Form 适配 | M9 | 复杂表单 |
+| 🔨 P1 | 状态管理生成（Zustand / Pinia） | M9 | 从页面数据依赖派生 |
+| 🔨 P1 | **Vue 3 + Vue Router + Pinia + Element Plus/Naive UI** | M10 | |
+| 🔨 P1 | Next.js（SSR 变体） | M10 | |
 | 👁 P2 | SvelteKit / Angular | M11 | |
-| 🔨 P1 | 状态管理生成 | M7 | Zustand（React）/ Pinia（Vue）：从 `page` 数据依赖派生 |
-| 🔨 P0 | **i18n 生成** | M4 | DSL 内 message → react-i18next / vue-i18n 资源文件 |
-| 👁 P2 | 桌面：**Tauri**（配 Rust 后端天然）/ Electron | M10 | |
+| 👁 P2 | 桌面：Tauri / Electron | M11 | |
 
 ### 2.5 移动端
 
 | 优先级 | 技术 | 里程碑 | 说明 |
 |---|---|---|---|
-| 🔨 P1 | **Expo（React Native）** | M9 | 与 React emitter 复用度最高；同一页面原语 |
-| 👁 P2 | Flutter（Dart emitter） | M10 | 自绘 UI，组件映射独立 |
-| 👁 P2 | 原生：SwiftUI / Jetpack Compose | M11 | 高保真双 emitter |
-| 👁 P2 | **微信小程序 / uni-app** | M11 | 国内场景重要；table/form 原语可映射 |
+| 🔨 P1 | **Expo（React Native）** | M10 | 与 React emitter 复用度最高 |
+| 👁 P2 | Flutter | M11 | 独立组件映射 |
+| 👁 P2 | 原生 SwiftUI / Jetpack Compose | M11 | |
+| 👁 P2 | 微信小程序 / uni-app | M11 | 国内场景 |
 
-### 2.6 认证与安全（能力模块）
-
-| 优先级 | 能力 | 里程碑 | 说明 |
-|---|---|---|---|
-| ✅ 首批 | **内置 Auth 模块** | M5 | DSL 声明 `auth module` → 双端生成：User/Role/Session 实体、登录/注册/改密页面、JWT/session 中间件、`access` 规则落地 |
-| 🔨 P1 | OAuth2 / OIDC 接入 | M7 | 对接 Keycloak/Auth0/企业微信/飞书 |
-| 🔨 P1 | 多租户 | M9 | 实体级 `@tenant` → 行级隔离 + 查询注入 |
-| 👁 P2 | SSO / SAML | M11 | |
-
-### 2.7 能力模块（业务常见件，全部双端生成）
+### 2.6 能力模块（全部双端生成）
 
 | 优先级 | 能力 | 里程碑 | DSL 形态（草案） |
 |---|---|---|---|
-| ✅ 首批 | 文件上传 | M7 | `field Attachment` + `storage s3\|oss\|local` |
-| ✅ 首批 | 导入导出 | M8 | `export Order as csv\|xlsx` → 后端端点 + 前端按钮 |
-| 🔨 P1 | 消息通知 | M9 | `notify email\|sms\|webhook` 事件绑定 |
-| 🔨 P1 | 全文搜索 | M9 | `searchable [customerEmail, note]` → Meilisearch/ES |
-| 🔨 P1 | 定时任务 | M9 | `job { cron "…" { … } }` |
-| 🔨 P1 | 实时推送 | M9 | `live OrderList` → WebSocket/SSE + 前端订阅 |
-| ✅ 首批 | 审计日志 | M7 | `audit { … }`（已在 DSL 草案） |
-| 👁 P2 | 工作流运行时 | M11 | 长事务/补偿（BPMN 经验迁移） |
-| 👁 P2 | 支付 | M11 | Stripe/微信支付适配 |
+| ✅ 首批 | **Auth 模块**（用户/角色/会话 + 登录注册页 + JWT/session 中间件） | M5 | `auth module { provider jwt }` |
+| ✅ 首批 | 审计日志 | M7 | `audit { action "…" }` |
+| 🔨 P1 | 文件上传 | M9 | `field Attachment` + `storage s3\|oss\|local` |
+| 🔨 P1 | 导入导出 | M9 | `export Order as csv\|xlsx` |
+| 🔨 P1 | 消息通知 | M10 | `notify email\|sms\|webhook` |
+| 🔨 P1 | 全文搜索 | M10 | `searchable [...]` → Meilisearch/ES |
+| 🔨 P1 | 定时任务 | M10 | `job { cron "…" { … } }` |
+| 🔨 P1 | 实时推送 | M10 | `live OrderList` → WebSocket/SSE |
+| 🔨 P1 | 多租户 | M10 | `@tenant` 行级隔离 |
+| 👁 P2 | 工作流运行时 / 支付 | M11 | |
 
-### 2.8 工程化与质量
+### 2.7 工程化
 
 | 优先级 | 项 | 里程碑 |
 |---|---|---|
-| ✅ 首批 | 生成代码可编译验证（Rust `cargo check`、TS `tsc`） | M3/M4 |
-| ✅ 首批 | CI 模板生成（每个目标工程自带 lint/test/build） | M4 |
-| 🔨 P1 | **Docker / docker-compose 产物** | M7 |
-| 🔨 P1 | K8s / Helm / Terraform 产物 | M9 |
-| 🔨 P1 | OpenTelemetry + 结构化日志注入 | M9 |
-| 👁 P2 | e2e 测试生成（Playwright：页面原语 → 选择器稳定） | M10 |
-| 👁 P2 | 性能基准与 Token 经济学 Benchmark 报告 | M10 |
+| ✅ 首批 | 生成代码可编译验证（cargo check / tsc） | M3 / M4 |
+| ✅ 首批 | 各目标工程自带 CI 模板（lint/test/build） | M4 |
+| 🔨 P1 | Docker / docker-compose 产物 | M9 |
+| 🔨 P1 | K8s / Helm / Terraform | M11 |
+| 🔨 P1 | OpenTelemetry + 结构化日志 | M10 |
+| 👁 P2 | Playwright e2e 生成 / Token Benchmark | M11 |
 
----
+## 3. 可视化路线（Forma Studio）
 
-## 3. 里程碑详情与验收标准
+可视化与 DSL 同级：**写 `.fm` 必须能被看见**。Studio 是审阅面的图形投影，分三阶段：
 
-### Wave 1 — 端到端闭环
+**M6 — Studio v1（实时只读预览）**
+- `forma studio` 本地 Web 服务；DSL 变更刷新即见
+- 实体关系图（ER）：实体/字段/关系/索引，节点点击定位 DSL 源行
+- 页面原型：`table/form/detail` 用真实 shadcn 组件渲染（与 M4 emitter 同源组件，非手绘 mockup）
+- API 文档视图：Swagger UI 风格浏览（操作/请求/响应/权限）
+- 规则矩阵：字段校验/守卫/权限按实体×操作一览
+- 验收：仅通过 Studio 即可完整理解一个陌生项目的现状
 
-**M1 DSL 内核**（进行中）
-- `forma-syntax`：Lexer + Parser + AST（span 保留）
-- `forma-ir`：AST → 语义图 + 类型检查 + 规则表达式检查
-- `forma check`：全量诊断（行号 + did-you-mean）
-- 验收：`examples/order-management/forma/*.fm` 全量通过；错误诊断样例 20+ 个
+**M9 — Studio v2（双向编辑）**
+- ER 图上增删字段/关系 → 写回 `.fm`（等价于一次语义补丁，走同一校验管线）
+- 页面原型上调整列/控件 → 写回 `page` 块
+- 诊断点击跳转源码
 
-**M2 db-mysql 适配层**
-- MySQL 8 DDL emitter（类型映射见架构 §3.1）+ 基线迁移
-- 验收：生成的 DDL 在 MySQL 8 直接执行成功；第二次 `forma build` 零变更
+**M11 — Studio v3（协作）**
+- 多人实时协作、变更评审视图（DSL diff 的图形化）
 
-**M3 backend-rust 适配层**
-- 实体 → struct/serde；枚举 → Rust enum；规则 → 校验函数；`api` → axum 路由 + sqlx 仓库
-- 验收：`cargo build && cargo test` 通过；CRUD 端到端（curl 可跑）；规则在 API 层生效（400 + i18n 消息）
+## 4. 生态互通路线（与历史优质项目结合）
 
-**M4 web-react 适配层**
-- TanStack Router 路由树 + Query hooks + shadcn 页面 + zod
-- 验收：`pnpm dev` 跑通列表（过滤/搜索/分页）、创建/编辑表单（前端校验即时反馈）、详情；`tsc` 零错误
+Forma 是生态的枢纽，不孤立。互通分导出与导入两个方向，均为生成视图：
 
-### Wave 2 — 业务必备 + AI 闭环
+| 方向 | 项目 | 里程碑 | 内容 |
+|---|---|---|---|
+| 导出 | **OpenAPI 3.1 + Swagger UI** | M7 | `api` 块 → 规范文档 + 本地文档站 |
+| 导出 | **Postman Collection** | M7 | API 调试即用 |
+| 导出 | **Mermaid**（ER/流程图） | M7 | 文档即代码 |
+| 导出 | JSON Schema / DBML | M7 / M10 | 契约与建模互通 |
+| 导入 | **OpenAPI** → 实体 + API 骨架 | M7 | 既有 Swagger 项目接入 Forma |
+| 导入 | **SQL DDL**（MySQL/PG）→ 实体 | M7 | 数据库逆向工程 |
+| 导入 | **Prisma schema** → 实体 | M10 | |
+| 导入 | JSON Schema → 实体 | M10 | |
+| 双向 | SQL 迁移对接（Flyway/Liquibase/golang-migrate 目录约定） | M9 | 产物落进既有迁移体系 |
 
-**M5 Auth 模块**：`auth module` DSL → 双端生成（实体 + 中间件 + 登录注册页 + access 规则落地）。验收：登录 → 带 token CRUD → 无权限操作被拒（后端 403 + 前端按钮隐藏）。
+验收（M7）：把一个既有 Swagger + MySQL 项目导入为 `.fm`，再导出 OpenAPI 与 DDL，语义等价。
 
-**M6 语义补丁（AI 闭环）**：AST 级 patch（add-entity-field / rename / add-rule / add-page…）→ 影响闭包 → 全目标增量重编；MCP 四工具切至 DSL。验收：**「Order 加付款状态」一条补丁，MySQL + Rust + React 三处同步 + 测试绿，全程 AI 不接触目标代码**。
+## 5. 里程碑详情与验收
 
-**M7 标准视图 + 工程化**：OpenAPI 导出、Docker 产物、上传/导出/审计模块、RHF 适配、Zustand 生成、Redis 键设计。
+**M1 DSL 内核**（进行中）：lexer/parser/AST（span 保留）、AST → 语义图、类型与规则表达式检查、`forma check` 诊断（行号 + did-you-mean）。验收：`examples/order-management/forma/*.fm` 全量通过；诊断样例 20+。
 
-### Wave 3 — 横向扩栈
+**M2 db-mysql**：DDL emitter + 基线迁移；IR diff → `ALTER TABLE`。验收：DDL 在 MySQL 8 直接执行；连续两次 `forma build` 零变更。
 
-**M8**：PostgreSQL / SQLite / NestJS / Hono / FastAPI / 导入导出。
-**M9**：Vue 3 生态 / Next.js / GraphQL / Expo / 多租户 / 通知 / 搜索 / 定时任务 / 实时 / K8s 产物 / OTel。
+**M3 backend-rust**：struct/serde、规则校验函数、axum 路由 + sqlx 仓库。验收：`cargo build && cargo test` 通过；CRUD 端到端；规则生效（400 + i18n 消息）。
 
-### Wave 4 — 企业级与长尾
+**M4 web-react**：TanStack Router/Query、shadcn 页面、zod、i18n 资源。验收：`pnpm dev` 跑通列表（过滤/搜索/分页）、表单（校验即时反馈）、详情；`tsc` 零错误。
 
-**M10**：Spring Boot / Go / .NET / Tauri / Flutter / 原生移动 / Playwright e2e / Benchmark。
-**M11**：SQL Server / Oracle / 小程序 / SSO / 工作流运行时 / 支付 / MongoDB。
+**M5 Auth 模块**：DSL `auth module` → 双端生成。验收：登录 → 带 token CRUD → 无权限被拒（后端 403 + 前端按钮隐藏）。
 
----
+**M6 Studio v1 / M7 生态互通 / M8 AI 语义补丁闭环**：见 §3、§4；AI 闭环验收——「Order 加付款状态」一条补丁，MySQL + Rust + React 三处同步 + 测试绿，AI 全程不接触目标代码。
 
-## 4. 治理
+**M9 工程化 + Studio v2**：Docker、上传/导出/审计、RHF/Zustand、迁移对接、Studio 双向编辑。
 
-### 4.1 适配层接口契约
+**M10 横向扩栈 / M11 企业级**：见 §2 矩阵标注。
 
-每个 emitter crate 实现：
+## 6. 治理
+
+### 6.1 适配层接口契约
 
 ```rust
 trait Emitter {
@@ -190,28 +177,23 @@ trait Emitter {
 }
 ```
 
-约束：确定性输出、`@generated` 头、参与增量缓存、产物内不回读业务语义（一切以 IR 为准）。
+约束：确定性输出、`@generated` 头、参与增量缓存、产物内不回读业务语义。
 
-### 4.2 DSL 版本演进
+### 6.2 DSL 版本演进
 
-- `app.version` + DSL 语法版本双轨；语法变更加 `forma migrate`（AST 级重写，非正则）。
-- 弃用周期：标记 → 下一里程碑报 warning → 再下一里程碑移除。
-- emitter 按 `dsl-spec` 的次版本兼容：minor 新增构造不破坏旧 emitter（未识别构造显式报错，不静默跳过）。
+`app.version` 与 DSL 语法版本双轨；语法变更加 `forma migrate`（AST 级重写）；弃用周期 = 标记 → 下一里程碑 warning → 再下一里程碑移除。emitter 遇到未识别构造显式报错，不静默跳过。
 
-### 4.3 生成代码升级路径
+### 6.3 生成代码升级路径
 
-生成物整体重生成（不手改）；自定义逻辑通过**扩展点**承接：`extension` 块引用手写代码（后端 handler 钩子、前端组件覆写），升级时扩展点文件不动。
+生成物整体重生成；自定义逻辑通过 `extension` 扩展点承接（后端 handler 钩子、前端组件覆写），升级时扩展点文件不动。
 
-### 4.4 明确不做（Non-goals）
+### 6.4 明确不做
 
-- ❌ 运行时低代码引擎（Forma 是编译期方案，产物是普通代码，脱离 Forma 也能跑）
-- ❌ 在 DSL 里表达像素级 UI（页面原语之上由目标生态自治）
-- ❌ 通用编程语言（算法/复杂逻辑走 extension 手写）
-- ❌ 运行时解释执行 DSL（解释器形态仅限规则表达式在特殊场景的候选实现）
+- 运行时低代码引擎（产物是普通代码，脱离 Forma 可运行）
+- 像素级 UI 表达（页面原语之上由目标生态自治）
+- 通用编程语言（算法/复杂逻辑走 extension）
+- 运行时解释执行 DSL（例外：规则表达式在特殊场景的候选实现）
 
----
+## 7. 遗留代码处置
 
-## 5. 遗留代码处置
-
-- `crates/forma`（v0.2 联邦引擎，17 测试绿）：`graph / patch / engine` 模块被 DSL 编译器复用；SQL/JSON Schema/OpenAPI/JSON Forms/BPMN 适配器 → M7 改造为标准导出视图；Hono 生成器经验并入 Node emitter。
-- `docs/history/`：历史决策归档，只读。
+`crates/forma`（v0.2 联邦引擎，17 测试绿）：`graph / patch / engine` 模块被 DSL 编译器复用；SQL/OpenAPI/JSON Schema 适配器 → M7 改造为导入器与导出视图；Hono 生成器经验并入 Node emitter。`docs/history/` 只读归档。

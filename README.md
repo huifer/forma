@@ -103,9 +103,9 @@ No axum, no React, no SQL in the DSL — pages are target-agnostic primitives (`
 **v0.3 (current)** — DSL middle-layer architecture finalized; DSL spec v0.1 published. The full **adapter matrix** — databases (MySQL → PostgreSQL/SQLite), backends (Rust → NestJS/Hono/FastAPI → Spring/Go/.NET), web (React → Vue/Next.js), mobile (Expo → Flutter/native/mini-programs), API styles (REST → OpenAPI/GraphQL/gRPC), and capability modules (auth, uploads, i18n, search, jobs, realtime, audit, multi-tenant) — is mapped in waves:
 
 - **Wave 1 (M1–M4)** end-to-end loop: DSL kernel → MySQL → Rust backend → React web
-- **Wave 2 (M5–M7)** auth module · AI closed loop (semantic patch) · OpenAPI/Docker/export views
-- **Wave 3 (M8–M9)** breadth: PostgreSQL/SQLite, Node/Python backends, Vue/Next.js, Expo, GraphQL, multi-tenant, realtime
-- **Wave 4 (M10–M11)** enterprise: Spring/Go/.NET, native mobile, mini-programs, workflow runtime
+- **Wave 2 (M5–M8)** auth module · **Studio v1 visualization** · **ecosystem interop** (OpenAPI/SQL/Postman both ways) · AI semantic-patch closed loop
+- **Wave 3 (M9–M10)** engineering (Docker/uploads/exports/audit) + Studio two-way editing · breadth: PostgreSQL/SQLite, Node/Python backends, Vue/Next.js, Expo, GraphQL, multi-tenant, realtime
+- **Wave 4 (M11+)** enterprise: Spring/Go/.NET, native mobile, mini-programs, workflow runtime, payments
 
 The repository currently contains a working **standards-federation prototype** (v0.2, Rust: adapters + doctor + incremental build + transactional patches + MCP, 17 tests green). Its semantic-graph, patch and build engines are reused by the DSL compiler; the standard adapters become export views (M7). History: [docs/history/](docs/history/README.md).
 
