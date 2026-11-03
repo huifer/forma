@@ -36,7 +36,7 @@ entity Student {
 entity Course {
   id        Uuid      @id @default(uuid)
   school    School    @required
-  title     String(120) @required
+  title     String(120) @required  /// 课程名称
   capacity  Int       @required @min(1) @max(500)
   createdAt Timestamp @default(now) @readonly
 
@@ -52,6 +52,7 @@ entity Enrollment {
   createdAt  Timestamp        @default(now) @readonly
   note       Text?
 
+  index [status]
   index [student, course]
   unique [student, course]
 }

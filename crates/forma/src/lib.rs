@@ -9,6 +9,7 @@ pub mod engine;
 pub mod generators;
 pub mod graph;
 pub mod identity;
+pub mod lint;
 pub mod manifest;
 pub mod mcp;
 pub mod patch;

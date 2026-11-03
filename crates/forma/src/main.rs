@@ -56,6 +56,39 @@ fn run(argv: &[String]) -> Result<i32> {
 
     match command {
         "check" => Ok(cmd_check(project_dir(0))),
+        "lint" => {
+            let dir = project_dir(0);
+            let manifest = forma::manifest::load_manifest(&dir)?;
+            let source = manifest.manifest.source.clone().unwrap_or_default();
+            let (program, diagnostics) = forma::dsl::load_program(&dir, &source)?;
+            let parse_errors = diagnostics.iter().filter(|d| d.severity == "error").count();
+            if parse_errors > 0 {
+                for d in diagnostics.iter().filter(|d| d.severity == "error") {
+                    eprintln!("{}", forma::validate::format_diagnostic(d));
+                }
+                eprintln!("✗ fix DSL errors before linting");
+                return Ok(1);
+            }
+            let lint_diags = forma::lint::run_lint(&program, None);
+            let by_sev = |s: &str| lint_diags.iter().filter(|d| d.severity == s).count();
+            for d in &lint_diags {
+                let entity = d.entity.as_deref().unwrap_or("");
+                let field = d.field.as_deref().map(|f| format!(" .{f}")).unwrap_or_default();
+                println!(
+                    "[{: >7}] {: <44} {}{}  ── {}",
+                    d.severity, d.rule, entity, field, d.message
+                );
+                if let Some(h) = &d.fix_hint {
+                    println!("           └─ 💡 {h}");
+                }
+            }
+            println!(
+                "\n{} errors, {} warnings, {} info — {} rule(s) checked",
+                by_sev("error"), by_sev("warning"), by_sev("info"),
+                forma::lint::builtin_rules().len()
+            );
+            Ok(if by_sev("error") > 0 { 1 } else { 0 })
+        }
         "diagrams" => {
             let dir = project_dir(0);
             let manifest = forma::manifest::load_manifest(&dir)?;
