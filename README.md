@@ -15,7 +15,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org/)
-[![Tests](https://img.shields.io/badge/tests-48%20passing-brightgreen.svg)](#development)
+[![Tests](https://img.shields.io/badge/tests-60%20passing-brightgreen.svg)](#development)
 [![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet.svg)](#ai-integration-mcp)
 [![Status](https://img.shields.io/badge/status-v0.3%20design%20%2B%20M1-blue.svg)](docs/roadmap.zh-CN.md)
 
@@ -93,10 +93,50 @@ No axum, no React, no SQL in the DSL — pages are target-agnostic primitives (`
 
 | Target | Stack (now) | Generated output |
 |---|---|---|
-| Database | **MySQL 8** (InnoDB, utf8mb4) | DDL + migrations |
+| Database | **MySQL 8** (InnoDB, utf8mb4) | immutable baseline + versioned upgrade/rollback migrations |
 | Backend | **Rust** (axum + sqlx) | models, validators, routes, repositories |
 | Web | **React + TanStack Router/Query + shadcn/ui** | typed routes, query hooks, forms, zod schemas |
 | Mobile | iOS / Android | planned (same page primitives → native or Expo) |
+
+## Versioned migrations (multi-version)
+
+Schema evolution works like a real project: the DSL is the single source of truth, and every
+change compiles into a numbered **upgrade + rollback pair**, appended to a version ledger.
+
+```text
+forma build  (v0.1.0)   →  0001_init.sql                    # immutable baseline (created once)
+forma build  (v0.2.0)   →  0002_upgrade.sql + 0002_rollback.sql   # upgrade + rollback pair
+forma build  (v0.3.0)   →  0003_upgrade.sql + 0003_rollback.sql
+                        →  MIGRATIONS.md                    # visible SQL trail per version
+```
+
+Every migration pair is **MySQL-order-safe** (drop constraints → add/modify columns → add
+constraints → drop columns) and uses **content-derived index names** (`idx_{table}_{cols}`),
+so replaying a long chain never hits duplicate-key or missing-column errors.
+
+The replay simulator (`emit/replay.rs`) executes the generated SQL subset with real MySQL
+semantics — no database needed — to prove the guarantees below.
+
+The CLI manages the chain end-to-end:
+
+```bash
+forma migrate [dir] status            # applied vs pending per version
+forma migrate [dir] history           # the full version trail
+forma migrate [dir] up [--to v]       # step forward (to a target version); --apply to mark
+forma migrate [dir] down [--steps N] [--to v]   # roll back N steps / to a version
+forma migrate [dir] verify            # chain integrity + forward-replay consistency (CI-ready)
+```
+
+`verify` checks: continuous numbering · every upgrade paired with a rollback · ledger hashes
+match file contents (tamper detection) · replaying `0001…000N` equals the current DSL schema
+(baseline-drift detection). Exit code 1 on any drift.
+
+Live example: [`examples/school/db/migrations/`](examples/school/db/migrations/) — a real
+three-version chain: v0.1.0 (CRUD baseline) → v0.2.0 (election feature: 3 new tables + FKs)
+→ v0.3.0 (add `phone`/`remark`, widen `title`, add voter index), with `MIGRATIONS.md`
+showing every version's SQL. Versioned DSL snapshots live in
+`examples/school/v1/` and `v2/`. Applied-state lives in `.forma/migrations.json`
+(git-ignored, per-machine) while the migration SQL itself is committed.
 
 ## Status & roadmap
 
@@ -114,8 +154,10 @@ Full roadmap with acceptance criteria per milestone: [docs/roadmap.zh-CN.md](doc
 ## Development (current prototype)
 
 ```bash
-cargo test            # 17 integration tests
+cargo test            # 60 integration tests
 cargo build --release
+cargo run -- migrate examples/school status      # database version chain
+cargo run -- migrate examples/school verify      # chain integrity + replay check
 cargo run -- doctor examples/order-management    # federation-era demo commands
 ```
 

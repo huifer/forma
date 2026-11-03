@@ -151,7 +151,12 @@ Forma 是生态的枢纽，不孤立。互通分导出与导入两个方向，�
 
 **M1 DSL 内核**（✅ 已完成）：lexer/parser/AST（span 保留）、AST → 语义图、类型与规则表达式检查、`forma check` 诊断（行号 + did-you-mean）。验收：`examples/school/forma/app.fm`（学生-学校-报名-上课，4 实体/3 关系/8 页面）全量通过。
 
-**M2 db-mysql**（✅ 已完成）：DDL emitter + 基线迁移（外键/索引/唯一约束/可空）。验收：DDL 在 MySQL 8 直接执行；连续两次 `forma build` 零变更。
+**M2 db-mysql**（✅ 已完成）：DDL emitter + 版本化迁移引擎（外键/索引/唯一约束/可空；
+不可变基线 + upgrade/rollback 配对迁移 + MySQL 安全顺序 + 内容派生索引名 + 版本台账
+MIGRATIONS.md + SQL 重放模拟器）。验收：DDL 在 MySQL 8 直接执行；DSL 逐版本演进产出成对
+迁移（回滚为逆序反向操作）；`forma migrate {status|history|verify|up|down} [--to] [--steps]`
+全生命周期可用；`verify` 保证链完整 + 前向重放 == 当前 schema（CI 可接）；三版本示例链
+（school v0.1.0→v0.2.0→v0.3.0）重放往返零漂移；连续两次 `forma build` 零变更。
 
 **M3 backend-rust**（✅ 已完成）：struct/serde、规则校验函数（含守卫）、axum 路由 + sqlx 仓库（关系 JOIN 列表）。验收：`cargo build` 通过（school-backend 二进制）；CRUD 端到端；规则生效（400 + i18n 消息）。
 

@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Versioned migration engine（多版本迁移）** — schema evolution like a real project:
+  - Structured diff → paired `{index:04}_upgrade.sql` + `{index:04}_rollback.sql` per change;
+    rollback is the inverse sequence (add column ↔ drop column, create table ↔ drop table,
+    add index/fk ↔ drop index/fk, modify ↔ modify-back).
+  - MySQL-safe op ordering per table (drop constraints → add/modify columns → add constraints
+    → drop columns) and content-derived index names (`idx_{table}_{cols}`) — long chains
+    replay without duplicate-key or missing-column errors.
+  - Immutable baseline: `0001_init.sql` is written once by gen-mysql and never rewritten;
+    every later DSL change becomes an incremental migration.
+  - Version ledger `.forma/migrations.json` (per-migration version, changes, up/down hashes,
+    applied flag) + generated `MIGRATIONS.md` making the whole SQL trail visible.
+  - CLI `forma migrate {status|history|verify|up|down} [--sql] [--apply] [--to v] [--steps N]`:
+    step to a target version, roll back N steps, and `verify` the chain (numbering, pairing,
+    hash tamper-detection, forward-replay == current DSL schema; CI-ready exit codes).
+  - SQL replay simulator (`emit/replay.rs`): executes the generated SQL subset with real
+    MySQL semantics — no database needed — proving forward-replay to latest and
+    backward-rollback to baseline.
+  - School example now ships a committed **three-version chain**:
+    `examples/school/db/migrations/` — v0.1.0 (CRUD baseline) → v0.2.0 (election feature)
+    → v0.3.0 (phone/remark/title-widen/voter-index). Versioned DSL snapshots in `v1/`, `v2/`.
+  - manifest: `targets.db` / `targets.web` accepted as aliases of `database` / `frontend`.
+
+### Fixed
+- `ADD COLUMN` on a `@unique` field dropped the unique constraint (new columns skipped the
+  column-level unique diff) — now emits a named `uq_{table}_{col}` key, consistent between
+  CREATE and ALTER paths.
+- Positional index names (`idx_{table}_{i}`) collided across versions (baseline
+  `idx_enrollments_0 (student_id, course_id)` vs upgrade `idx_enrollments_0 (status)` →
+  real MySQL "Duplicate key name") — replaced with content-derived names.
+- `DROP COLUMN` was emitted before its dependent `DROP INDEX` — MySQL auto-drops the index,
+  making the explicit drop fail; constraints now drop first.
+
 ### Changed (design)
 - **Architecture v0.3 — DSL middle layer.** Forma is repositioned: one DSL is the single
   source of truth for data, rules, API and pages; adapter layers compile it to MySQL,
@@ -19,7 +52,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Planned
 - DMN adapter (decision tables → rule execution)
 - AsyncAPI adapter (event contracts → subscriptions)
-- DDL diff → incremental `ALTER TABLE` migrations
 - `forma patch --dry-run` (edit-plan preview without writing)
 - Forma Studio (per-standard visual editors)
 
