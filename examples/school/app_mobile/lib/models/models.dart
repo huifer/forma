@@ -642,3 +642,16 @@ class VoteRecordInput {
   };
 }
 
+/// 命令 EnrollmentReject 的输入体。
+class EnrollmentRejectInput {
+  final String reason;
+
+  const EnrollmentRejectInput({
+    required this.reason,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'reason': reason,
+  };
+}
+

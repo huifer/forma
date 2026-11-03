@@ -151,7 +151,91 @@ api Enrollments {
   }
 }
 
+// ── 命令类操作（真实业务的状态机动作） ──
+// 报名审批流：pending → active（批准）/ cancelled（驳回）
+// pre 在后端权威执行：状态不满足 → 409 + 业务文案
+
+api EnrollmentApprove {
+  POST "/enrollments/{id}/approve"
+  label { zh "批准" en "Approve" }
+  pre  { status == "pending" }
+  message { zh "只有待确认的报名可以批准" en "Only pending enrollments can be approved" }
+  effect {
+    set Enrollment.status = active
+  }
+  audit { action "enrollment.approve" }
+}
+
+api EnrollmentReject {
+  POST "/enrollments/{id}/reject"
+  label { zh "驳回" en "Reject" }
+  input {
+    reason Text
+  }
+  pre  { status == "pending" }
+  message { zh "只有待确认的报名可以驳回" en "Only pending enrollments can be rejected" }
+  effect {
+    set Enrollment.status = cancelled
+    set Enrollment.note = input.reason
+  }
+  audit { action "enrollment.reject" }
+}
+
 // ── 页面层（目标无关原语 → shadcn/ui） ──
+
+// ── 可视化层（Chart IR → ECharts option + React runtime，RFC-0001）──
+
+// 课程容量对比：分类维度（课程名）+ 数值（容量）
+chart CourseCapacity {
+  type  bar
+  title { zh "课程容量对比" en "Course capacity" }
+
+  source Courses.list
+
+  encoding {
+    x { field title    type nominal }
+    y { field capacity type quantitative format integer }
+  }
+
+  axis {
+    x { label "课程" }
+    y { label "容量" format integer }
+  }
+
+  tooltip { enabled true }
+  legend  { enabled false }
+}
+
+// 每日报名趋势：时间分桶 + 计数聚合 + 状态系列
+chart EnrollmentTrend {
+  type  line
+  title { zh "每日报名趋势" en "Daily enrollments" }
+
+  source Enrollments.list
+
+  encoding {
+    x      { field enrolledAt type temporal format datetime }
+    y      { field value       type quantitative format integer }
+    series { field status      type nominal }
+  }
+
+  transform {
+    bucket    { field enrolledAt by day }
+    aggregate { op count groupBy [enrolledAt, status] }
+    sort      { by enrolledAt desc }
+    limit     30
+  }
+
+  axis {
+    x { label "报名时间" type datetime }
+    y { label "报名数" format integer }
+  }
+
+  tooltip     { enabled true }
+  legend      { enabled true }
+  interaction { zoom true }
+  appearance  { smooth true showSymbol false }
+}
 
 page SchoolList {
   route "/schools"
@@ -342,4 +426,16 @@ page CandidateEdit {
     }
     submit create → Candidates.create redirect "/elections"
   }
+}
+
+page CourseCapacityPage {
+  route "/courses/capacity"
+  title { zh "课程容量" en "Course capacity" }
+  chart CourseCapacity
+}
+
+page EnrollmentTrendPage {
+  route "/enrollments/trend"
+  title { zh "报名趋势" en "Enrollment trend" }
+  chart EnrollmentTrend
 }

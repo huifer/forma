@@ -13,7 +13,7 @@ Usage:
   forma graph [dir]          Print semantic graph (--json | --export <file>)
   forma build [dir]          Incremental build (--force)
   forma seed [dir]           生成确定性案例数据（db/seed/*.sql + fixtures/*.json）
-  forma migrate [dir]        数据库迁移：status/history/verify/up/down [--sql] [--apply] [--to v] [--steps N]
+  forma migrate [dir]        数据库迁移：status/history/verify/up/down/risk [--sql] [--apply] [--to v] [--steps N]
   forma patch [dir] <file>   Apply a semantic patch (transactional)
   forma mcp [dir]            Start MCP stdio server (for Codex / Claude Code / Pi)
   forma --help | --version
@@ -518,6 +518,32 @@ fn cmd_migrate(
                 }
                 1
             }
+        }
+        "risk" => {
+            let source = manifest.manifest.source.clone().unwrap_or_default();
+            let (program, diagnostics) = match forma::dsl::load_program(project_dir, &source) {
+                Ok(v) => v,
+                Err(err) => {
+                    eprintln!("✗ {err:#}");
+                    return 1;
+                }
+            };
+            let errors = diagnostics.iter().filter(|d| d.severity == "error").count();
+            if errors > 0 {
+                eprintln!("✗ DSL 有 {errors} 个错误，先修复再评估迁移风险");
+                return 1;
+            }
+            let ops = match forma::emit::pending_migration_ops(project_dir, &program) {
+                Ok(v) => v,
+                Err(err) => {
+                    eprintln!("✗ {err:#}");
+                    return 1;
+                }
+            };
+            for l in forma::emit::migration_risk_lines(&ops) {
+                println!("{l}");
+            }
+            0
         }
         "up" => {
             let pending = match forma::emit::migration_up(project_dir, &out_dir, apply, target) {

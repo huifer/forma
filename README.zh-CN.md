@@ -13,6 +13,8 @@
 
 **Forma 是一层 DSL 中间层：一套 DSL 描述前端、后端、数据库与规则，适配层（编译器）把它变成各平台的完整代码。**
 
+<img src="docs/og-image.png" alt="Forma 编译器工作流：AI Agent 写 app.fm → Forma Compile → MySQL / Rust / React / OpenAPI / Diagrams" width="880">
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org/)
 [![Tests](https://img.shields.io/badge/tests-92%20passing-brightgreen.svg)](#开发)
@@ -46,8 +48,13 @@ AI 只写 DSL（纯语义，约占传统方式 1% 的 Token）
 **一套 DSL 是数据、规则、API、页面的唯一事实来源。更新 DSL → 执行编译器 → 得到新代码**——所有平台同步。规则是一等公民：DSL 里写一次，编译为**后端权威校验（Rust）**与**同源前端校验（zod）**。
 
 > 一句话说：**AI 成为意图表达者，适配层成为打字员**——确定性的、增量的、免费的。
+>
+> Forma 的定位是 **AI-Native Specification Compiler（面向 AI 的规格编译器）**：AI 生产软件规格，
+> Forma 把规格编译为确定性、可验证、可审计的工程产物。它的差异化不是「生成更多语言」，
+> 而是「安全地改变一个真实的软件系统」——见 [验证体系](docs/verification.zh-CN.md) 与
+> [Agent 工作流](docs/agent-workflow.zh-CN.md)。
 
-深入阅读：[设计理念](docs/philosophy.zh-CN.md) · [架构蓝图 v0.3](docs/architecture.zh-CN.md) · [DSL 语言规范](docs/dsl-spec.zh-CN.md)
+深入阅读：[设计理念](docs/philosophy.zh-CN.md) · [架构蓝图 v0.3](docs/architecture.zh-CN.md) · [DSL 语言规范](docs/dsl-spec.zh-CN.md) · [验证体系（L1–L5）](docs/verification.zh-CN.md) · [迁移安全](docs/migration-safety.zh-CN.md) · [Agent 工作流](docs/agent-workflow.zh-CN.md) · [近期里程碑](docs/next-milestone.zh-CN.md)
 
 ## 一个文件看懂 DSL
 
@@ -125,6 +132,7 @@ forma migrate [dir] history           # 完整版本历史
 forma migrate [dir] up [--to v]       # 前进到指定版本；--apply 标记已应用
 forma migrate [dir] down [--steps N] [--to v]   # 回滚 N 步 / 回滚到目标版本之上
 forma migrate [dir] verify            # 链完整性 + 前向重放一致性（可直接进 CI）
+forma migrate [dir] risk             # 按破坏性给待执行变更分级（Low/Medium/High/Extreme）
 ```
 
 `verify` 检查：编号连续 · 每个升级都有配对回滚 · 台账哈希与文件一致（篡改检测）·

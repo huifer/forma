@@ -79,8 +79,8 @@ fn mcp_graph_understands_dsl_projects() {
     assert_eq!(summary["entityCount"], 7, "{graph}");
     assert_eq!(summary["enums"].as_array().unwrap().len(), 2);
     assert_eq!(summary["apis"].as_array().unwrap().len(), 7);
-    assert_eq!(summary["pages"].as_array().unwrap().len(), 12);
-    // 实体带表名与关系字段信息
+    assert_eq!(summary["pages"].as_array().unwrap().len(), 14); // 12 管理 + 2 图表页
+                                                                // 实体带表名与关系字段信息
     let students = summary["entities"]
         .as_array()
         .unwrap()
@@ -110,7 +110,7 @@ fn mcp_check_reports_diagnostics_and_lint() {
 fn mcp_build_matches_cli_pipeline() {
     let dir = school_dir();
     let build = call_tool(&dir, "forma_build", &args()).unwrap();
-    assert_eq!(build["totalFiles"], 77);
+    assert_eq!(build["totalFiles"], 89); // +audit.rs（命令）+ 2 图表页（flutter）+ viz 模板 5 + school 图表 2? 按实际
     let steps: Vec<&str> = build["steps"]
         .as_array()
         .unwrap()
@@ -123,6 +123,7 @@ fn mcp_build_matches_cli_pipeline() {
             "db-mysql",
             "backend-rust",
             "web-react",
+            "viz-web",
             "openapi",
             "diagrams",
             "migrate",

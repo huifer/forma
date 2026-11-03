@@ -199,6 +199,13 @@ trait Emitter {
 - 通用编程语言（算法/复杂逻辑走 extension）
 - 运行时解释执行 DSL（例外：规则表达式在特殊场景的候选实现）
 
+### 6.5 当前近程重点（Reliability & Verification）
+
+下一阶段不急于扩展目标技术栈，而先把「可信赖地生成」做扎实：分层验证（L1–L5，见
+[docs/verification.zh-CN.md](verification.zh-CN.md)）、迁移风险分级（[docs/migration-safety.zh-CN.md](migration-safety.zh-CN.md)）、
+Agent 原生工作流（[docs/agent-workflow.zh-CN.md](agent-workflow.zh-CN.md)）。具体任务清单与状态见
+[docs/next-milestone.zh-CN.md](next-milestone.zh-CN.md)（F-001…F-008）。
+
 ## 7. 遗留代码处置
 
 `crates/forma`（v0.2 联邦引擎，17 测试绿）：`graph / patch / engine` 模块被 DSL 编译器复用；SQL/OpenAPI/JSON Schema 适配器 → M7 改造为导入器与导出视图；Hono 生成器经验并入 Node emitter。`docs/history/` 只读归档。

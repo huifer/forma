@@ -5,9 +5,10 @@ pub mod lexer;
 pub mod parser;
 
 pub use parser::{
-    ApiDecl, Attr, BinOp, CheckRule, DetailCfg, EntityDecl, EnumDecl, Expr, FieldConstraint,
-    FieldDecl, FieldRule, FormCfg, FormFieldCfg, GuardDecl, ListCfg, Message, PageBody, PageDecl,
-    Program, TableCfg,
+    ApiDecl, Attr, BinOp, ChannelDecl, ChartDecl, ChartPageCfg, CheckRule, CommandDecl,
+    CommandInput, DetailCfg, Effect, EffectValue, EncodingDecl, EntityDecl, EnumDecl, Expr,
+    FieldConstraint, FieldDecl, FieldRule, FormCfg, FormFieldCfg, GuardDecl, ListCfg, Message,
+    PageBody, PageDecl, Program, TableCfg, TransformDecl,
 };
 
 use crate::validate::Diagnostic;
@@ -46,6 +47,8 @@ pub fn load_program(
         entities: Vec::new(),
         rules: Vec::new(),
         apis: Vec::new(),
+        commands: Vec::new(),
+        charts: Vec::new(),
         pages: Vec::new(),
     };
     let mut diagnostics = Vec::new();
@@ -131,6 +134,20 @@ fn merge_program(
         }
     }
     program.rules.extend(part.rules);
+    for c in part.commands {
+        if program.commands.iter().any(|x| x.name == c.name) {
+            diagnostics.push(Diagnostic {
+                severity: "error".into(),
+                code: "dsl-duplicate".into(),
+                message: format!("duplicate api command '{}'", c.name),
+                file: Some(file.into()),
+                line: None,
+                nodes: None,
+            });
+        } else {
+            program.commands.push(c);
+        }
+    }
     for a in part.apis {
         if program.apis.iter().any(|x| x.name == a.name) {
             diagnostics.push(Diagnostic {
@@ -157,6 +174,20 @@ fn merge_program(
             });
         } else {
             program.pages.push(p);
+        }
+    }
+    for c in part.charts {
+        if program.charts.iter().any(|x| x.name == c.name) {
+            diagnostics.push(Diagnostic {
+                severity: "error".into(),
+                code: "viz-duplicate".into(),
+                message: format!("duplicate chart '{}'", c.name),
+                file: Some(file.into()),
+                line: None,
+                nodes: None,
+            });
+        } else {
+            program.charts.push(c);
         }
     }
 }
@@ -584,6 +615,28 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                     });
                 }
             }
+            PageBody::Chart(c) => {
+                if !program.charts.iter().any(|ch| ch.name == c.chart) {
+                    d.push(Diagnostic {
+                        severity: "error".into(),
+                        code: "viz-unknown-chart".into(),
+                        message: format!(
+                            "page '{}' references unknown chart '{}'",
+                            page.name, c.chart
+                        ),
+                        file: None,
+                        line: None,
+                        nodes: None,
+                    });
+                }
+            }
+        }
+    }
+
+    // 可视化图表（RFC-0001）
+    for chart in &program.charts {
+        if let Err(errs) = crate::visualization::lower_chart(program, chart) {
+            d.extend(errs);
         }
     }
 

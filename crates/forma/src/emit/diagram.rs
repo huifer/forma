@@ -148,6 +148,20 @@ pub fn dataflow_mermaid(program: &Program) -> String {
                     link_api_to_entity(program, &mut out, &qid, &api.entity);
                 }
             }
+            crate::dsl::PageBody::Chart(c) => {
+                let cid = sanitize_id(&format!("C_{}", c.chart));
+                out.push_str(&format!("    {cid}[\"图表 {}\"]\n", c.chart));
+                out.push_str(&format!("    {pid} --> {cid}\n"));
+                if let Some(chart) = program.charts.iter().find(|ch| ch.name == c.chart) {
+                    if let Some((api_name, _op)) = &chart.source {
+                        if let Some(api) = program.apis.iter().find(|a| a.name == *api_name) {
+                            let qid = sanitize_id(&format!("Q_{}", api.name));
+                            out.push_str(&format!("    {cid} --> {qid}\n"));
+                            link_api_to_entity(program, &mut out, &qid, &api.entity);
+                        }
+                    }
+                }
+            }
         }
     }
 

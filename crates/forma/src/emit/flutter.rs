@@ -16,7 +16,7 @@
 use super::{
     find_entity, has_attr, is_enum, is_relation, pick_message, EntityDecl, FieldDecl, Program,
 };
-use crate::dsl::{ApiDecl, DetailCfg, FormCfg, PageBody, PageDecl, TableCfg};
+use crate::dsl::{ApiDecl, ChartPageCfg, DetailCfg, FormCfg, PageBody, PageDecl, TableCfg};
 use crate::identity::to_snake_case;
 use std::path::Path;
 
@@ -56,6 +56,7 @@ pub fn emit_flutter(
             PageBody::Table(cfg) => list_page_dart(program, page, cfg),
             PageBody::Form(cfg) => edit_page_dart(program, page, cfg),
             PageBody::Detail(cfg) => detail_page_dart(program, page, cfg),
+            PageBody::Chart(cfg) => chart_page_dart(program, page, cfg),
         };
         files.push(file(out_dir, &rel, content));
     }
@@ -342,7 +343,61 @@ fn models_dart(program: &Program) -> String {
         out.push_str(&input_class_dart(program, entity));
         out.push('\n');
     }
+    out.push_str(&command_models_dart(program));
     out
+}
+
+/// 命令输入体（spec §10）：toJson 键名与后端 {Command}Input serde 一致。
+fn command_models_dart(program: &Program) -> String {
+    let mut out = String::new();
+    for cmd in &program.commands {
+        if cmd.input.is_empty() {
+            continue;
+        }
+        let mut decl = String::new();
+        let mut ctor = String::new();
+        let mut tojson = String::new();
+        for input in &cmd.input {
+            let key = to_snake_case(&input.name);
+            let fname = to_camel(&key);
+            let t = dart_input_type(&input.type_name);
+            if input.optional {
+                decl.push_str(&format!("  final {t}? {fname};\n"));
+                ctor.push_str(&format!("    this.{fname},\n"));
+                let v = match input.type_name.as_str() {
+                    "Timestamp" | "Date" => format!("{fname}!.toIso8601String()"),
+                    other if is_enum(program, other) => format!("{fname}!.name"),
+                    _ => fname.clone(),
+                };
+                tojson.push_str(&format!("    if ({fname} != null) '{key}': {v},\n"));
+            } else {
+                decl.push_str(&format!("  final {t} {fname};\n"));
+                ctor.push_str(&format!("    required this.{fname},\n"));
+                let v = match input.type_name.as_str() {
+                    "Timestamp" | "Date" => format!("{fname}.toIso8601String()"),
+                    other if is_enum(program, other) => format!("{fname}.name"),
+                    _ => fname.clone(),
+                };
+                tojson.push_str(&format!("    '{key}': {v},\n"));
+            }
+        }
+        out.push_str(&format!(
+            "/// 命令 {name} 的输入体。\nclass {name}Input {{\n{decl}\n  const {name}Input({{\n{ctor}  }});\n\n  Map<String, dynamic> toJson() => {{\n{tojson}  }};\n}}\n\n",
+            name = cmd.name
+        ));
+    }
+    out
+}
+
+fn dart_input_type(type_name: &str) -> String {
+    match type_name {
+        "Uuid" | "String" | "Email" | "Text" | "Decimal" => "String".to_string(),
+        "Int" => "int".to_string(),
+        "Float" => "double".to_string(),
+        "Bool" => "bool".to_string(),
+        "Timestamp" | "Date" => "DateTime".to_string(),
+        _ => "String".to_string(), // 枚举 → 变体名文本（与实体模型一致）
+    }
 }
 
 fn entity_class_dart(program: &Program, entity: &EntityDecl) -> String {
@@ -526,7 +581,184 @@ fn api_dart(program: &Program) -> String {
         out.push_str(&params_class_dart(program, entity, api));
         out.push_str(&entity_api_class_dart(program, entity, api));
     }
+    out.push_str(&command_api_dart(program));
     out
+}
+
+/// 命令客户端：POST /api{path}（{id} → 路径参数）。
+fn command_api_dart(program: &Program) -> String {
+    let mut out = String::new();
+    for cmd in &program.commands {
+        let dart_path = cmd.path.replace("{id}", "$id");
+        let label = escape_dart(&pick_message(&cmd.label, &cmd.name));
+        let execute = if cmd.input.is_empty() {
+            format!("  Future<void> execute(String id) => client.post('{dart_path}', const {{}});")
+        } else {
+            format!(
+                "  Future<void> execute(String id, {n}Input input) =>\n      client.post('{dart_path}', input.toJson());",
+                n = cmd.name
+            )
+        };
+        out.push_str(&format!(
+            "class {name}Api {{\n  final Api client;\n  {name}Api(this.client);\n\n  /// {label}\n{execute}\n}}\n\n",
+            name = cmd.name,
+            label = label,
+            execute = execute,
+        ));
+    }
+    out
+}
+
+/// pre 为简单 `field == "lit"` / `field != "lit"` 时 → 行级显隐表达式 `r.{col} == "lit"`。
+/// 复杂 pre 返回 None（按钮恒显，由服务端 409 兜底）。
+fn command_visibility_dart(program: &Program, cmd: &crate::dsl::CommandDecl) -> Option<String> {
+    let pre = cmd.pre.as_ref()?;
+    let crate::dsl::Expr::Bin(op, a, b) = pre else {
+        return None;
+    };
+    let (field, lit) = match (a.as_ref(), b.as_ref()) {
+        (crate::dsl::Expr::Ref { path, old: false }, crate::dsl::Expr::Str(lit))
+            if path.len() == 1 =>
+        {
+            (path[0].clone(), lit.clone())
+        }
+        _ => return None,
+    };
+    let entity = cmd.effects.first()?.entity.clone();
+    let e = program.entities.iter().find(|e| e.name == entity)?;
+    if !e.fields.iter().any(|f| f.name == field) {
+        return None;
+    }
+    let col = to_camel(&to_snake_case(&field));
+    // 枚举字段在 Dart 模型里是枚举类型 → 比较 .name（JSON/后端语义都是变体名）
+    let is_enum_field = e
+        .fields
+        .iter()
+        .find(|f| f.name == field)
+        .map(|f| is_enum(program, &f.type_name))
+        .unwrap_or(false);
+    let lhs = if is_enum_field {
+        format!("r.{col}.name")
+    } else {
+        format!("r.{col}")
+    };
+    Some(match op {
+        crate::dsl::BinOp::Eq => format!("{lhs} == '{lit}'"),
+        crate::dsl::BinOp::Ne => format!("{lhs} != '{lit}'"),
+        _ => return None,
+    })
+}
+
+/// 列表页的命令方法 + 行按钮（trailing）。
+fn command_page_parts(program: &Program, entity_name: &str) -> (String, String) {
+    let mut methods = String::new();
+    let mut buttons = String::new();
+    for cmd in program
+        .commands
+        .iter()
+        .filter(|c| c.effects.first().map(|e| e.entity.clone()) == Some(entity_name.to_string()))
+    {
+        let fn_name = format!("_{}Command", to_camel(&to_snake_case(&cmd.name)));
+        let label = pick_message(&cmd.label, &cmd.name);
+        let api_name = format!("{}Api", cmd.name);
+        let vis = command_visibility_dart(program, cmd);
+
+        // 方法（空输入 confirm；有输入 AlertDialog + TextField）
+        let mut dialog_body = String::new();
+        let mut controllers = String::new();
+        let mut input_call = String::new();
+        if cmd.input.is_empty() {
+            dialog_body.push_str("      content: const Text('确认执行该操作？'),");
+        } else {
+            for input in &cmd.input {
+                let col = to_camel(&to_snake_case(&input.name));
+                let lbl = humanize(&to_snake_case(&input.name));
+                controllers.push_str(&format!("    final {col}Ctrl = TextEditingController();\n"));
+                let kb = if matches!(input.type_name.as_str(), "Int" | "Float" | "Decimal") {
+                    ", keyboardType: TextInputType.number"
+                } else {
+                    ""
+                };
+                dialog_body.push_str(&format!(
+                    "      TextField(controller: {col}Ctrl, decoration: const InputDecoration(labelText: '{lbl}'){kb}),"
+                ));
+                input_call.push_str(&format!("{col}: {col}Ctrl.text,"));
+            }
+            dialog_body = format!(
+                "      content: Column(\n        mainAxisSize: MainAxisSize.min,\n        children: [\n          {dialog_body}\n        ],\n      ),"
+            );
+        }
+        // input_call 组装（required 字段兜底空串由后端校验）
+        let mut input_args = String::new();
+        for input in &cmd.input {
+            let col = to_camel(&to_snake_case(&input.name));
+            input_args.push_str(&format!("{col}: {col}Ctrl.text, "));
+        }
+
+        let dispose = if cmd.input.is_empty() {
+            String::new()
+        } else {
+            let mut d = String::new();
+            for input in &cmd.input {
+                let col = to_camel(&to_snake_case(&input.name));
+                d.push_str(&format!("      {col}Ctrl.dispose();\n"));
+            }
+            d
+        };
+
+        let call = if cmd.input.is_empty() {
+            format!("{api_name}(_api).execute(id)")
+        } else {
+            format!(
+                "{api_name}(_api).execute(id, {cmd}Input({args}))",
+                cmd = cmd.name,
+                args = input_args
+            )
+        };
+
+        methods.push_str(&format!(
+            r#"  Future<void> {fn_name}(String id) async {{
+{controllers}    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('{title}'),
+{dialog_body}
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('确认')),
+        ],
+      ),
+    );
+    if (ok != true) {{
+{dispose}      return;
+    }}
+    try {{
+      await {call};
+      if (!mounted) return;
+      _reload();
+    }} on ApiException catch (e) {{
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    }}
+  }}
+
+"#,
+            title = escape_dart(&label),
+        ));
+
+        // 按钮（trailing）
+        let vis_wrap = |inner: String| match &vis {
+            Some(v) => format!("if ({v}) {inner}"),
+            None => inner,
+        };
+        let btn_src = format!(
+            "TextButton(onPressed: () => {fn_name}(r.id), child: const Text('{btn}'))",
+            fn_name = fn_name,
+            btn = escape_dart(&label),
+        );
+        buttons.push_str(&format!("                      {},\n", vis_wrap(btn_src)));
+    }
+    (methods, buttons)
 }
 
 fn params_class_dart(program: &Program, entity: &EntityDecl, api: &ApiDecl) -> String {
@@ -988,6 +1220,39 @@ fn detail_value_expr(
 
 /// Detail 原语 → Material 详情页：按 section 分 Card，行 = 标签/值。
 /// children（子列表）暂与 gen-web 一致：不渲染（spec 未定义其分页/布局细节）。
+/// 图表页占位：移动端图表渲染（V0.6 之后评估）。
+/// 当前生成一个可编译的占位页，保证路由与导航结构完整。
+fn chart_page_dart(_program: &Program, page: &PageDecl, cfg: &ChartPageCfg) -> String {
+    let title = pick_message(&page.title, &page.name);
+    let chart_name = cfg.chart.clone();
+    let page_name = page.name.clone();
+    let template = r#"// @generated by Forma (gen-flutter) — do not edit manually.
+import 'package:flutter/material.dart';
+
+/// 图表页（移动端图表渲染尚未支持，当前为占位页）。
+class %%PAGE%% extends StatelessWidget {
+  const %%PAGE%%({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('%%TITLE%%')),
+      body: const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text('该图表（%%CHART%%）请在 Web 端查看。'),
+        ),
+      ),
+    );
+  }
+}
+"#;
+    template
+        .replace("%%PAGE%%", &page_name)
+        .replace("%%TITLE%%", &escape_dart(&title))
+        .replace("%%CHART%%", &escape_dart(&chart_name))
+}
+
 fn detail_page_dart(program: &Program, page: &PageDecl, cfg: &DetailCfg) -> String {
     let Some(entity) = find_entity(program, &cfg.entity) else {
         return format!(
@@ -1269,6 +1534,14 @@ fn list_page_dart(program: &Program, page: &PageDecl, cfg: &TableCfg) -> String 
         }
     }
 
+    // 命令类操作（spec §10）：方法 + 行按钮
+    let (command_methods, command_buttons) = command_page_parts(program, &entity.name.to_string());
+    let command_methods = if command_methods.is_empty() {
+        String::new()
+    } else {
+        format!("\n{}", command_methods)
+    };
+
     // ── 动作 ──
     let mut fab = String::new();
     let mut row_nav = String::new();
@@ -1316,7 +1589,7 @@ fn list_page_dart(program: &Program, page: &PageDecl, cfg: &TableCfg) -> String 
         String::new()
     } else {
         format!(
-            "                        trailing: Row(\n                          mainAxisSize: MainAxisSize.min,\n                          children: [\n{trailing_edit}{trailing_delete}                          ],\n                        ),\n"
+            "                        trailing: Row(\n                          mainAxisSize: MainAxisSize.min,\n                          children: [\n{command_buttons}{trailing_edit}{trailing_delete}                          ],\n                        ),\n"
         )
     };
 
@@ -1535,7 +1808,7 @@ class _%%PAGE%%State extends State<%%PAGE%%> {
   List<String> _detailLines(%%ROW%% r) => [
 %%LINES%%
   ];
-}
+%%COMMAND_METHODS%%}
 "#;
 
     template
@@ -1550,6 +1823,7 @@ class _%%PAGE%%State extends State<%%PAGE%%> {
         .replace("%%LOAD_OPTIONS%%", &load_options)
         .replace("%%DELETE_FN%%", &delete_fn)
         .replace("%%DISPOSE_FN%%", dispose_fn)
+        .replace("%%COMMAND_METHODS%%", &command_methods)
         .replace("%%FAB%%", &fab)
         .replace("%%SEARCH%%", &search_block)
         .replace("%%FILTERS%%", &filter_blocks)
@@ -2402,6 +2676,12 @@ fn main_dart(program: &Program, pkg: &str) -> String {
                         p.route, p.name
                     ));
                 }
+            }
+            PageBody::Chart(_) => {
+                routes.push_str(&format!(
+                    "        '{}': (_) => const {}(),\n",
+                    p.route, p.name
+                ));
             }
         }
     }

@@ -419,3 +419,55 @@ fn seed_verify_catches_drift_and_manual_edits() {
     assert!(!report.ok);
     assert!(report.issues[0].contains("缺失"));
 }
+
+#[test]
+fn flutter_commands_generate_client_and_ui() {
+    // 三端对称：命令在移动端同样有 API 客户端 + 行按钮（按状态显隐）+ 对话框
+    let (_dir, program) = school_program();
+    let dir = std::env::temp_dir().join(format!(
+        "flutter-cmd-{}-{:?}",
+        std::process::id(),
+        std::time::SystemTime::now()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let files = emit_flutter(&dir, &program, "app_mobile", "school").unwrap();
+
+    let models = files
+        .iter()
+        .find(|f| f.path.ends_with("models/models.dart"))
+        .unwrap();
+    // 输入体（reason 必填）+ 空 input 命令不生成类
+    assert!(models.content.contains("class EnrollmentRejectInput {"));
+    assert!(models.content.contains("required this.reason,"));
+    assert!(!models.content.contains("class EnrollmentApproveInput {"));
+
+    let api = files
+        .iter()
+        .find(|f| f.path.ends_with("api/api.dart"))
+        .unwrap();
+    // 空输入：execute(id)；有输入：execute(id, input)
+    assert!(api.content.contains(
+        "Future<void> execute(String id) => client.post('/enrollments/$id/approve', const {});"
+    ));
+    assert!(api
+        .content
+        .contains("execute(String id, EnrollmentRejectInput input)"));
+    assert!(api
+        .content
+        .contains("client.post('/enrollments/$id/reject', input.toJson());"));
+
+    let list = files
+        .iter()
+        .find(|f| f.path.ends_with("enrollment_list.dart"))
+        .unwrap();
+    // 按状态显隐（枚举字段比较 .name——Dart 模型是枚举类型）
+    assert!(list.content.contains("r.status.name == 'pending'"));
+    // 按钮文案取 @label（zh）
+    assert!(list.content.contains("Text('批准')"));
+    assert!(list.content.contains("Text('驳回')"));
+    // 方法存在
+    assert!(list
+        .content
+        .contains("Future<void> _enrollmentApproveCommand(String id)"));
+}

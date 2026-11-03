@@ -104,6 +104,10 @@ pub fn run_build(project_dir: &Path) -> Result<BuildReport> {
         crate::emit::emit_web_react(&dir, &program, &web_out, &app_name),
     )?;
     push(
+        "viz-web",
+        crate::emit::emit_visualization(&dir, &program, &web_out),
+    )?;
+    push(
         "openapi",
         crate::emit::emit_openapi(&dir, &program, api_out),
     )?;

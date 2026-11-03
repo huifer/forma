@@ -9,7 +9,10 @@ pub struct Program {
     pub entities: Vec<EntityDecl>,
     pub rules: Vec<RulesDecl>,
     pub apis: Vec<ApiDecl>,
+    pub commands: Vec<CommandDecl>,
     pub pages: Vec<PageDecl>,
+    /// 可视化图表（Chart IR 的 DSL 载体，RFC-0001 §3.1）
+    pub charts: Vec<ChartDecl>,
 }
 
 #[derive(Debug, Clone)]
@@ -106,6 +109,85 @@ pub struct DenyDecl {
     pub reason: Message,
 }
 
+// ── 可视化（Chart）── RFC-0001 ─────────────────────────────
+
+/// `chart` 顶层块：描述一个可视化组件的语义规格。
+#[derive(Debug, Clone)]
+pub struct ChartDecl {
+    pub name: String,
+    /// 语义图表类型：line | bar | area | pie | scatter | funnel | gauge | radar | heatmap | treemap
+    pub chart_type: String,
+    pub title: Message,
+    /// 数据绑定：`<ApiName>.<operation>`
+    pub source: Option<(String, String)>,
+    pub encoding: EncodingDecl,
+    pub transform: Vec<TransformDecl>,
+    pub axis: AxisDecl,
+    pub tooltip: Option<bool>,
+    pub legend: Option<bool>,
+    /// interaction.zoom
+    pub zoom: Option<bool>,
+    pub appearance: AppearanceDecl,
+    pub line: usize,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct EncodingDecl {
+    pub x: Option<ChannelDecl>,
+    pub y: Option<ChannelDecl>,
+    pub series: Option<ChannelDecl>,
+    pub color: Option<ChannelDecl>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ChannelDecl {
+    /// 实体字段路径（V0.1 只支持直接字段）
+    pub field: String,
+    /// temporal | quantitative | nominal | ordinal
+    pub value_type: Option<String>,
+    /// currency | percent | integer | decimal | datetime | date
+    pub format: Option<String>,
+    /// 轴标题（仅 axis 通道使用）
+    pub label: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub enum TransformDecl {
+    Filter {
+        field: String,
+        cmp: String,
+        value: String,
+    },
+    Bucket {
+        field: String,
+        by: String,
+    },
+    Aggregate {
+        op: String,
+        field: Option<String>,
+        group_by: Vec<String>,
+    },
+    Sort {
+        by: String,
+        desc: bool,
+    },
+    Limit {
+        n: usize,
+    },
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct AxisDecl {
+    pub x: Option<ChannelDecl>,
+    pub y: Option<ChannelDecl>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct AppearanceDecl {
+    pub smooth: Option<bool>,
+    pub show_symbol: Option<bool>,
+}
+
 // ── 表达式 ──────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -152,6 +234,53 @@ pub struct ApiDecl {
     pub list: Option<ListCfg>,
 }
 
+/// 命令类操作（spec §10）：状态机审批流等真实业务动作。
+/// `api OrderApprove { POST "/orders/{id}/approve" input {..} pre {..} effect { set .. } audit {..} }`
+#[derive(Debug, Clone)]
+pub struct CommandDecl {
+    pub name: String,
+    pub method: String,
+    pub path: String,
+    /// 按钮文案（缺省用块名）
+    pub label: Message,
+    pub input: Vec<CommandInput>,
+    /// 前置条件：对目标实体当前行求值，不成立 → 409 + message
+    pub pre: Option<Expr>,
+    /// pre 失败时的业务文案（zh/en）
+    pub message: Option<Message>,
+    pub effects: Vec<Effect>,
+    /// 审计动作名（如 "order.approve"）
+    pub audit: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CommandInput {
+    pub name: String,
+    pub type_name: String,
+    pub optional: bool,
+    pub type_args: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Effect {
+    pub entity: String,
+    pub field: String,
+    pub value: EffectValue,
+}
+
+#[derive(Debug, Clone)]
+pub enum EffectValue {
+    /// 枚举变体（未加引号的标识符）
+    Ident(String),
+    Str(String),
+    Num(f64),
+    Bool(bool),
+    /// 当前时间
+    Now,
+    /// 引用命令输入体字段（如 input.comment）
+    InputRef(String),
+}
+
 #[derive(Debug, Clone)]
 pub struct ListCfg {
     /// (字段, contains?)
@@ -177,6 +306,14 @@ pub enum PageBody {
     Table(TableCfg),
     Form(FormCfg),
     Detail(DetailCfg),
+    /// 可视化图表页面（RFC-0001 §3.3）
+    Chart(ChartPageCfg),
+}
+
+/// 页面挂载的图表：引用顶层 `chart` 块名。
+#[derive(Debug, Clone)]
+pub struct ChartPageCfg {
+    pub chart: String,
 }
 
 #[derive(Debug, Clone)]
@@ -261,8 +398,10 @@ pub fn parse(tokens: &[Token]) -> ParseOutcome {
         toks: tokens,
         pos: 0,
         errors: Vec::new(),
+        pending_commands: Vec::new(),
     };
-    let program = p.parse_program();
+    let mut program = p.parse_program();
+    program.commands = std::mem::take(&mut p.pending_commands);
     ParseOutcome {
         program,
         errors: p.errors,
@@ -273,6 +412,9 @@ struct Parser<'a> {
     toks: &'a [Token],
     pos: usize,
     errors: Vec<ParseError>,
+    /// `api` 块的命令形态经由 parse_api 分发，但 commands 与 apis 是不同的
+    /// Program 槽位 —— 解析期先暂存，parse_program 结束时合并。
+    pending_commands: Vec<CommandDecl>,
 }
 
 impl<'a> Parser<'a> {
@@ -377,7 +519,9 @@ impl<'a> Parser<'a> {
             entities: Vec::new(),
             rules: Vec::new(),
             apis: Vec::new(),
+            commands: Vec::new(),
             pages: Vec::new(),
+            charts: Vec::new(),
         };
         while self.peek().kind != TokKind::Eof {
             let tok = self.peek().clone();
@@ -404,7 +548,9 @@ impl<'a> Parser<'a> {
                 }
                 "api" if tok.kind == TokKind::Ident => {
                     if let Some(a) = self.parse_api() {
-                        program.apis.push(a);
+                        if !a.name.is_empty() {
+                            program.apis.push(a);
+                        }
                     }
                 }
                 "page" if tok.kind == TokKind::Ident => {
@@ -412,11 +558,16 @@ impl<'a> Parser<'a> {
                         program.pages.push(p);
                     }
                 }
+                "chart" if tok.kind == TokKind::Ident => {
+                    if let Some(c) = self.parse_chart() {
+                        program.charts.push(c);
+                    }
+                }
                 _ => {
                     self.error_at(
                         &tok,
                         format!(
-                            "unexpected '{}', expected app/enum/entity/rules/api/page",
+                            "unexpected '{}', expected app/enum/entity/rules/api/page/chart",
                             tok.value
                         ),
                     );
@@ -867,7 +1018,7 @@ impl<'a> Parser<'a> {
         self.next(); // api
         let name = self.expect_ident()?;
         let mut decl = ApiDecl {
-            name,
+            name: name.clone(),
             entity: String::new(),
             operations: vec![
                 "list".into(),
@@ -880,6 +1031,22 @@ impl<'a> Parser<'a> {
         };
         if !self.expect_punct("{") {
             return Some(decl);
+        }
+        // 命令形态：`api Name { POST "/path" ... }`（块内首个 token 是 HTTP 方法）
+        if matches!(
+            self.peek().value.as_str(),
+            "POST" | "GET" | "PUT" | "DELETE" | "PATCH"
+        ) && self.peek().kind == TokKind::Ident
+        {
+            let cmd = self.parse_command(name)?;
+            self.pending_commands.push(cmd);
+            // 空 ApiDecl 占位：commands 与 apis 是不同槽位，命令不入 apis
+            return Some(ApiDecl {
+                name: String::new(),
+                entity: String::new(),
+                operations: vec![],
+                list: None,
+            });
         }
         while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
             if self.eat_punct(";") {
@@ -916,6 +1083,191 @@ impl<'a> Parser<'a> {
         }
         self.expect_punct("}");
         Some(decl)
+    }
+
+    /// 命令类操作（spec §10）：
+    /// ```fm
+    /// api OrderApprove {
+    ///   POST "/orders/{id}/approve"
+    ///   label { zh "审批" en "Approve" }
+    ///   input { comment Text? }
+    ///   pre  { status == "pending" }
+    ///   message { zh "..." en "..." }
+    ///   effect { set Order.status = approved
+    ///            set Order.approverComment = input.comment }
+    ///   audit { action "order.approve" }
+    /// }
+    /// ```
+    fn parse_command(&mut self, name: String) -> Option<CommandDecl> {
+        let method = self.next().value.to_uppercase();
+        let path = self.expect_string()?;
+        let mut cmd = CommandDecl {
+            name,
+            method,
+            path,
+            label: Vec::new(),
+            input: Vec::new(),
+            pre: None,
+            message: None,
+            effects: Vec::new(),
+            audit: None,
+        };
+        // 条目直接跟在 POST "/path" 之后（label/input/pre/message/effect/audit），
+        // 循环终止于 api 块的闭括号
+        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+            if self.eat_punct(";") {
+                continue;
+            }
+            let tok = self.peek().clone();
+            match tok.value.as_str() {
+                "label" if tok.kind == TokKind::Ident => {
+                    self.next();
+                    cmd.label = self.parse_message_block();
+                }
+                "input" if tok.kind == TokKind::Ident => {
+                    self.next();
+                    if self.expect_punct("{") {
+                        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+                            if self.eat_punct(";") {
+                                continue;
+                            }
+                            let Some(fname) = self.expect_ident() else {
+                                break;
+                            };
+                            let Some(type_name) = self.expect_ident() else {
+                                break;
+                            };
+                            let mut optional = false;
+                            let mut type_args = Vec::new();
+                            if self.eat_punct("(") {
+                                while !self.is_punct(")") && self.peek().kind != TokKind::Eof {
+                                    if let Some(a) = self.expect_ident() {
+                                        type_args.push(a);
+                                    } else {
+                                        self.next();
+                                    }
+                                }
+                                self.expect_punct(")");
+                            }
+                            if self.eat_punct("?") {
+                                optional = true;
+                            }
+                            cmd.input.push(CommandInput {
+                                name: fname,
+                                type_name,
+                                optional,
+                                type_args,
+                            });
+                        }
+                        self.expect_punct("}");
+                    }
+                }
+                "pre" if tok.kind == TokKind::Ident => {
+                    self.next();
+                    if self.eat_punct("{") {
+                        cmd.pre = Some(self.parse_expr());
+                        self.expect_punct("}");
+                    }
+                }
+                "message" if tok.kind == TokKind::Ident => {
+                    self.next();
+                    cmd.message = Some(self.parse_message_block());
+                }
+                "effect" if tok.kind == TokKind::Ident => {
+                    self.next();
+                    if self.expect_punct("{") {
+                        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+                            if self.eat_punct(";") {
+                                continue;
+                            }
+                            if !self.eat_kw("set") {
+                                let t = self.peek().clone();
+                                self.error_at(
+                                    &t,
+                                    format!("expected 'set' in effect, found '{}'", t.value),
+                                );
+                                self.next();
+                                continue;
+                            }
+                            let Some(entity) = self.expect_ident() else {
+                                break;
+                            };
+                            self.expect_punct(".");
+                            let Some(field) = self.expect_ident() else {
+                                break;
+                            };
+                            self.expect_punct("=");
+                            let value = self.parse_effect_value();
+                            cmd.effects.push(Effect {
+                                entity,
+                                field,
+                                value,
+                            });
+                        }
+                        self.expect_punct("}");
+                    }
+                }
+                "audit" if tok.kind == TokKind::Ident => {
+                    self.next();
+                    if self.eat_punct("{") {
+                        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+                            if self.eat_kw("action") {
+                                if let Some(a) = self.expect_string() {
+                                    cmd.audit = Some(a);
+                                }
+                            } else {
+                                self.next();
+                            }
+                        }
+                        self.expect_punct("}");
+                    }
+                }
+                other => {
+                    self.error_at(&tok, format!("unknown command entry '{other}'"));
+                    self.next();
+                    if self.is_punct("{") {
+                        self.next();
+                        self.skip_to_block_end();
+                    }
+                }
+            }
+        }
+        self.expect_punct("}");
+        Some(cmd)
+    }
+
+    /// effect 值：枚举变体 / 字符串 / 数字 / bool / now / input.field
+    fn parse_effect_value(&mut self) -> EffectValue {
+        let tok = self.peek().clone();
+        match tok.kind {
+            TokKind::Str => EffectValue::Str(self.next().value),
+            TokKind::Num => EffectValue::Num(self.next().value.parse().unwrap_or(0.0)),
+            TokKind::Ident => {
+                self.next();
+                match tok.value.as_str() {
+                    "true" => EffectValue::Bool(true),
+                    "false" => EffectValue::Bool(false),
+                    "now" => EffectValue::Now,
+                    "input" => {
+                        if self.eat_punct(".") {
+                            let f = self.expect_ident().unwrap_or_default();
+                            EffectValue::InputRef(f)
+                        } else {
+                            EffectValue::Ident("input".into())
+                        }
+                    }
+                    _ => EffectValue::Ident(tok.value),
+                }
+            }
+            _ => {
+                self.error_at(
+                    &tok,
+                    "expected effect value (variant / literal / now / input.field)",
+                );
+                self.next();
+                EffectValue::Ident(String::new())
+            }
+        }
     }
 
     fn parse_list_cfg(&mut self) -> Option<ListCfg> {
@@ -988,6 +1340,475 @@ impl<'a> Parser<'a> {
         Some(cfg)
     }
 
+    // ── chart（可视化，RFC-0001）──
+
+    /// `chart Name { type line  title {...}  source Orders.list  encoding {...} ... }`
+    fn parse_chart(&mut self) -> Option<ChartDecl> {
+        let name_tok = self.peek().clone();
+        self.next(); // chart
+        let name = self.expect_ident()?;
+        let mut decl = ChartDecl {
+            name,
+            chart_type: String::new(),
+            title: Vec::new(),
+            source: None,
+            encoding: EncodingDecl::default(),
+            transform: Vec::new(),
+            axis: AxisDecl::default(),
+            tooltip: None,
+            legend: None,
+            zoom: None,
+            appearance: AppearanceDecl::default(),
+            line: name_tok.line,
+        };
+        if !self.expect_punct("{") {
+            return Some(decl);
+        }
+        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+            if self.eat_punct(";") {
+                continue;
+            }
+            let tok = self.peek().clone();
+            match tok.value.as_str() {
+                "type" => {
+                    self.next();
+                    decl.chart_type = self.expect_ident().unwrap_or_default();
+                }
+                "title" => {
+                    self.next();
+                    decl.title = self.parse_title_value();
+                }
+                "source" => {
+                    self.next();
+                    if let Some(p) = self.parse_path() {
+                        let (api, operation) = match p.split_once('.') {
+                            Some((a, op)) => (a.to_string(), op.to_string()),
+                            None => (p.clone(), "list".to_string()),
+                        };
+                        decl.source = Some((api, operation));
+                    }
+                }
+                "encoding" => {
+                    self.next();
+                    decl.encoding = self.parse_encoding();
+                }
+                "transform" => {
+                    self.next();
+                    decl.transform = self.parse_transform();
+                }
+                "axis" => {
+                    self.next();
+                    decl.axis = self.parse_axis();
+                }
+                "tooltip" => {
+                    self.next();
+                    decl.tooltip = self.parse_enabled();
+                }
+                "legend" => {
+                    self.next();
+                    decl.legend = self.parse_enabled();
+                }
+                "interaction" => {
+                    self.next();
+                    decl.zoom = self.parse_zoom();
+                }
+                "appearance" => {
+                    self.next();
+                    decl.appearance = self.parse_appearance();
+                }
+                other => {
+                    self.error_at(&tok, format!("unknown chart entry '{other}'"));
+                    self.next();
+                    if self.is_punct("{") {
+                        self.next();
+                        self.skip_to_block_end();
+                    }
+                }
+            }
+        }
+        self.expect_punct("}");
+        Some(decl)
+    }
+
+    /// title：字符串字面量（单语言）或 i18n 块。
+    fn parse_title_value(&mut self) -> Message {
+        if self.peek().kind == TokKind::Str {
+            let t = self.next().value;
+            return vec![("zh".to_string(), t)];
+        }
+        self.parse_message_block()
+    }
+
+    fn parse_enabled(&mut self) -> Option<bool> {
+        if !self.expect_punct("{") {
+            return None;
+        }
+        let mut enabled = None;
+        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+            let tok = self.peek().clone();
+            match tok.value.as_str() {
+                "enabled" => {
+                    self.next();
+                    enabled = self.parse_bool();
+                }
+                other => {
+                    self.error_at(&tok, format!("unknown entry '{other}'"));
+                    self.next();
+                }
+            }
+        }
+        self.expect_punct("}");
+        enabled
+    }
+
+    fn parse_zoom(&mut self) -> Option<bool> {
+        if !self.expect_punct("{") {
+            return None;
+        }
+        let mut zoom = None;
+        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+            let tok = self.peek().clone();
+            match tok.value.as_str() {
+                "zoom" => {
+                    self.next();
+                    zoom = self.parse_bool();
+                }
+                other => {
+                    self.error_at(&tok, format!("unknown interaction entry '{other}'"));
+                    self.next();
+                }
+            }
+        }
+        self.expect_punct("}");
+        zoom
+    }
+
+    fn parse_bool(&mut self) -> Option<bool> {
+        if self.peek().kind == TokKind::Ident {
+            let v = self.next().value;
+            return match v.as_str() {
+                "true" => Some(true),
+                "false" => Some(false),
+                _ => None,
+            };
+        }
+        if self.peek().kind == TokKind::Num {
+            let v = self.next().value;
+            return Some(v != "0");
+        }
+        None
+    }
+
+    fn parse_appearance(&mut self) -> AppearanceDecl {
+        let mut app = AppearanceDecl::default();
+        if !self.expect_punct("{") {
+            return app;
+        }
+        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+            let tok = self.peek().clone();
+            match tok.value.as_str() {
+                "smooth" => {
+                    self.next();
+                    app.smooth = self.parse_bool();
+                }
+                "showSymbol" => {
+                    self.next();
+                    app.show_symbol = self.parse_bool();
+                }
+                other => {
+                    self.error_at(&tok, format!("unknown appearance entry '{other}'"));
+                    self.next();
+                }
+            }
+        }
+        self.expect_punct("}");
+        app
+    }
+
+    fn parse_encoding(&mut self) -> EncodingDecl {
+        let mut enc = EncodingDecl::default();
+        if !self.expect_punct("{") {
+            return enc;
+        }
+        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+            let tok = self.peek().clone();
+            match tok.value.as_str() {
+                "x" | "y" | "series" | "color" => {
+                    self.next();
+                    let ch = self.parse_channel(false);
+                    match tok.value.as_str() {
+                        "x" => enc.x = Some(ch),
+                        "y" => enc.y = Some(ch),
+                        "series" => enc.series = Some(ch),
+                        _ => enc.color = Some(ch),
+                    }
+                }
+                other => {
+                    self.error_at(&tok, format!("unknown encoding entry '{other}'"));
+                    self.next();
+                }
+            }
+        }
+        self.expect_punct("}");
+        enc
+    }
+
+    fn parse_axis(&mut self) -> AxisDecl {
+        let mut axis = AxisDecl::default();
+        if !self.expect_punct("{") {
+            return axis;
+        }
+        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+            let tok = self.peek().clone();
+            match tok.value.as_str() {
+                "x" | "y" => {
+                    self.next();
+                    let ch = self.parse_channel(true);
+                    if tok.value == "x" {
+                        axis.x = Some(ch);
+                    } else {
+                        axis.y = Some(ch);
+                    }
+                }
+                other => {
+                    self.error_at(&tok, format!("unknown axis entry '{other}'"));
+                    self.next();
+                }
+            }
+        }
+        self.expect_punct("}");
+        axis
+    }
+
+    /// 通道声明：`{ field <path> [type <t>] [format <f>] [label "<s>"] }`
+    fn parse_channel(&mut self, with_label: bool) -> ChannelDecl {
+        let mut ch = ChannelDecl {
+            field: String::new(),
+            value_type: None,
+            format: None,
+            label: None,
+        };
+        if !self.expect_punct("{") {
+            return ch;
+        }
+        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+            let tok = self.peek().clone();
+            match tok.value.as_str() {
+                "field" => {
+                    self.next();
+                    ch.field = self.parse_path().unwrap_or_default();
+                }
+                "type" => {
+                    self.next();
+                    ch.value_type = self.expect_ident();
+                }
+                "format" => {
+                    self.next();
+                    ch.format = self.expect_ident();
+                }
+                "label" if with_label => {
+                    self.next();
+                    if self.peek().kind == TokKind::Str {
+                        ch.label = Some(self.next().value);
+                    }
+                }
+                other => {
+                    self.error_at(&tok, format!("unknown channel entry '{other}'"));
+                    self.next();
+                }
+            }
+        }
+        self.expect_punct("}");
+        ch
+    }
+
+    fn parse_transform(&mut self) -> Vec<TransformDecl> {
+        let mut ops = Vec::new();
+        if !self.expect_punct("{") {
+            return ops;
+        }
+        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+            let tok = self.peek().clone();
+            match tok.value.as_str() {
+                "filter" => {
+                    self.next();
+                    ops.push(self.parse_filter());
+                }
+                "bucket" => {
+                    self.next();
+                    ops.push(self.parse_bucket());
+                }
+                "aggregate" => {
+                    self.next();
+                    ops.push(self.parse_aggregate());
+                }
+                "sort" => {
+                    self.next();
+                    ops.push(self.parse_sort());
+                }
+                "limit" => {
+                    self.next();
+                    let n = self.parse_number();
+                    ops.push(TransformDecl::Limit {
+                        n: n.max(0.0) as usize,
+                    });
+                }
+                other => {
+                    self.error_at(&tok, format!("unknown transform entry '{other}'"));
+                    self.next();
+                    if self.is_punct("{") {
+                        self.next();
+                        self.skip_to_block_end();
+                    }
+                }
+            }
+        }
+        self.expect_punct("}");
+        ops
+    }
+
+    /// `filter { field status eq "active" }`
+    fn parse_filter(&mut self) -> TransformDecl {
+        let mut field = String::new();
+        let mut cmp = "eq".to_string();
+        let mut value = String::new();
+        if !self.expect_punct("{") {
+            return TransformDecl::Filter { field, cmp, value };
+        }
+        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+            let tok = self.peek().clone();
+            match tok.value.as_str() {
+                "field" => {
+                    self.next();
+                    field = self.parse_path().unwrap_or_default();
+                }
+                "eq" | "ne" | "gt" | "gte" | "lt" | "lte" | "in" => {
+                    cmp = tok.value.clone();
+                    self.next();
+                    value = self.parse_literal();
+                }
+                "value" => {
+                    self.next();
+                    value = self.parse_literal();
+                }
+                other => {
+                    self.error_at(&tok, format!("unknown filter entry '{other}'"));
+                    self.next();
+                }
+            }
+        }
+        self.expect_punct("}");
+        TransformDecl::Filter { field, cmp, value }
+    }
+
+    fn parse_literal(&mut self) -> String {
+        match self.peek().kind {
+            TokKind::Str | TokKind::Num | TokKind::Ident => self.next().value,
+            _ => String::new(),
+        }
+    }
+
+    /// `bucket { field createdAt by day }`
+    fn parse_bucket(&mut self) -> TransformDecl {
+        let mut field = String::new();
+        let mut by = "day".to_string();
+        if !self.expect_punct("{") {
+            return TransformDecl::Bucket { field, by };
+        }
+        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+            let tok = self.peek().clone();
+            match tok.value.as_str() {
+                "field" => {
+                    self.next();
+                    field = self.parse_path().unwrap_or_default();
+                }
+                "by" => {
+                    self.next();
+                    by = self.expect_ident().unwrap_or_else(|| "day".to_string());
+                }
+                other => {
+                    self.error_at(&tok, format!("unknown bucket entry '{other}'"));
+                    self.next();
+                }
+            }
+        }
+        self.expect_punct("}");
+        TransformDecl::Bucket { field, by }
+    }
+
+    /// `aggregate { op sum field amount groupBy [createdAt] }`
+    fn parse_aggregate(&mut self) -> TransformDecl {
+        let mut op = "count".to_string();
+        let mut field = None;
+        let mut group_by = Vec::new();
+        if !self.expect_punct("{") {
+            return TransformDecl::Aggregate {
+                op,
+                field,
+                group_by,
+            };
+        }
+        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+            let tok = self.peek().clone();
+            match tok.value.as_str() {
+                "op" => {
+                    self.next();
+                    op = self.expect_ident().unwrap_or_else(|| "count".to_string());
+                }
+                "field" => {
+                    self.next();
+                    field = self.parse_path();
+                }
+                "groupBy" | "group_by" => {
+                    self.next();
+                    group_by = self.parse_ident_list();
+                }
+                other => {
+                    self.error_at(&tok, format!("unknown aggregate entry '{other}'"));
+                    self.next();
+                }
+            }
+        }
+        self.expect_punct("}");
+        TransformDecl::Aggregate {
+            op,
+            field,
+            group_by,
+        }
+    }
+
+    /// `sort { by createdAt desc }`
+    fn parse_sort(&mut self) -> TransformDecl {
+        let mut by = String::new();
+        let mut desc = false;
+        if !self.expect_punct("{") {
+            return TransformDecl::Sort { by, desc };
+        }
+        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+            let tok = self.peek().clone();
+            match tok.value.as_str() {
+                "by" => {
+                    self.next();
+                    by = self.parse_path().unwrap_or_default();
+                }
+                "desc" => {
+                    self.next();
+                    desc = true;
+                }
+                "asc" => {
+                    self.next();
+                    desc = false;
+                }
+                other => {
+                    self.error_at(&tok, format!("unknown sort entry '{other}'"));
+                    self.next();
+                }
+            }
+        }
+        self.expect_punct("}");
+        TransformDecl::Sort { by, desc }
+    }
+
     // ── page ──
 
     fn parse_page(&mut self) -> Option<PageDecl> {
@@ -1046,6 +1867,12 @@ impl<'a> Parser<'a> {
                     self.next();
                     if let Some(d) = self.parse_detail() {
                         decl.body = PageBody::Detail(d);
+                    }
+                }
+                "chart" if tok.kind == TokKind::Ident => {
+                    self.next();
+                    if let Some(c) = self.expect_ident() {
+                        decl.body = PageBody::Chart(ChartPageCfg { chart: c });
                     }
                 }
                 other => {

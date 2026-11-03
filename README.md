@@ -7,6 +7,8 @@
 A Rust-based specification compiler that turns one declarative DSL into database migrations,
 backend code, frontend code, APIs, validation, and diagrams.
 
+<img src="docs/og-image.png" alt="Forma — describe once, build everywhere: an AI agent writes app.fm, Forma compiles it to MySQL, Rust, React, OpenAPI, and diagrams" width="880">
+
 [![CI](https://github.com/huifer/forma/actions/workflows/ci.yml/badge.svg)](https://github.com/huifer/forma/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org/)
@@ -44,6 +46,29 @@ into the target technologies. Rules are emitted to both authoritative backend va
 same-source frontend validation.
 
 > **AI expresses intent. Forma handles repetition.**
+>
+> Forma is an **AI-Native Specification Compiler**: AI produces software specifications, and Forma
+> compiles them into deterministic, verifiable, auditable engineering artifacts. Its differentiation
+> is not "generate more languages" but *safe, verifiable system change* — see
+> [docs/verification.zh-CN.md](docs/verification.zh-CN.md) and
+> [docs/agent-workflow.zh-CN.md](docs/agent-workflow.zh-CN.md).
+
+## Reliability & verification
+
+Forma treats **reliable generation** as the product, not an afterthought. Verification is layered
+into five levels (L1 Syntax → L2 Semantic → L3 Artifact → L4 Behavioral → L5 Change Safety);
+every level has an independent, machine-readable conclusion — never a single `success: true`.
+Highlights:
+
+- **Structured diagnostics** with stable error codes (`E_REF_NOT_FOUND`, …) so AI agents can
+  repair locally instead of re-reading the whole spec.
+- **Artifact compilation**: generated Rust (`cargo check`), Web (`tsc`), Flutter (`flutter analyze`),
+  and a MySQL replay simulator (`forma migrate verify`, no live DB required).
+- **Migration risk classification** — `forma migrate risk` grades every schema change
+  Low / Medium / High / Extreme; destructive changes require human approval
+  (see [docs/migration-safety.zh-CN.md](docs/migration-safety.zh-CN.md)).
+- **Semantic impact analysis** — `forma graph` / `forma impact` compute the dependency closure
+  of a change before any code is generated.
 
 ## Current status
 
@@ -134,6 +159,10 @@ target configuration selects the concrete output stack.
 - [DSL specification](docs/dsl-spec.zh-CN.md)
 - [Architecture](docs/architecture.zh-CN.md)
 - [Design philosophy](docs/philosophy.zh-CN.md)
+- [Verification (L1–L5)](docs/verification.zh-CN.md)
+- [Migration safety & risk](docs/migration-safety.zh-CN.md)
+- [Agent workflow](docs/agent-workflow.zh-CN.md)
+- [Next milestone (F-001…F-008)](docs/next-milestone.zh-CN.md)
 - [Roadmap](docs/roadmap.zh-CN.md)
 
 ## Generated targets
@@ -241,6 +270,7 @@ forma lint [dir]                          Run built-in lint rules
 forma migrate [dir] status               Show migration state
 forma migrate [dir] history              Show migration history
 forma migrate [dir] verify               Verify the migration chain
+forma migrate [dir] risk                 Grade pending schema changes by destructiveness
 forma migrate [dir] up [--to v]          Plan/apply forward migrations
 forma migrate [dir] down [--steps N]     Plan/apply rollback migrations
 forma mcp [dir]                          Start the MCP stdio server

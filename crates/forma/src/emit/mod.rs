@@ -9,20 +9,23 @@ pub mod openapi;
 pub mod replay;
 pub mod rust_backend;
 pub mod seed;
+pub mod visualization;
 pub mod web_react;
 
 pub use diagram::emit_diagrams;
 pub use diff::{diff_programs, emit_diff, DiffReport};
 pub use flutter::emit_flutter;
 pub use migrate::{
-    diff_down_sql, diff_ops, emit_migration, migration_down, migration_status, migration_up,
-    migration_verify, MigrationEntry, MigrationLedger, MigrationOp,
+    classify_op, diff_down_sql, diff_ops, emit_migration, migration_down, migration_risk_lines,
+    migration_status, migration_up, migration_verify, pending_migration_ops, MigrationEntry,
+    MigrationLedger, MigrationOp, MigrationRisk, MigrationRiskReport,
 };
 pub use mysql::emit_mysql;
 pub use openapi::emit_openapi;
 pub use replay::{replay_sql, schema_diff, schema_from_plans, SimSchema, SimTable};
 pub use rust_backend::emit_rust_backend;
 pub use seed::{emit_seed, render_seed_bundle, verify_seed, SeedBundle, SeedVerifyReport};
+pub use visualization::emit_visualization;
 pub use web_react::emit_web_react;
 
 pub use super::identity::to_snake_case as snake;

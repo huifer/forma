@@ -17,6 +17,7 @@ pub mod patch;
 pub mod scaffold;
 pub mod util;
 pub mod validate;
+pub mod visualization;
 
 pub use dsl::Program;
 pub use engine::{build_project, load_project, BuildOutcome, LoadOutcome};

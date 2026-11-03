@@ -17,7 +17,8 @@ fn parse_school_use_case() {
     assert_eq!(program.entities.len(), 7);
     assert_eq!(program.enums.len(), 2);
     assert_eq!(program.apis.len(), 7);
-    assert_eq!(program.pages.len(), 12);
+    assert_eq!(program.commands.len(), 2, "报名批准/驳回命令");
+    assert_eq!(program.pages.len(), 14); // 12 管理 + 2 图表占位页
 
     // 关系字段
     let student = program

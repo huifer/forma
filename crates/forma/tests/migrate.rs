@@ -1,7 +1,8 @@
 use forma::dsl::lexer::lex;
 use forma::dsl::parser::parse;
-use forma::emit::migrate::diff_down_sql;
-use forma::emit::migrate::diff_sql;
+use forma::emit::migrate::{
+    classify_op, diff_down_sql, diff_ops, diff_sql, MigrationOp, MigrationRisk, MigrationRiskReport,
+};
 use forma::emit::mysql::plan_tables;
 use forma::emit::{
     diff_programs, emit_diagrams, emit_migration, emit_mysql, migration_down, migration_status,
@@ -598,4 +599,75 @@ fn diff_sql_direct_add_and_drop() {
     let sql = diff_sql(&old, &new);
     assert!(sql.contains("DROP COLUMN tag"), "{sql}");
     assert!(sql.contains("MODIFY COLUMN name VARCHAR(100)"), "{sql}");
+}
+
+#[test]
+fn classify_op_assigns_expected_risk_levels() {
+    assert_eq!(classify_op("create_table"), MigrationRisk::Low);
+    assert_eq!(classify_op("add_column"), MigrationRisk::Low);
+    assert_eq!(classify_op("add_index"), MigrationRisk::Low);
+    assert_eq!(classify_op("add_unique"), MigrationRisk::Low);
+    assert_eq!(classify_op("add_fk"), MigrationRisk::Low);
+    assert_eq!(classify_op("drop_index"), MigrationRisk::Medium);
+    assert_eq!(classify_op("drop_unique"), MigrationRisk::Medium);
+    assert_eq!(classify_op("drop_fk"), MigrationRisk::Medium);
+    assert_eq!(classify_op("modify_column"), MigrationRisk::High);
+    assert_eq!(classify_op("drop_column"), MigrationRisk::High);
+    assert_eq!(classify_op("drop_table"), MigrationRisk::Extreme);
+    // fail-safe：未知操作按高风险处理，避免静默放过破坏性变更
+    assert_eq!(classify_op("weird_op"), MigrationRisk::High);
+}
+
+#[test]
+fn risk_report_sums_counts_and_picks_max() {
+    let ops = vec![
+        MigrationOp {
+            kind: "add_column",
+            table: "t".into(),
+            summary: "a".into(),
+            up: vec![],
+            down: vec![],
+        },
+        MigrationOp {
+            kind: "drop_column",
+            table: "t".into(),
+            summary: "b".into(),
+            up: vec![],
+            down: vec![],
+        },
+    ];
+    let r = MigrationRiskReport::new(&ops);
+    assert_eq!(r.overall, MigrationRisk::High);
+    assert!(r.approval_required);
+    assert_eq!(r.counts.get(&MigrationRisk::Low).copied(), Some(1));
+    assert_eq!(r.counts.get(&MigrationRisk::High).copied(), Some(1));
+    assert_eq!(r.counts.get(&MigrationRisk::Extreme).copied(), None);
+}
+
+#[test]
+fn pending_diff_to_real_drop_column_is_high_risk() {
+    // 旧 schema（V1）含 tag；新 schema（V3_DROP_FIELD）删掉它 → drop_column（High）
+    let old_plans = plan_tables(&program(V1));
+    let new_plans = plan_tables(&program(V3_DROP_FIELD));
+    let ops = diff_ops(&old_plans, &new_plans);
+    assert!(
+        ops.iter().any(|o| o.kind == "drop_column"),
+        "expected a drop_column op in {ops:?}"
+    );
+    assert_eq!(MigrationRiskReport::new(&ops).overall, MigrationRisk::High);
+}
+
+#[test]
+fn risk_lines_flag_approval_for_destructive_ops() {
+    let ops = vec![MigrationOp {
+        kind: "drop_table",
+        table: "orders".into(),
+        summary: "删除表 orders".into(),
+        up: vec![],
+        down: vec![],
+    }];
+    let lines = forma::emit::migration_risk_lines(&ops);
+    let joined = lines.join("\n");
+    assert!(joined.contains("EXTREME"), "{joined}");
+    assert!(joined.contains("需人工审批"), "{joined}");
 }

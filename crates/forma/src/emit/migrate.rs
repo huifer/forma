@@ -136,6 +136,148 @@ pub struct MigrationOp {
     pub down: Vec<String>,
 }
 
+// ── 迁移风险分级（见 docs/migration-safety.zh-CN.md） ──────────
+//
+// 不是所有 SQL 变更都能安全自动回滚：删除列/表、改类型、改主键在回滚时
+// 会丢失数据或破坏兼容。分级是 `forma migrate risk` 与 apply 前置门禁的依据。
+
+/// 迁移操作的破坏性风险等级（升序：Low < Medium < High < Extreme）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum MigrationRisk {
+    /// 纯增量、可逆（建表 / 加列 / 加索引 / 加唯一 / 加外键）。
+    Low,
+    /// 可逆但影响查询计划（删索引 / 删唯一 / 删外键）。
+    Medium,
+    /// 数据兼容风险或回滚丢数据（改列类型 / 删列）。
+    High,
+    /// 数据销毁（删表）。
+    Extreme,
+}
+
+impl MigrationRisk {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            MigrationRisk::Low => "low",
+            MigrationRisk::Medium => "medium",
+            MigrationRisk::High => "high",
+            MigrationRisk::Extreme => "extreme",
+        }
+    }
+
+    /// 稳定机器可读代码（结构化诊断 / 自动化门禁用）。
+    pub fn code(self) -> &'static str {
+        match self {
+            MigrationRisk::Low => "RISK_LOW",
+            MigrationRisk::Medium => "RISK_MEDIUM",
+            MigrationRisk::High => "RISK_HIGH",
+            MigrationRisk::Extreme => "RISK_EXTREME",
+        }
+    }
+
+    /// 高风险（High/Extreme）变更在 `up --apply` 前必须经过人工审批。
+    pub fn requires_approval(self) -> bool {
+        matches!(self, MigrationRisk::High | MigrationRisk::Extreme)
+    }
+}
+
+/// 单条迁移操作 → 风险等级。
+///
+/// 分级依据（与 docs/migration-safety.zh-CN.md 的对照表一致）。
+/// 未识别操作按 fail-safe 归为 High，避免静默放过破坏性变更。
+pub fn classify_op(kind: &str) -> MigrationRisk {
+    match kind {
+        "create_table" | "add_column" | "add_index" | "add_unique" | "add_fk" => MigrationRisk::Low,
+        "drop_index" | "drop_unique" | "drop_fk" => MigrationRisk::Medium,
+        "modify_column" | "drop_column" => MigrationRisk::High,
+        "drop_table" => MigrationRisk::Extreme,
+        _ => MigrationRisk::High,
+    }
+}
+
+/// 一组操作 → 整体风险（取最高级）+ 各级计数 + 是否需审批。
+#[derive(Debug, Clone)]
+pub struct MigrationRiskReport {
+    pub overall: MigrationRisk,
+    pub counts: std::collections::BTreeMap<MigrationRisk, usize>,
+    pub approval_required: bool,
+}
+
+impl MigrationRiskReport {
+    pub fn new(ops: &[MigrationOp]) -> Self {
+        let mut counts = std::collections::BTreeMap::new();
+        let mut overall = MigrationRisk::Low;
+        for op in ops {
+            let r = classify_op(op.kind);
+            *counts.entry(r).or_insert(0) += 1;
+            if r > overall {
+                overall = r;
+            }
+        }
+        let approval_required = overall.requires_approval();
+        Self {
+            overall,
+            counts,
+            approval_required,
+        }
+    }
+}
+
+/// 生成人类可读的风险报告行（供 `forma migrate risk` 与 verify 复用）。
+pub fn migration_risk_lines(ops: &[MigrationOp]) -> Vec<String> {
+    if ops.is_empty() {
+        return vec!["无待执行迁移（schema 未变）".into()];
+    }
+    let report = MigrationRiskReport::new(ops);
+    let mut lines = Vec::new();
+    lines.push(format!(
+        "迁移风险概览：整体 {}（{}）{}",
+        report.overall.as_str().to_uppercase(),
+        report.overall.code(),
+        if report.approval_required {
+            " — 需人工审批"
+        } else {
+            ""
+        }
+    ));
+    for r in [
+        MigrationRisk::Extreme,
+        MigrationRisk::High,
+        MigrationRisk::Medium,
+        MigrationRisk::Low,
+    ] {
+        if let Some(&n) = report.counts.get(&r) {
+            lines.push(format!("  {} {:>2} 项", r.as_str().to_uppercase(), n));
+        }
+    }
+    lines.push("逐项：".into());
+    for op in ops {
+        let r = classify_op(op.kind);
+        let flag = if r.requires_approval() {
+            " ⚠ 需审批"
+        } else {
+            ""
+        };
+        lines.push(format!(
+            "  [{}] {} {}",
+            r.as_str().to_uppercase(),
+            op.summary,
+            flag
+        ));
+    }
+    lines
+}
+
+/// 计算「自上次构建以来」的待执行迁移操作（旧快照 → 当前 DSL schema）。
+/// 首次构建（无快照）视为全量建表，均为 Low。
+/// 供 `forma migrate risk` 在 apply 之前评估破坏性。
+pub fn pending_migration_ops(project_dir: &Path, program: &Program) -> Result<Vec<MigrationOp>> {
+    let new_plans = plan_tables(program);
+    match read_snapshot(project_dir) {
+        Some(snap) => Ok(diff_ops(&snap.tables, &new_plans)),
+        None => Ok(diff_ops(&[], &new_plans)),
+    }
+}
+
 /// 表结构差异 → 带回滚配对的结构化操作序列。
 pub fn diff_ops(old: &[TablePlan], new: &[TablePlan]) -> Vec<MigrationOp> {
     let mut ops: Vec<MigrationOp> = Vec::new();

@@ -24,7 +24,7 @@ pub fn emit_web_react(
     files.push(file(
         out_dir,
         "package.json",
-        package_json(app_name),
+        package_json(app_name, !program.charts.is_empty()),
         "gen-web",
     ));
     files.push(file(out_dir, "vite.config.ts", vite_config(), "gen-web"));
@@ -53,6 +53,7 @@ pub fn emit_web_react(
             crate::dsl::PageBody::Table(t) => list_page(program, page, t),
             crate::dsl::PageBody::Form(f) => edit_page(program, page, f),
             crate::dsl::PageBody::Detail(d) => detail_page(program, page, d),
+            crate::dsl::PageBody::Chart(c) => chart_page(program, page, c),
         };
         files.push(file(
             out_dir,
@@ -112,7 +113,7 @@ fn file(
     }
 }
 
-fn package_json(app: &str) -> String {
+fn package_json(app: &str, has_charts: bool) -> String {
     let mut s = String::from("{\n");
     s.push_str(&format!("  \"name\": \"{}-web\",\n", app.to_lowercase()));
     s.push_str(
@@ -128,7 +129,14 @@ fn package_json(app: &str) -> String {
     "@tanstack/react-query": "^5.51.0",
     "@tanstack/react-router": "^1.45.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1","#,
+    );
+    // 有 chart 时引入 echarts（可视化适配层）
+    if has_charts {
+        s.push_str("\n    \"echarts\": \"^5.5.1\"");
+    }
+    s.push_str(
+        r#"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",
@@ -391,6 +399,48 @@ function qs(params: Record<string, unknown>): string {
             "export const {}Api = {};// alias\n",
             api.name, entity_api
         ));
+    }
+    out.push_str(&commands_api_ts(program));
+    out
+}
+
+/// 命令类操作（spec §10）：输入接口 + execute 客户端。
+fn commands_api_ts(program: &Program) -> String {
+    let mut out = String::new();
+    for cmd in &program.commands {
+        let mut fields = String::new();
+        for input in &cmd.input {
+            let col = crate::identity::to_snake_case(&input.name);
+            let base = match input.type_name.as_str() {
+                "Int" | "Float" => "number".to_string(),
+                "Bool" => "boolean".to_string(),
+                "Decimal" => "string".to_string(),
+                "Timestamp" | "Date" => "string".to_string(),
+                _ => "string".to_string(),
+            };
+            let t = if input.optional {
+                format!("{base} | null")
+            } else {
+                base
+            };
+            fields.push_str(&format!("  {col}: {t};\n"));
+        }
+        let label = super::pick_message(&cmd.label, &cmd.name);
+        let mut body_obj = "{ ".to_string();
+        let cols: Vec<String> = cmd
+            .input
+            .iter()
+            .map(|i| crate::identity::to_snake_case(&i.name))
+            .collect();
+        body_obj.push_str(&cols.join(", "));
+        body_obj.push_str(" }");
+        out.push_str(&format!(
+            "export interface {name}Input {{\n{fields}}}\n\nexport const {name}Api = {{\n  label: \"{label}\",\n  execute: (id: string, input: {name}Input) =>\n    req<{{ ok: boolean }}>(`/api{path}`.replace(\"{{id}}\", id), {{ method: \"POST\", body: JSON.stringify(input) }}),\n}};\n\n",
+            name = cmd.name,
+            label = escape_ts(&label),
+            path = cmd.path,
+        ));
+        let _ = body_obj;
     }
     out
 }
@@ -862,6 +912,9 @@ a { color: inherit; text-decoration: none; }
 .form-error { color: var(--destructive); font-size: 13px; }
 .filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .filters .input { width: 160px; }
+
+.modal-overlay { position: fixed; inset: 0; background: rgb(0 0 0 / 45%); display: flex; align-items: center; justify-content: center; z-index: 50; }
+.modal { background: var(--bg, #fff); border-radius: var(--radius); padding: 20px; width: min(480px, 92vw); max-height: 86vh; overflow: auto; box-shadow: 0 20px 50px rgb(0 0 0 / 25%); }
 "#
     .to_string()
 }
@@ -884,6 +937,90 @@ fn humanize(name: &str) -> String {
         }
     }
     out
+}
+
+/// pre 为简单 `field == "lit"` / `field != "lit"` 时 → 生成行级显隐表达式 `row.{col} === "lit"`。
+/// 复杂 pre 返回 None（按钮恒显，由服务端 409 兜底——业务正确性不依赖 UI）。
+fn command_visibility(
+    program: &Program,
+    cmd: &crate::dsl::CommandDecl,
+    row_var: &str,
+) -> Option<String> {
+    let pre = cmd.pre.as_ref()?;
+    let crate::dsl::Expr::Bin(op, a, b) = pre else {
+        return None;
+    };
+    let (field, lit) = match (a.as_ref(), b.as_ref()) {
+        (crate::dsl::Expr::Ref { path, old: false }, crate::dsl::Expr::Str(lit))
+            if path.len() == 1 =>
+        {
+            (path[0].clone(), lit.clone())
+        }
+        _ => return None,
+    };
+    // 字段必须是实体字段
+    let entity = cmd.effects.first()?.entity.clone();
+    let e = program.entities.iter().find(|e| e.name == entity)?;
+    if !e.fields.iter().any(|f| f.name == field) {
+        return None;
+    }
+    let col = crate::identity::to_snake_case(&field);
+    Some(match op {
+        crate::dsl::BinOp::Eq => format!("{row_var}.{col} === \"{lit}\""),
+        crate::dsl::BinOp::Ne => format!("{row_var}.{col} !== \"{lit}\""),
+        _ => return None,
+    })
+}
+
+/// 空 input 命令的 useMutation 声明。
+fn command_mutations_ts(program: &Program, entity_name: &str) -> String {
+    let mut out = String::new();
+    for cmd in program.commands.iter().filter(|c| {
+        c.input.is_empty()
+            && c.effects.first().map(|e| e.entity.clone()) == Some(entity_name.to_string())
+    }) {
+        let fn_name = crate::identity::to_snake_case(&cmd.name);
+        out.push_str(&format!(
+            "  const {fn_name}Mut = useMutation({{\n    mutationFn: (id: string) => {name}Api.execute(id, {{}}),\n    onSuccess: () => qc.invalidateQueries({{ queryKey: [\"{snake}\"] }}),\n  }});\n",
+            name = cmd.name,
+            snake = crate::identity::to_snake_case(entity_name),
+        ));
+    }
+    out
+}
+
+/// 图表页：挂载一个顶层 `chart` 块。数据、option、事件全部由可视化运行时接管。
+fn chart_page(
+    program: &Program,
+    page: &crate::dsl::PageDecl,
+    cfg: &crate::dsl::ChartPageCfg,
+) -> String {
+    let Some(decl) = program.charts.iter().find(|c| c.name == cfg.chart) else {
+        return "// unknown chart".into();
+    };
+    let chart = decl.name.clone();
+    let title = super::pick_message(&page.title, &page.name);
+    format!(
+        "// @generated by Forma (gen-web) — do not edit manually.\n\
+         import {{ FormaChart }} from \"../viz/runtime\";\n\
+         import {{ {chart}Spec, {chart}Option, {chart}Source }} from \"../viz/charts/{chart}\";\n\
+         \n\
+         const title = \"{title}\";\n\
+         \n\
+         export function {page_name}() {{\n\
+         \x20 return (\n\
+         \x20   <div>\n\
+         \x20     <div className=\"page-header\">\n\
+         \x20       <h1>{{title}}</h1>\n\
+         \x20     </div>\n\
+         \x20     <FormaChart spec={{{chart}Spec}} option={{{chart}Option}} source={{{chart}Source}} />\n\
+         \x20   </div>\n\
+         \x20 );\n\
+         }}\n",
+        chart = chart,
+        title = escape_ts(&title),
+        page_name = page.name,
+    )
 }
 
 fn list_page(program: &Program, page: &crate::dsl::PageDecl, cfg: &crate::dsl::TableCfg) -> String {
@@ -995,6 +1132,123 @@ fn list_page(program: &Program, page: &crate::dsl::PageDecl, cfg: &crate::dsl::T
             "                <Button variant=\"destructive\" onClick={() => { if (confirm(\"确认删除？\")) deleteMut.mutate(row.id); }}>删除</Button>\n",
         );
     }
+    // 命令按钮（spec §10）：pre 为简单等值比较时按行状态显隐
+    let mut command_dialogs = String::new(); // 模块顶层：对话框组件定义
+    let mut dialog_refs = String::new(); // 页面组件内：条件渲染引用
+    let mut command_state = String::new();
+    let entity_name = cfg
+        .query_api
+        .split('.')
+        .next()
+        .and_then(|n| program.apis.iter().find(|a| a.name == n))
+        .map(|a| a.entity.clone())
+        .unwrap_or_default();
+    for cmd in program
+        .commands
+        .iter()
+        .filter(|c| c.effects.first().map(|e| e.entity.clone()) == Some(entity_name.clone()))
+    {
+        let label = super::pick_message(&cmd.label, &cmd.name);
+        let fn_name = crate::identity::to_snake_case(&cmd.name);
+        let vis = command_visibility(program, cmd, "row");
+        let vis_expr = vis
+            .as_ref()
+            .map(|v| format!("{{{} && (", v))
+            .unwrap_or_else(|| "(".to_string());
+        let close = if vis.is_some() { ")}" } else { ")" };
+        if cmd.input.is_empty() {
+            row_actions.push_str(&format!(
+                "                {vis_expr}<Button onClick={{() => {{ if (confirm(\"确认执行 {label}？\")) {fn_name}Mut.mutate(row.id); }}}}>{label}</Button>{close}\n"
+            ));
+        } else {
+            row_actions.push_str(&format!(
+                "                {vis_expr}<Button onClick={{() => set{cmd_name}For(row.id)}}>{label}</Button>{close}\n",
+                cmd_name = cmd.name,
+            ));
+            // 对话框组件 + 状态
+            let mut dialog_fields = String::new();
+            let mut input_obj = String::new();
+            for input in &cmd.input {
+                let col = crate::identity::to_snake_case(&input.name);
+                let lbl = humanize(&col);
+                match input.type_name.as_str() {
+                    "Text" => {
+                        dialog_fields.push_str(&format!(
+                            "          <Field label=\"{lbl}\"><Textarea value={{inputs.{col} ?? \"\"}} onChange={{(e) => setInputs((p) => ({{ ...p, {col}: e.target.value }}))}} /></Field>\n"
+                        ));
+                    }
+                    _ => {
+                        dialog_fields.push_str(&format!(
+                            "          <Field label=\"{lbl}\"><Input value={{String(inputs.{col} ?? \"\")}} onChange={{(e) => setInputs((p) => ({{ ...p, {col}: e.target.value }}))}} /></Field>\n"
+                        ));
+                    }
+                }
+                input_obj.push_str(&format!("{col}: inputs.{col} ?? \"\", "));
+            }
+            command_state.push_str(&format!(
+                "  const [{cmd_name}Id, set{cmd_name}For] = useState<string | null>(null);\n",
+                cmd_name = cmd.name,
+            ));
+            // 独立对话框组件：hooks 必须在组件顶层（不能内联进 JSX）
+            let mut dialog_fields = String::new();
+            let mut input_obj = String::new();
+            for input in &cmd.input {
+                let col = crate::identity::to_snake_case(&input.name);
+                let lbl = humanize(&col);
+                match input.type_name.as_str() {
+                    "Text" => {
+                        dialog_fields.push_str(&format!(
+                            "          <Field label=\"{lbl}\"><Textarea value={{inputs.{col} ?? \"\"}} onChange={{(e) => setInputs((p) => ({{ ...p, {col}: e.target.value }}))}} /></Field>\n"
+                        ));
+                    }
+                    _ => {
+                        dialog_fields.push_str(&format!(
+                            "          <Field label=\"{lbl}\"><Input value={{String(inputs.{col} ?? \"\")}} onChange={{(e) => setInputs((p) => ({{ ...p, {col}: e.target.value }}))}} /></Field>\n"
+                        ));
+                    }
+                }
+                input_obj.push_str(&format!("{col}: inputs.{col} ?? \"\", "));
+            }
+            command_dialogs.push_str(&format!(
+                r#"function {cmd_name}Dialog({{ id, onClose }}: {{ id: string; onClose: () => void }}) {{
+  const qc = useQueryClient();
+  const [inputs, setInputs] = useState<Record<string, string | null>>({{}});
+  return (
+    <div className="modal-overlay" onClick={{onClose}}>
+      <div className="modal" onClick={{(e) => e.stopPropagation()}}>
+        <h3 style={{{{ marginTop: 0 }}}}>{label}</h3>
+{dialog_fields}        <div className="form-actions">
+          <Button variant="secondary" onClick={{onClose}}>取消</Button>
+          <Button variant="default" onClick={{async () => {{
+            try {{
+              await {cmd_name}Api.execute(id, {{ {input_obj}}});
+              onClose();
+              qc.invalidateQueries({{ queryKey: ["{snake_e}"] }});
+            }} catch (e: any) {{
+              alert(e.message ?? "操作失败");
+            }}
+          }}}}>确认</Button>
+        </div>
+      </div>
+    </div>
+  );
+}}
+
+"#,
+                cmd_name = cmd.name,
+                label = escape_ts(&label),
+                snake_e = snake_e,
+            ));
+            dialog_refs.push_str(&format!(
+                r#"      {{{cmd_name}Id != null && (
+        <{cmd_name}Dialog id={{{cmd_name}Id}} onClose={{() => set{cmd_name}For(null)}} />
+      )}}
+"#,
+                cmd_name = cmd.name,
+            ));
+        }
+    }
+    let _ = &command_state;
     if !row_actions.is_empty() {
         head.push("操作".into());
     }
@@ -1005,6 +1259,17 @@ fn list_page(program: &Program, page: &crate::dsl::PageDecl, cfg: &crate::dsl::T
         .collect();
 
     let mut list_imports: Vec<String> = vec![format!("{}Api", cfg.query_api)];
+    // 命令类操作：目标实体的命令 Api 也要导入
+    for cmd in program
+        .commands
+        .iter()
+        .filter(|c| c.effects.first().map(|e| e.entity.clone()) == Some(entity_name.clone()))
+    {
+        let import_name = format!("{}Api", cmd.name);
+        if !list_imports.contains(&import_name) {
+            list_imports.push(import_name);
+        }
+    }
     for src_entity in &seen_sources {
         let import_name = format!("{}Api", src_entity);
         if !list_imports.contains(&import_name) {
@@ -1012,13 +1277,17 @@ fn list_page(program: &Program, page: &crate::dsl::PageDecl, cfg: &crate::dsl::T
         }
     }
     format!(
-        "// @generated by Forma (gen-web) — do not edit manually.\nimport {{ useState }} from \"react\";\nimport {{ useMutation, useQuery, useQueryClient }} from \"@tanstack/react-query\";\nimport {{ Badge, Button, Card, Input, Select, Table }} from \"../ui\";\nimport {{ {list_imports_str} }} from \"../api\";\nimport {{ enumOptions, fmtDateTime, fmtMoney }} from \"../format\";\n\nconst title = \"{title}\";\n\nexport function {page_name}() {{\n  const qc = useQueryClient();\n  const [filters, setFilters] = useState<Record<string, string | null>>({{}});\n  const [search, setSearch] = useState(\"\");\n  const [page, setPage] = useState(1);\n  const query = useQuery({{\n    queryKey: [\"{snake_e}\", filters, search, page],\n    queryFn: () => {api_name}Api.list({{ ...filters, q: search || null, page }}),\n  }});\n{option_queries}  const deleteMut = useMutation({{\n    mutationFn: (id: string) => {delete_call},\n    onSuccess: () => qc.invalidateQueries({{ queryKey: [\"{snake_e}\"] }}),\n  }});\n\n  return (\n    <div>\n      <div className=\"page-header\">\n        <h1>{{title}}</h1>\n        {create_div}\n      </div>\n      <Card>\n        <div className=\"filters\">\n{filters_code}          <Input placeholder=\"搜索…\" value={{search}} onChange={{(e) => setSearch(e.target.value)}} />\n        </div>\n        <Table head={{[{head_names}]}}>\n          {{(query.data ?? []).map((row: any) => (\n            <tr key={{row.id}}>\n{cells}\n{row_actions}            </tr>\n          ))}}\n        </Table>\n        <div className=\"form-actions\">\n          <Button variant=\"secondary\" disabled={{page <= 1}} onClick={{() => setPage((p) => Math.max(1, p - 1))}}>上一页</Button>\n          <span>第 {{page}} 页</span>\n          <Button variant=\"secondary\" disabled={{(query.data ?? []).length < 20}} onClick={{() => setPage((p) => p + 1)}}>下一页</Button>\n        </div>\n      </Card>\n    </div>\n  );\n}}\n",
+        "// @generated by Forma (gen-web) — do not edit manually.\nimport {{ useState }} from \"react\";\nimport {{ useMutation, useQuery, useQueryClient }} from \"@tanstack/react-query\";\nimport {{ Badge, Button, Card, Field, Input, Select, Table, Textarea }} from \"../ui\";\nimport {{ {list_imports_str} }} from \"../api\";\nimport {{ enumOptions, fmtDateTime, fmtMoney }} from \"../format\";\n\nconst title = \"{title}\";\n\nexport function {page_name}() {{\n  const qc = useQueryClient();\n  const [filters, setFilters] = useState<Record<string, string | null>>({{}});\n  const [search, setSearch] = useState(\"\");\n  const [page, setPage] = useState(1);\n  const query = useQuery({{\n    queryKey: [\"{snake_e}\", filters, search, page],\n    queryFn: () => {api_name}Api.list({{ ...filters, q: search || null, page }}),\n  }});\n{option_queries}{command_mutations}  const deleteMut = useMutation({{\n    mutationFn: (id: string) => {delete_call},\n    onSuccess: () => qc.invalidateQueries({{ queryKey: [\"{snake_e}\"] }}),\n  }});\n{command_state}\n  return (\n    <div>\n      <div className=\"page-header\">\n        <h1>{{title}}</h1>\n        {create_div}\n      </div>\n      <Card>\n        <div className=\"filters\">\n{filters_code}          <Input placeholder=\"搜索…\" value={{search}} onChange={{(e) => setSearch(e.target.value)}} />\n        </div>\n        <Table head={{[{head_names}]}}>\n          {{(query.data ?? []).map((row: any) => (\n            <tr key={{row.id}}>\n{cells}\n{row_actions}            </tr>\n          ))}}\n        </Table>\n        <div className=\"form-actions\">\n          <Button variant=\"secondary\" disabled={{page <= 1}} onClick={{() => setPage((p) => Math.max(1, p - 1))}}>上一页</Button>\n          <span>第 {{page}} 页</span>\n          <Button variant=\"secondary\" disabled={{(query.data ?? []).length < 20}} onClick={{() => setPage((p) => p + 1)}}>下一页</Button>\n        </div>\n      </Card>\n{dialog_refs}    </div>\n  );\n}}\n\n{command_dialogs}",
         list_imports_str = list_imports.join(", "),
         api_name = cfg.query_api,
         title = escape_ts(&title),
         page_name = page.name,
         snake_e = snake_e,
         option_queries = option_queries,
+        command_mutations = command_mutations_ts(program, &entity_name),
+        command_state = command_state,
+        command_dialogs = command_dialogs,
+        dialog_refs = dialog_refs,
         delete_call = delete_call,
         create_div = create_div,
         filters_code = filters_code,
@@ -1158,7 +1427,7 @@ fn edit_page(program: &Program, page: &crate::dsl::PageDecl, cfg: &crate::dsl::F
 
     format!(
         "// @generated by Forma (gen-web) — do not edit manually.\nimport {{ useEffect, useState }} from \"react\";\nimport {{ useMutation, useQuery, useQueryClient }} from \"@tanstack/react-query\";\nimport {{ useNavigate, useParams }} from \"@tanstack/react-router\";\nimport {{ Button, Card, Field, Input, Select, Textarea }} from \"../ui\";\nimport {{ {api_imports} }} from \"../api\";\nimport {{ enumOptions, fmtDateTime, fmtMoney }} from \"../format\";\nimport {{ validateCreate{entity_name}, validateUpdate{entity_name} }} from \"../validators\";\nimport {{ Create{entity_name}, Update{entity_name} }} from \"../types\";\n\nconst title = \"{title}\";\n\nexport function {page_name}() {{\n  const params = useParams({{ strict: false }}) as {{ id?: string }};\n  const id = params.id;\n  {op_flag}\n  const qc = useQueryClient();\n  const navigate = useNavigate();\n  const [values, setValues] = useState<Record<string, any>>({{}});\n  const [errors, setErrors] = useState<Record<string, string>>({{}});\n  const existing = useQuery({{\n    queryKey: [\"{snake_e}\", id],\n    queryFn: () => {main_api}Api.get(id!),\n    enabled: !!id && !isCreate,\n  }});\n{option_codes}  useEffect(() => {{\n    if (existing.data) setValues(existing.data as Record<string, any>);\n  }}, [existing.data]);\n\n  const mut = useMutation({{\n    mutationFn: (redirect: string) =>
-      isCreate ? {main_api}Api.create(values as any) : {main_api}Api.update(id!, values as any),\n    onSuccess: (_data, redirect) => {{\n      qc.invalidateQueries({{ queryKey: [\"{snake_e}\"] }});\n      if (redirect) navigate({{ to: redirect }});\n    }},\n    onError: (err: any) => {{\n      const map: Record<string, string> = {{}};\n      for (const f of err.fields ?? []) map[f.field] = f.message;\n      setErrors(map);\n    }},\n  }});\n\n  function submit(e: React.FormEvent) {{\n    e.preventDefault();\n    const errs = isCreate\n      ? validateCreate{entity_name}(values)\n      : validateUpdate{entity_name}(values);\n    if (errs.length > 0) {{\n      const map: Record<string, string> = {{}};\n      for (const er of errs) map[er.field] = er.message;\n      setErrors(map);\n      return;\n    }}\n    setErrors({{}});\n    const redirect = isCreate ? \"{create_redirect}\" : \"{update_redirect}\";\n    mut.mutate(redirect);\n  }}\n\n  return (\n    <div>\n      <div className=\"page-header\"><h1>{{title}}</h1></div>\n      <Card>\n        <form onSubmit={{submit}}>\n          <div className=\"form-grid\">\n{field_inputs}          </div>\n          {{errors.__check ? <p className=\"form-error\">{{errors.__check}}</p> : null}}\n          <div className=\"form-actions\">\n            <Button type=\"submit\" disabled={{mut.isPending}}>{{mut.isPending ? \"保存中…\" : \"保存\"}}</Button>\n            <Button variant=\"secondary\" onClick={{() => history.back()}}>取消</Button>\n          </div>\n        </form>\n      </Card>\n    </div>\n  );\n}}\n",
+      isCreate ? {main_api}Api.create(values as any) : {main_api}Api.update(id!, values as any),\n    onSuccess: (_data, redirect) => {{\n      qc.invalidateQueries({{ queryKey: [\"{snake_e}\"] }});\n      if (redirect) navigate({{ to: redirect }});\n    }},\n    onError: (err: any) => {{\n      const map: Record<string, string> = {{}};\n      for (const f of err.fields ?? []) map[f.field] = f.message;\n      setErrors(map);\n    }},\n  }});\n\n  function submit(e: React.FormEvent) {{\n    e.preventDefault();\n    const errs = isCreate\n      ? validateCreate{entity_name}(values)\n      : validateUpdate{entity_name}(values);\n    if (errs.length > 0) {{\n      const map: Record<string, string> = {{}};\n      for (const er of errs) map[er.field] = er.message;\n      setErrors(map);\n      return;\n    }}\n    setErrors({{}});\n    const redirect = isCreate ? \"{create_redirect}\" : \"{update_redirect}\";\n    mut.mutate(redirect);\n  }}\n\n  return (\n    <div>\n      <div className=\"page-header\"><h1>{{title}}</h1></div>\n      <Card>\n        <form onSubmit={{submit}}>\n          <div className=\"form-grid\">\n{field_inputs}          </div>\n          {{errors.__check ? <p className=\"form-error\">{{errors.__check}}</p> : null}}\n          <div className=\"form-actions\">\n            <Button type=\"submit\" disabled={{mut.isPending}}>{{mut.isPending ? \"保存中…\" : \"保存\"}}</Button>\n            <Button variant=\"secondary\" onClick={{() => history.back()}}>取消</Button>\n          </div>\n        </form>\n      </Card>    </div>\n  );\n}}\n",
         api_imports = api_imports.join(", "),
         entity_name = entity_name,
         title = escape_ts(&title),
@@ -1262,7 +1531,10 @@ fn router_tsx(program: &Program) -> String {
 fn layout_tsx(program: &Program) -> String {
     let mut nav = String::new();
     for page in &program.pages {
-        if matches!(page.body, crate::dsl::PageBody::Table(_)) {
+        if matches!(
+            page.body,
+            crate::dsl::PageBody::Table(_) | crate::dsl::PageBody::Chart(_)
+        ) {
             let label = super::pick_message(&page.title, &page.name);
             nav.push_str(&format!(
                 "    <NavLink to=\"{}\" label=\"{}\" />\n",

@@ -128,6 +128,8 @@ class _EnrollmentListState extends State<EnrollmentList> {
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                      if (r.status.name == 'pending') TextButton(onPressed: () => _enrollmentApproveCommand(r.id), child: const Text('批准')),
+                      if (r.status.name == 'pending') TextButton(onPressed: () => _enrollmentRejectCommand(r.id), child: const Text('驳回')),
                           IconButton(
                             tooltip: '编辑',
                             icon: const Icon(Icons.edit_outlined),
@@ -153,4 +155,62 @@ class _EnrollmentListState extends State<EnrollmentList> {
     'Status：${r.status.label}',
     'EnrolledAt：${fmtDateTime(r.enrolledAt)}',
   ];
+
+  Future<void> _enrollmentApproveCommand(String id) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('批准'),
+      content: const Text('确认执行该操作？'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('确认')),
+        ],
+      ),
+    );
+    if (ok != true) {
+      return;
+    }
+    try {
+      await EnrollmentApproveApi(_api).execute(id);
+      if (!mounted) return;
+      _reload();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    }
+  }
+
+  Future<void> _enrollmentRejectCommand(String id) async {
+    final reasonCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('驳回'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+                TextField(controller: reasonCtrl, decoration: const InputDecoration(labelText: 'Reason')),
+        ],
+      ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('确认')),
+        ],
+      ),
+    );
+    if (ok != true) {
+      reasonCtrl.dispose();
+      return;
+    }
+    try {
+      await EnrollmentRejectApi(_api).execute(id, EnrollmentRejectInput(reason: reasonCtrl.text, ));
+      if (!mounted) return;
+      _reload();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    }
+  }
+
 }

@@ -331,3 +331,20 @@ class VoteRecordApi {
   Future<void> create(VoteRecordInput input) => client.post('/vote_records', input.toJson());
 }
 
+class EnrollmentApproveApi {
+  final Api client;
+  EnrollmentApproveApi(this.client);
+
+  /// 批准
+  Future<void> execute(String id) => client.post('/enrollments/$id/approve', const {});
+}
+
+class EnrollmentRejectApi {
+  final Api client;
+  EnrollmentRejectApi(this.client);
+
+  /// 驳回
+  Future<void> execute(String id, EnrollmentRejectInput input) =>
+      client.post('/enrollments/$id/reject', input.toJson());
+}
+

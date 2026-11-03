@@ -251,3 +251,98 @@ api Items {
     assert!(msg.contains("cursor"), "{msg}");
     assert!(msg.contains("offset"), "错误信息应说明当前支持的范围");
 }
+
+// ── 命令类操作（spec §10）：真实业务的状态机动作 ──────────
+
+fn command_files() -> Vec<forma::generators::GeneratedFile> {
+    let (_dir, program) = school_program();
+    let dir = std::env::temp_dir().join(format!(
+        "forma-cmd-{}-{:?}",
+        std::process::id(),
+        std::time::SystemTime::now()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    emit_rust_backend(&dir, &program, "generated/backend", "school").unwrap()
+}
+
+#[test]
+fn commands_generate_full_business_flow() {
+    let files = command_files();
+    let routes = file_ending(&files, "routes.rs");
+    let repo = file_ending(&files, "repo.rs");
+    let models = file_ending(&files, "models.rs");
+    let validators = file_ending(&files, "validators.rs");
+
+    // 路由 + handler
+    assert!(routes
+        .contains(".route(\"/api/enrollments/:id/approve\", post(enrollment_approve_handler))"));
+    assert!(
+        routes.contains(".route(\"/api/enrollments/:id/reject\", post(enrollment_reject_handler))")
+    );
+    // pre 条件编译（对当前行求值；枚举按文本比较）
+    assert!(
+        routes.contains("if !((row.status == \"pending\".to_string()))"),
+        "pre 应对当前行求值"
+    );
+    // pre 失败 → 409 + 业务文案
+    assert!(routes.contains("只有待确认的报名可以批准"));
+    // 审计钩子
+    assert!(routes.contains("crate::audit::log_action(\"enrollment.approve\""));
+    // effect SQL：approve 只改 status；reject 改 status + note（input 引用）
+    assert!(repo.contains("UPDATE enrollments SET status = ? WHERE id = ?"));
+    assert!(repo.contains("UPDATE enrollments SET status = ?, note = ? WHERE id = ?"));
+    assert!(repo.contains(".bind(\"cancelled\".to_string())"));
+    assert!(repo.contains(".bind(input.reason.clone())"));
+    // 输入模型 + 校验器（reason 必填）
+    assert!(models.contains("pub struct EnrollmentRejectInput {"));
+    assert!(validators.contains("pub fn validate_enrollment_reject("));
+    assert!(validators.contains("reason 必填"));
+}
+
+#[test]
+fn commands_require_audit_module_and_tracing() {
+    let files = command_files();
+    let audit = files
+        .iter()
+        .find(|f| f.path.ends_with("audit.rs"))
+        .expect("audit.rs 应随带 audit 的命令生成");
+    assert!(audit
+        .content
+        .contains("tracing::info!(action, entity, id, \"forma.audit\")"));
+    let main = file_ending(&files, "main.rs");
+    assert!(main.contains("mod audit;"));
+    assert!(main.contains("tracing_subscriber::fmt::init();"));
+    let cargo = files
+        .iter()
+        .find(|f| f.path.ends_with("Cargo.toml"))
+        .unwrap();
+    assert!(cargo.content.contains("tracing-subscriber"));
+}
+
+#[test]
+fn effect_value_mismatches_fail_loudly() {
+    // 裸标识符只允许枚举变体；now 仅 Timestamp
+    let dsl = r#"
+app demo { version = "0.1.0" }
+enum St { a b }
+entity Item {
+  id Uuid @id @default(uuid)
+  count Int @default(0)
+}
+api DoIt {
+  POST "/items/{id}/do"
+  effect { set Item.count = a }
+}
+"#;
+    let program = forma::dsl::parser::parse(&forma::dsl::lexer::lex(dsl)).program;
+    let dir = std::env::temp_dir().join(format!(
+        "forma-effect-{}-{:?}",
+        std::process::id(),
+        std::time::SystemTime::now()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let err = emit_rust_backend(&dir, &program, "generated/backend", "demo").unwrap_err();
+    assert!(format!("{err:#}").contains("仅支持枚举变体"), "{err:#}");
+}

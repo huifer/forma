@@ -13,6 +13,8 @@ import 'pages/election_list.dart';
 import 'pages/election_edit.dart';
 import 'pages/candidate_list.dart';
 import 'pages/candidate_edit.dart';
+import 'pages/course_capacity_page.dart';
+import 'pages/enrollment_trend_page.dart';
 
 void main() => runApp(const SchoolApp());
 
@@ -31,6 +33,8 @@ class SchoolApp extends StatelessWidget {
         '/courses': (_) => const CourseList(),
         '/enrollments': (_) => const EnrollmentList(),
         '/elections': (_) => const ElectionList(),
+        '/courses/capacity': (_) => const CourseCapacityPage(),
+        '/enrollments/trend': (_) => const EnrollmentTrendPage(),
       },
       onGenerateRoute: (settings) {
         final segments = (settings.name ?? '/')
