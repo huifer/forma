@@ -6,3 +6,4 @@ generated/
 .forma/
 .DS_Store
 target/
+.memory/
