@@ -2,10 +2,23 @@ use forma::engine::{build_project, BuildOptions};
 use forma::scaffold::scaffold_project;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// 进程内递增序号：SystemTime 的 Debug 格式纳秒会被截断，同二进制内两个
+/// 测试线程在同一窗口会得到同名目录（scaffold 报 "forma.yaml already exists"）。
+/// 序号保证同进程内唯一，pid + 纳秒保证跨进程唯一。
+static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
 
 fn tmp_project() -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("forma-build-{}", std::process::id()));
-    let dir = dir.join(format!("{:?}", std::time::SystemTime::now()).replace([' ', ':'], "-"));
+    let seq = TMP_SEQ.fetch_add(1, Ordering::Relaxed);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let dir = std::env::temp_dir().join(format!(
+        "forma-build-{}-{seq}-{nanos}",
+        std::process::id()
+    ));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     scaffold_project(&dir).unwrap();
