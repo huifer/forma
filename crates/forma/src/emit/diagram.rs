@@ -200,9 +200,11 @@ fn link_api_to_entity(program: &Program, out: &mut String, qid: &str, entity_nam
 
 // ── 业务流程图（状态生命周期） ──────────────────────────
 
-pub fn status_mermaid(program: &Program) -> String {
-    let mut out = String::new();
-    let mut first = true;
+/// 每个被实体引用的枚举 → 独立一份 stateDiagram。
+/// Mermaid 一个渲染块只能含一份 diagram 文档；多个枚举若拼接在同一块内
+/// 会直接报 Syntax error，因此必须按枚举分块。
+pub fn status_mermaid(program: &Program) -> Vec<String> {
+    let mut diagrams = Vec::new();
     for e in &program.enums {
         // 仅生成被实体字段引用的枚举
         let used = program
@@ -212,22 +214,29 @@ pub fn status_mermaid(program: &Program) -> String {
         if !used {
             continue;
         }
-        if !first {
-            out.push('\n');
-        }
-        first = false;
-        out.push_str("stateDiagram-v2\n");
+        let mut out = String::from("stateDiagram-v2\n");
         out.push_str(&format!(
             "    state \"{} 状态生命周期\" as {}_title\n",
             e.name,
             sanitize_id(&e.name)
         ));
         if e.variants.is_empty() {
+            diagrams.push(out);
             continue;
         }
-        out.push_str(&format!("    [*] --> {}\n", e.variants[0].name));
+        // 枚举变体名直接当状态节点，可能撞 Mermaid 关键字（note、state…）——
+        // 统一加命名空间前缀，语义由 title state 承载。
+        let sid = |v: &str| format!("{}_{}", sanitize_id(&e.name), sanitize_id(v));
+        out.push_str(&format!(
+            "    [*] --> {}\n",
+            sid(&e.variants[0].name)
+        ));
         for w in e.variants.windows(2) {
-            out.push_str(&format!("    {} --> {}\n", w[0].name, w[1].name));
+            out.push_str(&format!(
+                "    {} --> {}\n",
+                sid(&w[0].name),
+                sid(&w[1].name)
+            ));
         }
         // 守卫注记：deny 引用该枚举字段具体取值
         for entity in &program.entities {
@@ -242,7 +251,7 @@ pub fn status_mermaid(program: &Program) -> String {
                             if e.variants.iter().any(|v| v.name == value) {
                                 out.push_str(&format!(
                                     "    note right of {} : {} 时不可 {}\n",
-                                    value,
+                                    sid(&value),
                                     value,
                                     guard_op_zh(&guard.op)
                                 ));
@@ -252,8 +261,9 @@ pub fn status_mermaid(program: &Program) -> String {
                 }
             }
         }
+        diagrams.push(out);
     }
-    out
+    diagrams
 }
 
 fn deny_of_status(expr: &crate::dsl::Expr) -> Option<String> {
@@ -283,6 +293,7 @@ fn escape_html(s: &str) -> String {
         .replace('>', "&gt;")
 }
 
+/// Mermaid 标签 / HTML 属性内的引号转义（不碰 &<>，避免破坏 Mermaid 语法）。
 fn escape(s: &str) -> String {
     s.replace('"', "\\\"")
 }
@@ -299,7 +310,23 @@ pub fn emit_diagrams(
     }
     let er = er_mermaid(program);
     let dataflow = dataflow_mermaid(program);
-    let status = status_mermaid(program);
+    let status_diagrams = status_mermaid(program);
+    let status = status_diagrams.join("\n\n");
+    // 每个枚举的状态图必须是独立渲染块：一个 <pre class="mermaid"> 只能承载一份 diagram
+    let status_cards = if status_diagrams.is_empty() {
+        "<div class=\"card\"><p class=\"muted\">无状态枚举（enum 未被实体字段引用）</p></div>".to_string()
+    } else {
+        status_diagrams
+            .iter()
+            .map(|d| {
+                format!(
+                    "<div class=\"card\"><pre class=\"mermaid\">\n{}\n</pre></div>",
+                    escape_html(d)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
 
     let app_name = program
         .app
@@ -338,9 +365,7 @@ pre.src {{ background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8p
 </pre></div>
 
 <h2>③ 业务流程图（状态生命周期 + 守卫）</h2>
-<div class="card"><pre class="mermaid">
-{status}
-</pre></div>
+{status_cards}
 
 <h2>图表源码</h2>
 <pre class="src">ER:
@@ -360,7 +385,6 @@ STATUS:
         sha = &sha256_hex(&format!("{er}{dataflow}{status}"))[..12],
         er = escape_html(&er),
         dataflow = escape_html(&dataflow),
-        status = escape_html(&status),
         er_src = escape_html(&er),
         dataflow_src = escape_html(&dataflow),
         status_src = escape_html(&status),

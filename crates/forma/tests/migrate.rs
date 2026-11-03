@@ -194,16 +194,53 @@ rules R {
 }
 "#;
     let p = program(src);
-    let files = emit_diagrams(&PathBuf::from("."), &p, "generated/diagrams").unwrap();
+    // 独立 tmp 目录：并行测试下不能共用 CWD 的 generated/ 输出（文件竞态）
+    let files = emit_diagrams(&tmp_dir("status-guard"), &p, "generated/diagrams").unwrap();
     let status = files
         .iter()
         .find(|f| f.path.ends_with("status.mmd"))
         .unwrap();
     assert!(status.content.contains("stateDiagram-v2"));
-    assert!(status.content.contains("[*] --> pending"));
-    assert!(status.content.contains("pending --> active"));
-    assert!(status.content.contains("active --> completed"));
-    assert!(status.content.contains("completed 时不可 删除"));
+    // 变体名加枚举命名空间前缀，避免撞 Mermaid 关键字（note/state/end…）
+    assert!(status.content.contains("[*] --> Status_pending"));
+    assert!(status.content.contains("Status_pending --> Status_active"));
+    assert!(status.content.contains("Status_active --> Status_completed"));
+    assert!(status
+        .content
+        .contains("note right of Status_completed : completed 时不可 删除"));
+}
+
+/// 回归：变体名撞 Mermaid 关键字（note/state/end/direction）时，
+/// 旧版直接输出裸名导致 `Syntax error in t…`，必须加枚举命名空间前缀。
+#[test]
+fn status_flow_namespaces_variants_that_collide_with_mermaid_keywords() {
+    let src = r#"
+app demo { version = "0.1.0" }
+enum Note { note state end direction }
+entity Ticket {
+  id Uuid @id @default(uuid)
+  status Note @default(note)
+}
+"#;
+    let p = program(src);
+    let files = emit_diagrams(&tmp_dir("status-kw"), &p, "generated/diagrams").unwrap();
+    let status = files
+        .iter()
+        .find(|f| f.path.ends_with("status.mmd"))
+        .unwrap();
+    for kw in ["note", "state", "end", "direction"] {
+        // 不得出现裸关键字作为状态名（即行内直接跟关键字且无前缀）
+        let bare = format!("    {} --> {}\n", kw, kw);
+        assert!(
+            !status.content.contains(&bare),
+            "bare mermaid keyword leaked: {kw}"
+        );
+        assert!(
+            status.content.contains(&format!("Note_{kw}")),
+            "namespaced state missing for {kw}"
+        );
+    }
+    assert!(status.content.contains("[*] --> Note_note"));
 }
 
 #[test]
