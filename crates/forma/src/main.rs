@@ -116,6 +116,27 @@ fn run(argv: &[String]) -> Result<i32> {
                 .as_ref()
                 .and_then(|t| t.out.clone())
                 .unwrap_or_else(|| "generated/db".into());
+            // --verify：确定性校验——磁盘种子必须与 DSL 纯函数推导 byte 级一致
+            if flags.contains_key("verify") {
+                let report = forma::emit::verify_seed(&dir, &program, &format!("{db_out}/seed"))?;
+                if report.ok {
+                    println!(
+                        "✓ seed verify ok — v{} · SHA-256 {}…",
+                        report.version,
+                        &report.sql_hash[..16]
+                    );
+                    return Ok(0);
+                }
+                for issue in &report.issues {
+                    eprintln!("  ✗ {issue}");
+                }
+                eprintln!(
+                    "✗ seed verify failed — {} issue(s)；重建方式：forma seed {}",
+                    report.issues.len(),
+                    dir.display()
+                );
+                return Ok(1);
+            }
             let files = forma::emit::emit_seed(&dir, &program, &format!("{db_out}/seed"))?;
             for f in &files {
                 println!("  + {} ({})", f.path, f.generator);

@@ -47,6 +47,7 @@ examples/school/
 | V14 | 后端运行时契约 | 真 MySQL 8 + curl（见下方 E2E） | list/filter/search/create/update/delete/guard/分页全部正确 |
 | V15 | 移动端契约 | `cd app_mobile && flutter test` | 离线往返 + 在线全链路全绿（后端未启动时在线用例自动跳过） |
 | V16 | Web 编译 | `cd generated/web && npm i && npm run build` | tsc 0 error + vite build 成功 |
+| V17 | 数据确定性 | `forma seed --verify` | 磁盘种子与 DSL 推导 byte 级一致（SHA-256 发布前/CI 必跑） |
 
 ## 三轮迭代剧本
 
@@ -139,6 +140,11 @@ curl -s -X DELETE "$B/enrollments/<completed-id>"       # 守卫 → 409 + 中�
 # 6) 移动端契约测试（真实 HTTP 打真实后端）
 cd ../../app_mobile && flutter test
 ```
+
+### Detail 原语（三端对称性）
+
+`detail` 页面原语三端均已实现：web → Card+表格，flutter → Card+`_kv` 行（同一套
+类型驱动渲染：datetime/money/badge/ref）。回归测试：`tests/seed_flutter.rs::flutter_detail_page_renders_sections`。
 
 ### 这条流程真实抓到的 bug（已全部修掉并固化为回归测试）
 

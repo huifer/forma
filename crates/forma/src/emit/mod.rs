@@ -22,7 +22,7 @@ pub use mysql::emit_mysql;
 pub use openapi::emit_openapi;
 pub use replay::{replay_sql, schema_diff, schema_from_plans, SimSchema, SimTable};
 pub use rust_backend::emit_rust_backend;
-pub use seed::emit_seed;
+pub use seed::{emit_seed, render_seed_bundle, verify_seed, SeedBundle, SeedVerifyReport};
 pub use web_react::emit_web_react;
 
 pub use super::identity::to_snake_case as snake;

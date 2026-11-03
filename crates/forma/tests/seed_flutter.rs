@@ -317,3 +317,105 @@ fn dsl_parser_smoke_for_seed_fixtures_helper() {
     let p = parse(&lex("app demo { version = \"0.1.0\" }")).program;
     assert_eq!(p.app.unwrap().version, "0.1.0");
 }
+
+#[test]
+fn flutter_detail_page_renders_sections() {
+    // Detail 原语：section 分卡片，行 = 标签/值（与 gen-web 的 detail_page 同语义）
+    let dsl = r#"
+app demo { version = "0.1.0" }
+entity Article {
+  id        Uuid      @id @default(uuid)
+  title     String(120) @required
+  body      Text?
+  createdAt Timestamp @default(now) @readonly
+}
+api Articles {
+  entity Article
+  operations [list get]
+  list { sort [createdAt desc] }
+}
+page ArticleDetail {
+  route "/articles/{id}"
+  title { zh "文章详情" en "Article" }
+  detail Article {
+    sections {
+      基本 [title, body, createdAt: datetime]
+    }
+  }
+}
+"#;
+    let program = forma::dsl::parser::parse(&forma::dsl::lexer::lex(dsl)).program;
+    let dir = std::env::temp_dir().join(format!(
+        "forma-detail-{}-{:?}",
+        std::process::id(),
+        std::time::SystemTime::now()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let files = emit_flutter(&dir, &program, "app_mobile", "demo").unwrap();
+
+    // 详情页文件存在（snake(page.name)）
+    let detail = files
+        .iter()
+        .find(|f| f.path.ends_with("article_detail.dart"))
+        .expect("detail page not emitted");
+    // 实体 get 调用 + section 标题 + 字段行（fmtDateTime 处理时间列）
+    assert!(
+        detail.content.contains("ArticleApi(_api).get(id)"),
+        "{}",
+        detail.content
+    );
+    assert!(detail.content.contains("'基本'"));
+    assert!(detail.content.contains("_kv('Title', r.title)"));
+    assert!(detail.content.contains("fmtDateTime(r.createdAt)"));
+    // 可空 body：类型驱动的 `?? '-'`
+    assert!(detail.content.contains("r.body ?? '-'"));
+    // 路由注册：带 {id} 的参数路由进入 onGenerateRoute 分支
+    let main = files
+        .iter()
+        .find(|f| f.path.ends_with("main.dart"))
+        .unwrap();
+    assert!(main
+        .content
+        .contains("if (_match(segments, ['articles', ':id']))"),);
+    assert!(main.content.contains("const ArticleDetail();"));
+    // 无模板占位符泄漏
+    assert!(!detail.content.contains("%%"));
+}
+
+#[test]
+fn seed_verify_catches_drift_and_manual_edits() {
+    // 案例数据不是 AI 数据的承诺兑现：磁盘种子必须与 DSL 纯函数推导 byte 级一致
+    let (dir, program) = school_program();
+    let out = "db/seed";
+
+    // 基线：build 后 verify 通过（SHA-256 稳定）
+    emit_seed(&dir, &program, out).unwrap();
+    let report = forma::emit::verify_seed(&dir, &program, out).unwrap();
+    assert!(report.ok, "{:?}", report.issues);
+    assert_eq!(report.version, "0.3.0");
+    assert_eq!(report.sql_hash.len(), 64);
+    let hash_again = forma::emit::verify_seed(&dir, &program, out)
+        .unwrap()
+        .sql_hash;
+    assert_eq!(report.sql_hash, hash_again, "hash 必须跨次运行稳定");
+
+    // 手工改动一行 → 抓住
+    let sql_path = dir.join("db/seed/seed_0_3_0.sql");
+    let mut sql = std::fs::read_to_string(&sql_path).unwrap();
+    sql.push_str("-- tampered\n");
+    std::fs::write(&sql_path, sql).unwrap();
+    let report = forma::emit::verify_seed(&dir, &program, out).unwrap();
+    assert!(!report.ok);
+    assert!(
+        report.issues[0].contains("seed_0_3_0.sql"),
+        "{:?}",
+        report.issues
+    );
+
+    // DSL 演进后未重建 → 抓住（删除文件模拟缺失）
+    std::fs::remove_file(&sql_path).unwrap();
+    let report = forma::emit::verify_seed(&dir, &program, out).unwrap();
+    assert!(!report.ok);
+    assert!(report.issues[0].contains("缺失"));
+}

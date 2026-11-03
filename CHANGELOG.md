@@ -46,6 +46,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `API_BASE=http://10.0.2.2:8080/api`（此前 Flutter 默认 3000，连不上后端）。
 
 ### Added
+- **`forma seed --verify`**：确定性校验——磁盘种子与当前 DSL 的纯函数推导 byte 级一致
+  （SHA-256 报告；手工改动 / DSL 演进后未重建 → 非 0 退出）。「案例数据不是 AI 数据」
+  从设计承诺变成 CI 可执行的命令。
+- **Flutter Detail 原语**（此前只有占位注释，与 web 不对称）：section → Card、行 → 标签/值，
+  与列表页同一套类型驱动渲染；`{id}` 参数路由接入。真实工具链 analyze 0 issues。
 - **MCP 认识 v0.3 DSL 工程**（此前全部工具走联邦引擎，对 DSL 工程返回空）：
   - 新工具 `forma_check`（DSL 诊断 + lint + 结构摘要）、`forma_build`（与 CLI `forma build`
     同一条管线的产物清单）、`forma_migrate`（迁移链状态）；

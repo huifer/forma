@@ -234,6 +234,7 @@ forma validate [dir]                      Validate the project
 forma check [dir]                         Check DSL semantics
 forma build [dir] [--force]              Generate all configured targets
 forma seed [dir]                          Generate deterministic case data (db/seed/*.sql + fixtures)
+forma seed [dir] --verify                 Verify seeds byte-match the DSL derivation (SHA-256)
 forma diff <dir-a> <dir-b>                Compare two projects
 forma diagrams [dir]                      Generate diagrams and HTML preview
 forma lint [dir]                          Run built-in lint rules
