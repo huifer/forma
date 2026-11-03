@@ -2,7 +2,7 @@
 // 一套 DSL → MySQL + Rust 后端(axum+sqlx) + React Web(TanStack+shadcn)
 
 app school {
-  version = "0.1.0"
+  version = "0.3.0"
   locale  = ["zh", "en"]
 }
 
@@ -33,6 +33,7 @@ entity Student {
   school    School    @required
   name      String(50)  @required
   email     Email     @required @unique
+  phone     String(20)?
   age       Int?      @min(6) @max(80)
   createdAt Timestamp @default(now) @readonly
 
@@ -42,7 +43,7 @@ entity Student {
 entity Course {
   id        Uuid      @id @default(uuid)
   school    School    @required
-  title     String(120) @required  /// 课程名称
+  title     String(200) @required  /// 课程名称
   capacity  Int       @required @min(1) @max(500)
   createdAt Timestamp @default(now) @readonly
 
@@ -69,6 +70,7 @@ entity Election {
   status    ElectionStatus  @default(nominating)
   startsAt  Timestamp       @required
   endsAt    Timestamp       @required
+  remark    Text?
 }
 
 entity Candidate {
@@ -84,6 +86,7 @@ entity VoteRecord {
   election  Election  @required
   candidate Candidate @required
   voter     Student   @required
+  index [voter]
   unique [election, voter]
 }
 
@@ -121,7 +124,7 @@ api Students {
   operations [list get create update delete]
   list {
     filters [school, age]
-    search  [email]
+    search  [email, phone]
     sort    [createdAt desc]
     paginate offset
   }
@@ -199,6 +202,7 @@ page StudentEdit {
     layout stack {
       name  Input @required
       email Input email
+      phone Input
       age   Input
       school Select from School @required
     }
@@ -311,6 +315,7 @@ page ElectionEdit {
       status   Select from ElectionStatus
       startsAt Input datetime
       endsAt   Input datetime
+      remark   Textarea
     }
     submit → Elections.update redirect "/elections"
     submit create → Elections.create redirect "/elections"

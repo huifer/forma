@@ -15,7 +15,7 @@ pre.src { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px
 </head>
 <body>
 <h1>school · 系统可视化</h1>
-<p class="muted">由 Forma (gen-diagrams) 从 DSL 生成 · mermaid 渲染 · 149f44d3d0ce</p>
+<p class="muted">由 Forma (gen-diagrams) 从 DSL 生成 · mermaid 渲染 · ca97e065e696</p>
 
 <h2>① 实体关系图（数据模型）</h2>
 <div class="card"><pre class="mermaid">
@@ -31,6 +31,7 @@ erDiagram
         SCHOOL school FK
         STRING name
         EMAIL email UK
+        STRING phone
         INT age
         TIMESTAMP created_at
     }
@@ -56,6 +57,7 @@ erDiagram
         ELECTIONSTATUS status
         TIMESTAMP starts_at
         TIMESTAMP ends_at
+        TEXT remark
     }
     Candidate {
         UUID id PK
@@ -215,17 +217,19 @@ flowchart LR
 <div class="card"><pre class="mermaid">
 stateDiagram-v2
     state "ElectionStatus 状态生命周期" as ElectionStatus_title
-    [*] --&gt; nominating
-    nominating --&gt; voting
-    voting --&gt; closed
+    [*] --&gt; ElectionStatus_nominating
+    ElectionStatus_nominating --&gt; ElectionStatus_voting
+    ElectionStatus_voting --&gt; ElectionStatus_closed
 
+</pre></div>
+<div class="card"><pre class="mermaid">
 stateDiagram-v2
     state "EnrollmentStatus 状态生命周期" as EnrollmentStatus_title
-    [*] --&gt; pending
-    pending --&gt; active
-    active --&gt; completed
-    completed --&gt; cancelled
-    note right of completed : completed 时不可 删除
+    [*] --&gt; EnrollmentStatus_pending
+    EnrollmentStatus_pending --&gt; EnrollmentStatus_active
+    EnrollmentStatus_active --&gt; EnrollmentStatus_completed
+    EnrollmentStatus_completed --&gt; EnrollmentStatus_cancelled
+    note right of EnrollmentStatus_completed : completed 时不可 删除
 
 </pre></div>
 
@@ -243,6 +247,7 @@ erDiagram
         SCHOOL school FK
         STRING name
         EMAIL email UK
+        STRING phone
         INT age
         TIMESTAMP created_at
     }
@@ -268,6 +273,7 @@ erDiagram
         ELECTIONSTATUS status
         TIMESTAMP starts_at
         TIMESTAMP ends_at
+        TEXT remark
     }
     Candidate {
         UUID id PK
@@ -423,17 +429,18 @@ flowchart LR
 STATUS:
 stateDiagram-v2
     state "ElectionStatus 状态生命周期" as ElectionStatus_title
-    [*] --&gt; nominating
-    nominating --&gt; voting
-    voting --&gt; closed
+    [*] --&gt; ElectionStatus_nominating
+    ElectionStatus_nominating --&gt; ElectionStatus_voting
+    ElectionStatus_voting --&gt; ElectionStatus_closed
+
 
 stateDiagram-v2
     state "EnrollmentStatus 状态生命周期" as EnrollmentStatus_title
-    [*] --&gt; pending
-    pending --&gt; active
-    active --&gt; completed
-    completed --&gt; cancelled
-    note right of completed : completed 时不可 删除
+    [*] --&gt; EnrollmentStatus_pending
+    EnrollmentStatus_pending --&gt; EnrollmentStatus_active
+    EnrollmentStatus_active --&gt; EnrollmentStatus_completed
+    EnrollmentStatus_completed --&gt; EnrollmentStatus_cancelled
+    note right of EnrollmentStatus_completed : completed 时不可 删除
 
 </pre>
 <script>mermaid.initialize({ startOnLoad: true, theme: "neutral" });</script>

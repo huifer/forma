@@ -7,7 +7,7 @@ source: ["forma/**/*.fm"]
 targets:
   db:
     engine: mysql
-    out: generated/db
+    out: db
   backend:
     language: rust
     framework: axum

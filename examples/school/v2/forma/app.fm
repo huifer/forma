@@ -1,0 +1,340 @@
+// Forma DSL —— 学生学校报名上课（完整 CRUD + 关系关联用例）
+// 一套 DSL → MySQL + Rust 后端(axum+sqlx) + React Web(TanStack+shadcn)
+
+app school {
+  version = "0.2.0"
+  locale  = ["zh", "en"]
+}
+
+enum ElectionStatus {
+  nominating
+  voting
+  closed
+}
+
+enum EnrollmentStatus {
+  pending   @label { zh "待确认" en "Pending" }
+  active    @label { zh "在读" en "Active" }
+  completed @label { zh "已结课" en "Completed" }
+  cancelled @label { zh "已取消" en "Cancelled" }
+}
+
+// ── 数据层：学校 ← 学生 / 课程 ← 报名（三重关系关联） ──
+
+entity School {
+  id        Uuid      @id @default(uuid)
+  name      String(100) @required
+  city      String(50)?
+  createdAt Timestamp @default(now) @readonly
+}
+
+entity Student {
+  id        Uuid      @id @default(uuid)
+  school    School    @required
+  name      String(50)  @required
+  email     Email     @required @unique
+  age       Int?      @min(6) @max(80)
+  createdAt Timestamp @default(now) @readonly
+
+  index [school, name]
+}
+
+entity Course {
+  id        Uuid      @id @default(uuid)
+  school    School    @required
+  title     String(120) @required  /// 课程名称
+  capacity  Int       @required @min(1) @max(500)
+  createdAt Timestamp @default(now) @readonly
+
+  index [school]
+}
+
+entity Enrollment {
+  id         Uuid             @id @default(uuid)
+  student    Student          @required
+  course     Course           @required
+  status     EnrollmentStatus @default(pending)
+  enrolledAt Timestamp        @default(now)
+  createdAt  Timestamp        @default(now) @readonly
+  note       Text?
+
+  index [status]
+  index [student, course]
+  unique [student, course]
+}
+
+entity Election {
+  id        Uuid            @id @default(uuid)
+  title     String(200)     @required
+  status    ElectionStatus  @default(nominating)
+  startsAt  Timestamp       @required
+  endsAt    Timestamp       @required
+}
+
+entity Candidate {
+  id       Uuid    @id @default(uuid)
+  election Election @required
+  student  Student @required
+  slogan   String(500) @required
+  index [election]
+}
+
+entity VoteRecord {
+  id        Uuid      @id @default(uuid)
+  election  Election  @required
+  candidate Candidate @required
+  voter     Student   @required
+  unique [election, voter]
+}
+
+// ── 规则校验（写一次，后端 Rust + 前端 zod 同源编译） ──
+
+rules SchoolRules {
+  field Student.name {
+    required { zh "学生姓名必填" en "Student name is required" }
+  }
+  field Student.age {
+    min 6 { zh "入学年龄不得小于 6 岁" en "Age must be at least 6" }
+  }
+  field Course.capacity {
+    min 1 { zh "课程容量至少 1 人" en "Capacity must be at least 1" }
+  }
+  check Enrollment "报名时间不能早于创建时间" {
+    enrolledAt >= createdAt
+  }
+  guard Enrollment.delete {
+    deny status == "completed"
+      reason { zh "已结课的报名记录不可删除" en "Completed enrollments cannot be deleted" }
+  }
+}
+
+// ── API 层 ──
+
+api Schools {
+  entity School
+  operations [list get create update delete]
+  list { sort [createdAt desc] }
+}
+
+api Students {
+  entity Student
+  operations [list get create update delete]
+  list {
+    filters [school, age]
+    search  [email]
+    sort    [createdAt desc]
+    paginate offset
+  }
+}
+
+api Courses {
+  entity Course
+  operations [list get create update delete]
+  list {
+    filters [school]
+    search  [title]
+    sort    [createdAt desc]
+    paginate offset
+  }
+}
+
+api Enrollments {
+  entity Enrollment
+  operations [list get create update delete]
+  list {
+    filters [student, course, status]
+    sort    [enrolledAt desc]
+    paginate offset
+  }
+}
+
+// ── 页面层（目标无关原语 → shadcn/ui） ──
+
+page SchoolList {
+  route "/schools"
+  title { zh "学校管理" en "Schools" }
+  table {
+    query   Schools.list
+    columns [name, city, createdAt: datetime]
+    search  [name]
+    actions {
+      create → SchoolEdit
+      row    [edit → SchoolEdit, delete → Schools.delete confirm]
+    }
+  }
+}
+
+page SchoolEdit {
+  route "/schools/{id}"
+  title { zh "编辑学校" en "Edit School" }
+  form School {
+    layout stack {
+      name Input @required
+      city Input
+    }
+    submit → Schools.update redirect "/schools"
+    submit create → Schools.create redirect "/schools"
+  }
+}
+
+page StudentList {
+  route "/students"
+  title { zh "学生管理" en "Students" }
+  table {
+    query   Students.list
+    columns [name, email, school: ref, age, createdAt: datetime]
+    filter  school as select
+    search  [email]
+    actions {
+      create → StudentEdit
+      row    [edit → StudentEdit, delete → Students.delete confirm]
+    }
+  }
+}
+
+page StudentEdit {
+  route "/students/{id}"
+  title { zh "编辑学生" en "Edit Student" }
+  form Student {
+    layout stack {
+      name  Input @required
+      email Input email
+      age   Input
+      school Select from School @required
+    }
+    validation [SchoolRules]
+    submit → Students.update redirect "/students"
+    submit create → Students.create redirect "/students"
+  }
+}
+
+page CourseList {
+  route "/courses"
+  title { zh "课程管理" en "Courses" }
+  table {
+    query   Courses.list
+    columns [title, school: ref, capacity, createdAt: datetime]
+    filter  school as select
+    search  [title]
+    actions {
+      create → CourseEdit
+      row    [edit → CourseEdit, delete → Courses.delete confirm]
+    }
+  }
+}
+
+page CourseEdit {
+  route "/courses/{id}"
+  title { zh "编辑课程" en "Edit Course" }
+  form Course {
+    layout stack {
+      title    Input @required
+      capacity Input
+      school   Select from School @required
+    }
+    submit → Courses.update redirect "/courses"
+    submit create → Courses.create redirect "/courses"
+  }
+}
+
+page EnrollmentList {
+  route "/enrollments"
+  title { zh "报名管理" en "Enrollments" }
+  table {
+    query   Enrollments.list
+    columns [student: ref, course: ref, status: badge, enrolledAt: datetime]
+    filter  status as select
+    filter  course as select
+    actions {
+      create → EnrollmentEdit
+      row    [edit → EnrollmentEdit, delete → Enrollments.delete confirm]
+    }
+  }
+}
+
+page EnrollmentEdit {
+  route "/enrollments/{id}"
+  title { zh "编辑报名" en "Edit Enrollment" }
+  form Enrollment {
+    layout stack {
+      student    Select from Student @required
+      course     Select from Course @required
+      status     Select from EnrollmentStatus
+      enrolledAt Input datetime
+      note       Textarea
+    }
+    validation [SchoolRules]
+    submit → Enrollments.update redirect "/enrollments"
+    submit create → Enrollments.create redirect "/enrollments"
+  }
+}
+
+
+api Elections {
+  entity Election
+  operations [list get create update delete]
+  list { filters [status] sort [startsAt desc] }
+}
+
+api Candidates {
+  entity Candidate
+  operations [list get create update delete]
+  list { filters [election] }
+}
+
+api VoteRecords {
+  entity VoteRecord
+  operations [list get create]
+  list { filters [election, candidate] }
+}
+
+page ElectionList {
+  route "/elections"
+  title { zh "学生会竞选" en "Elections" }
+  table {
+    query   Elections.list
+    columns [title, status: badge, startsAt: datetime, endsAt: datetime]
+    filter  status as select
+    actions {
+      create → ElectionEdit
+      row    [edit → ElectionEdit, delete → Elections.delete confirm]
+    }
+  }
+}
+
+page ElectionEdit {
+  route "/elections/{id}"
+  title { zh "编辑竞选" en "Edit Election" }
+  form Election {
+    layout stack {
+      title    Input @required
+      status   Select from ElectionStatus
+      startsAt Input datetime
+      endsAt   Input datetime
+    }
+    submit → Elections.update redirect "/elections"
+    submit create → Elections.create redirect "/elections"
+  }
+}
+
+page CandidateList {
+  route "/elections/{id}/candidates"
+  title { zh "候选人列表" en "Candidates" }
+  table {
+    query   Candidates.list
+    columns [student: ref, slogan]
+    actions { create → CandidateEdit, row [delete → Candidates.delete confirm] }
+  }
+}
+
+page CandidateEdit {
+  route "/candidates/{id}"
+  title { zh "编辑候选人" en "Edit Candidate" }
+  form Candidate {
+    layout stack {
+      student Select from Student @required
+      slogan  Textarea @required
+    }
+    submit create → Candidates.create redirect "/elections"
+  }
+}

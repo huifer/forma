@@ -1,13 +1,14 @@
 stateDiagram-v2
     state "ElectionStatus 状态生命周期" as ElectionStatus_title
-    [*] --> nominating
-    nominating --> voting
-    voting --> closed
+    [*] --> ElectionStatus_nominating
+    ElectionStatus_nominating --> ElectionStatus_voting
+    ElectionStatus_voting --> ElectionStatus_closed
+
 
 stateDiagram-v2
     state "EnrollmentStatus 状态生命周期" as EnrollmentStatus_title
-    [*] --> pending
-    pending --> active
-    active --> completed
-    completed --> cancelled
-    note right of completed : completed 时不可 删除
+    [*] --> EnrollmentStatus_pending
+    EnrollmentStatus_pending --> EnrollmentStatus_active
+    EnrollmentStatus_active --> EnrollmentStatus_completed
+    EnrollmentStatus_completed --> EnrollmentStatus_cancelled
+    note right of EnrollmentStatus_completed : completed 时不可 删除

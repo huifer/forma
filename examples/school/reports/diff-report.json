@@ -2,10 +2,37 @@
   "summary": {
     "added": 11,
     "removed": 0,
-    "modified": 2,
+    "modified": 4,
     "unchanged": false
   },
   "entities": [
+    {
+      "name": "Student",
+      "status": "modified",
+      "fields_added": [
+        {
+          "name": "phone",
+          "type_name": "String"
+        }
+      ],
+      "fields_removed": [],
+      "fields_modified": [],
+      "indexes_changed": false
+    },
+    {
+      "name": "Course",
+      "status": "modified",
+      "fields_added": [],
+      "fields_removed": [],
+      "fields_modified": [
+        {
+          "name": "title",
+          "old": "String[\"120\"][\"required\"]",
+          "new": "String[\"200\"][\"required\"]"
+        }
+      ],
+      "indexes_changed": false
+    },
     {
       "name": "Enrollment",
       "status": "modified",
@@ -42,6 +69,10 @@
         {
           "name": "endsAt",
           "type_name": "Timestamp"
+        },
+        {
+          "name": "remark",
+          "type_name": "Text"
         }
       ],
       "fields_removed": [],
