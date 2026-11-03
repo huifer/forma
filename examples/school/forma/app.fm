@@ -6,6 +6,12 @@ app school {
   locale  = ["zh", "en"]
 }
 
+enum ElectionStatus {
+  nominating
+  voting
+  closed
+}
+
 enum EnrollmentStatus {
   pending   @label { zh "待确认" en "Pending" }
   active    @label { zh "在读" en "Active" }
@@ -55,6 +61,30 @@ entity Enrollment {
   index [status]
   index [student, course]
   unique [student, course]
+}
+
+entity Election {
+  id        Uuid            @id @default(uuid)
+  title     String(200)     @required
+  status    ElectionStatus  @default(nominating)
+  startsAt  Timestamp       @required
+  endsAt    Timestamp       @required
+}
+
+entity Candidate {
+  id       Uuid    @id @default(uuid)
+  election Election @required
+  student  Student @required
+  slogan   String(500) @required
+  index [election]
+}
+
+entity VoteRecord {
+  id        Uuid      @id @default(uuid)
+  election  Election  @required
+  candidate Candidate @required
+  voter     Student   @required
+  unique [election, voter]
 }
 
 // ── 规则校验（写一次，后端 Rust + 前端 zod 同源编译） ──
@@ -236,5 +266,75 @@ page EnrollmentEdit {
     validation [SchoolRules]
     submit → Enrollments.update redirect "/enrollments"
     submit create → Enrollments.create redirect "/enrollments"
+  }
+}
+
+
+api Elections {
+  entity Election
+  operations [list get create update delete]
+  list { filters [status] sort [startsAt desc] }
+}
+
+api Candidates {
+  entity Candidate
+  operations [list get create update delete]
+  list { filters [election] }
+}
+
+api VoteRecords {
+  entity VoteRecord
+  operations [list get create]
+  list { filters [election, candidate] }
+}
+
+page ElectionList {
+  route "/elections"
+  title { zh "学生会竞选" en "Elections" }
+  table {
+    query   Elections.list
+    columns [title, status: badge, startsAt: datetime, endsAt: datetime]
+    filter  status as select
+    actions {
+      create → ElectionEdit
+      row    [edit → ElectionEdit, delete → Elections.delete confirm]
+    }
+  }
+}
+
+page ElectionEdit {
+  route "/elections/{id}"
+  title { zh "编辑竞选" en "Edit Election" }
+  form Election {
+    layout stack {
+      title    Input @required
+      status   Select from ElectionStatus
+      startsAt Input datetime
+      endsAt   Input datetime
+    }
+    submit → Elections.update redirect "/elections"
+    submit create → Elections.create redirect "/elections"
+  }
+}
+
+page CandidateList {
+  route "/elections/{id}/candidates"
+  title { zh "候选人列表" en "Candidates" }
+  table {
+    query   Candidates.list
+    columns [student: ref, slogan]
+    actions { create → CandidateEdit, row [delete → Candidates.delete confirm] }
+  }
+}
+
+page CandidateEdit {
+  route "/candidates/{id}"
+  title { zh "编辑候选人" en "Edit Candidate" }
+  form Candidate {
+    layout stack {
+      student Select from Student @required
+      slogan  Textarea @required
+    }
+    submit create → Candidates.create redirect "/elections"
   }
 }

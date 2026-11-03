@@ -1138,6 +1138,9 @@ impl<'a> Parser<'a> {
             row: Vec::new(),
         };
         while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+            if self.eat_punct(",") {
+                continue;
+            }
             let tok = self.peek().clone();
             if tok.value == "create" && tok.kind == TokKind::Ident {
                 self.next();

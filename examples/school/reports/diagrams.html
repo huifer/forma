@@ -15,7 +15,7 @@ pre.src { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px
 </head>
 <body>
 <h1>school · 系统可视化</h1>
-<p class="muted">由 Forma (gen-diagrams) 从 DSL 生成 · mermaid 渲染 · e47386ec7ab4</p>
+<p class="muted">由 Forma (gen-diagrams) 从 DSL 生成 · mermaid 渲染 · 149f44d3d0ce</p>
 
 <h2>① 实体关系图（数据模型）</h2>
 <div class="card"><pre class="mermaid">
@@ -50,11 +50,35 @@ erDiagram
         TIMESTAMP created_at
         TEXT note
     }
+    Election {
+        UUID id PK
+        STRING title
+        ELECTIONSTATUS status
+        TIMESTAMP starts_at
+        TIMESTAMP ends_at
+    }
+    Candidate {
+        UUID id PK
+        ELECTION election FK
+        STUDENT student FK
+        STRING slogan
+    }
+    VoteRecord {
+        UUID id PK
+        ELECTION election FK
+        CANDIDATE candidate FK
+        STUDENT voter FK
+    }
 
     Student }o--|| School : school
     Course }o--|| School : school
     Enrollment }o--|| Student : student
     Enrollment }o--|| Course : course
+    Candidate }o--|| Election : election
+    Candidate }o--|| Student : student
+    VoteRecord }o--|| Election : election
+    VoteRecord }o--|| Candidate : candidate
+    VoteRecord }o--|| Student : voter
 
 </pre></div>
 
@@ -134,6 +158,40 @@ flowchart LR
     F_EnrollmentEdit --&gt; Q_Enrollments_create
     Q_Enrollments_create --&gt; E_Enrollment
     R_SchoolRules -. 校验 .-&gt; F_EnrollmentEdit
+    P_ElectionList["页面 ElectionList · 学生会竞选"]
+    USER --&gt; P_ElectionList
+    Q_Elections["API Elections · list"]
+    P_ElectionList --&gt; Q_Elections
+    E_Election["实体 Election"]
+    E_Election --&gt; Q_Elections
+    P_ElectionEdit["页面 ElectionEdit · 编辑竞选"]
+    USER --&gt; P_ElectionEdit
+    F_ElectionEdit["表单 ElectionEdit"]
+    P_ElectionEdit --&gt; F_ElectionEdit
+    E_Election["实体 Election"]
+    Q_Elections_update["API Elections · update"]
+    F_ElectionEdit --&gt; Q_Elections_update
+    Q_Elections_update --&gt; E_Election
+    Q_Elections_create["API Elections · create"]
+    F_ElectionEdit --&gt; Q_Elections_create
+    Q_Elections_create --&gt; E_Election
+    P_CandidateList["页面 CandidateList · 候选人列表"]
+    USER --&gt; P_CandidateList
+    Q_Candidates["API Candidates · list"]
+    P_CandidateList --&gt; Q_Candidates
+    E_Candidate["实体 Candidate"]
+    E_Candidate --&gt; Q_Candidates
+    P_CandidateEdit["页面 CandidateEdit · 编辑候选人"]
+    USER --&gt; P_CandidateEdit
+    F_CandidateEdit["表单 CandidateEdit"]
+    P_CandidateEdit --&gt; F_CandidateEdit
+    E_Candidate["实体 Candidate"]
+    Q_Candidates_create["API Candidates · create"]
+    F_CandidateEdit --&gt; Q_Candidates_create
+    Q_Candidates_create --&gt; E_Candidate
+    Q_VoteRecords["API VoteRecords"]
+    E_VoteRecord["实体 VoteRecord"]
+    E_VoteRecord --&gt; Q_VoteRecords
     T_schools[("MySQL schools")]
     E_School --&gt; T_schools
     T_students[("MySQL students")]
@@ -142,6 +200,12 @@ flowchart LR
     E_Course --&gt; T_courses
     T_enrollments[("MySQL enrollments")]
     E_Enrollment --&gt; T_enrollments
+    T_elections[("MySQL elections")]
+    E_Election --&gt; T_elections
+    T_candidates[("MySQL candidates")]
+    E_Candidate --&gt; T_candidates
+    T_vote_records[("MySQL vote_records")]
+    E_VoteRecord --&gt; T_vote_records
     R_SchoolRules -. 校验 .-&gt; E_Student
     R_SchoolRules -. 校验 .-&gt; E_Course
 
@@ -149,6 +213,12 @@ flowchart LR
 
 <h2>③ 业务流程图（状态生命周期 + 守卫）</h2>
 <div class="card"><pre class="mermaid">
+stateDiagram-v2
+    state "ElectionStatus 状态生命周期" as ElectionStatus_title
+    [*] --&gt; nominating
+    nominating --&gt; voting
+    voting --&gt; closed
+
 stateDiagram-v2
     state "EnrollmentStatus 状态生命周期" as EnrollmentStatus_title
     [*] --&gt; pending
@@ -192,11 +262,35 @@ erDiagram
         TIMESTAMP created_at
         TEXT note
     }
+    Election {
+        UUID id PK
+        STRING title
+        ELECTIONSTATUS status
+        TIMESTAMP starts_at
+        TIMESTAMP ends_at
+    }
+    Candidate {
+        UUID id PK
+        ELECTION election FK
+        STUDENT student FK
+        STRING slogan
+    }
+    VoteRecord {
+        UUID id PK
+        ELECTION election FK
+        CANDIDATE candidate FK
+        STUDENT voter FK
+    }
 
     Student }o--|| School : school
     Course }o--|| School : school
     Enrollment }o--|| Student : student
     Enrollment }o--|| Course : course
+    Candidate }o--|| Election : election
+    Candidate }o--|| Student : student
+    VoteRecord }o--|| Election : election
+    VoteRecord }o--|| Candidate : candidate
+    VoteRecord }o--|| Student : voter
 
 
 DATAFLOW:
@@ -274,6 +368,40 @@ flowchart LR
     F_EnrollmentEdit --&gt; Q_Enrollments_create
     Q_Enrollments_create --&gt; E_Enrollment
     R_SchoolRules -. 校验 .-&gt; F_EnrollmentEdit
+    P_ElectionList["页面 ElectionList · 学生会竞选"]
+    USER --&gt; P_ElectionList
+    Q_Elections["API Elections · list"]
+    P_ElectionList --&gt; Q_Elections
+    E_Election["实体 Election"]
+    E_Election --&gt; Q_Elections
+    P_ElectionEdit["页面 ElectionEdit · 编辑竞选"]
+    USER --&gt; P_ElectionEdit
+    F_ElectionEdit["表单 ElectionEdit"]
+    P_ElectionEdit --&gt; F_ElectionEdit
+    E_Election["实体 Election"]
+    Q_Elections_update["API Elections · update"]
+    F_ElectionEdit --&gt; Q_Elections_update
+    Q_Elections_update --&gt; E_Election
+    Q_Elections_create["API Elections · create"]
+    F_ElectionEdit --&gt; Q_Elections_create
+    Q_Elections_create --&gt; E_Election
+    P_CandidateList["页面 CandidateList · 候选人列表"]
+    USER --&gt; P_CandidateList
+    Q_Candidates["API Candidates · list"]
+    P_CandidateList --&gt; Q_Candidates
+    E_Candidate["实体 Candidate"]
+    E_Candidate --&gt; Q_Candidates
+    P_CandidateEdit["页面 CandidateEdit · 编辑候选人"]
+    USER --&gt; P_CandidateEdit
+    F_CandidateEdit["表单 CandidateEdit"]
+    P_CandidateEdit --&gt; F_CandidateEdit
+    E_Candidate["实体 Candidate"]
+    Q_Candidates_create["API Candidates · create"]
+    F_CandidateEdit --&gt; Q_Candidates_create
+    Q_Candidates_create --&gt; E_Candidate
+    Q_VoteRecords["API VoteRecords"]
+    E_VoteRecord["实体 VoteRecord"]
+    E_VoteRecord --&gt; Q_VoteRecords
     T_schools[("MySQL schools")]
     E_School --&gt; T_schools
     T_students[("MySQL students")]
@@ -282,11 +410,23 @@ flowchart LR
     E_Course --&gt; T_courses
     T_enrollments[("MySQL enrollments")]
     E_Enrollment --&gt; T_enrollments
+    T_elections[("MySQL elections")]
+    E_Election --&gt; T_elections
+    T_candidates[("MySQL candidates")]
+    E_Candidate --&gt; T_candidates
+    T_vote_records[("MySQL vote_records")]
+    E_VoteRecord --&gt; T_vote_records
     R_SchoolRules -. 校验 .-&gt; E_Student
     R_SchoolRules -. 校验 .-&gt; E_Course
 
 
 STATUS:
+stateDiagram-v2
+    state "ElectionStatus 状态生命周期" as ElectionStatus_title
+    [*] --&gt; nominating
+    nominating --&gt; voting
+    voting --&gt; closed
+
 stateDiagram-v2
     state "EnrollmentStatus 状态生命周期" as EnrollmentStatus_title
     [*] --&gt; pending
