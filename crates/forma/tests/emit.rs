@@ -27,7 +27,7 @@ fn mysql_emits_fks_indexes_and_decimal() {
     assert_eq!(files.len(), 1);
     let sql = &files[0].content;
     // 三重关系外键
-    assert_eq!(sql.matches("FOREIGN KEY").count(), 4, "{sql}");
+    assert_eq!(sql.matches("FOREIGN KEY").count(), 9, "{sql}");
     assert!(sql.contains("REFERENCES schools (id)"));
     assert!(sql.contains("BIGINT")); // capacity
     assert!(sql.contains("UNIQUE KEY"));

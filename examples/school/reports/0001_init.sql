@@ -42,8 +42,41 @@ CREATE TABLE enrollments (
   note TEXT NULL,
   PRIMARY KEY (id),
   UNIQUE KEY uq_enrollments_0 (student_id, course_id),
-  KEY idx_enrollments_0 (student_id, course_id),
+  KEY idx_enrollments_0 (status),
+  KEY idx_enrollments_1 (student_id, course_id),
   CONSTRAINT fk_enrollments_student_id FOREIGN KEY (student_id) REFERENCES students (id),
   CONSTRAINT fk_enrollments_course_id FOREIGN KEY (course_id) REFERENCES courses (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE elections (
+  id CHAR(36) NOT NULL,
+  title VARCHAR(200) NOT NULL,
+  status VARCHAR(64) NOT NULL,
+  starts_at DATETIME(3) NOT NULL,
+  ends_at DATETIME(3) NOT NULL,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE candidates (
+  id CHAR(36) NOT NULL,
+  election_id CHAR(36) NOT NULL,
+  student_id CHAR(36) NOT NULL,
+  slogan VARCHAR(500) NOT NULL,
+  PRIMARY KEY (id),
+  KEY idx_candidates_0 (election_id),
+  CONSTRAINT fk_candidates_election_id FOREIGN KEY (election_id) REFERENCES elections (id),
+  CONSTRAINT fk_candidates_student_id FOREIGN KEY (student_id) REFERENCES students (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE vote_records (
+  id CHAR(36) NOT NULL,
+  election_id CHAR(36) NOT NULL,
+  candidate_id CHAR(36) NOT NULL,
+  voter_id CHAR(36) NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_vote_records_0 (election_id, voter_id),
+  CONSTRAINT fk_vote_records_election_id FOREIGN KEY (election_id) REFERENCES elections (id),
+  CONSTRAINT fk_vote_records_candidate_id FOREIGN KEY (candidate_id) REFERENCES candidates (id),
+  CONSTRAINT fk_vote_records_voter_id FOREIGN KEY (voter_id) REFERENCES students (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

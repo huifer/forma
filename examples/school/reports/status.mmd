@@ -1,4 +1,10 @@
 stateDiagram-v2
+    state "ElectionStatus 状态生命周期" as ElectionStatus_title
+    [*] --> nominating
+    nominating --> voting
+    voting --> closed
+
+stateDiagram-v2
     state "EnrollmentStatus 状态生命周期" as EnrollmentStatus_title
     [*] --> pending
     pending --> active

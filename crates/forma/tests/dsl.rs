@@ -14,10 +14,10 @@ fn parse_school_use_case() {
     let m = forma::manifest::load_manifest(&dir).unwrap();
     let (program, diags) = load_program(&dir, &m.manifest.source.clone().unwrap()).unwrap();
     assert!(diags.is_empty(), "{diags:?}");
-    assert_eq!(program.entities.len(), 4);
-    assert_eq!(program.enums.len(), 1);
-    assert_eq!(program.apis.len(), 4);
-    assert_eq!(program.pages.len(), 8);
+    assert_eq!(program.entities.len(), 7);
+    assert_eq!(program.enums.len(), 2);
+    assert_eq!(program.apis.len(), 7);
+    assert_eq!(program.pages.len(), 12);
 
     // 关系字段
     let student = program

@@ -1,6 +1,6 @@
 {
   "summary": {
-    "added": 0,
+    "added": 11,
     "removed": 0,
     "modified": 2,
     "unchanged": false
@@ -17,10 +17,99 @@
       ],
       "fields_removed": [],
       "fields_modified": [],
+      "indexes_changed": true
+    },
+    {
+      "name": "Election",
+      "status": "added",
+      "fields_added": [
+        {
+          "name": "id",
+          "type_name": "Uuid"
+        },
+        {
+          "name": "title",
+          "type_name": "String"
+        },
+        {
+          "name": "status",
+          "type_name": "ElectionStatus"
+        },
+        {
+          "name": "startsAt",
+          "type_name": "Timestamp"
+        },
+        {
+          "name": "endsAt",
+          "type_name": "Timestamp"
+        }
+      ],
+      "fields_removed": [],
+      "fields_modified": [],
+      "indexes_changed": false
+    },
+    {
+      "name": "Candidate",
+      "status": "added",
+      "fields_added": [
+        {
+          "name": "id",
+          "type_name": "Uuid"
+        },
+        {
+          "name": "election",
+          "type_name": "Election"
+        },
+        {
+          "name": "student",
+          "type_name": "Student"
+        },
+        {
+          "name": "slogan",
+          "type_name": "String"
+        }
+      ],
+      "fields_removed": [],
+      "fields_modified": [],
+      "indexes_changed": false
+    },
+    {
+      "name": "VoteRecord",
+      "status": "added",
+      "fields_added": [
+        {
+          "name": "id",
+          "type_name": "Uuid"
+        },
+        {
+          "name": "election",
+          "type_name": "Election"
+        },
+        {
+          "name": "candidate",
+          "type_name": "Candidate"
+        },
+        {
+          "name": "voter",
+          "type_name": "Student"
+        }
+      ],
+      "fields_removed": [],
+      "fields_modified": [],
       "indexes_changed": false
     }
   ],
   "enums": [
+    {
+      "name": "ElectionStatus",
+      "status": "added",
+      "variants_added": [
+        "nominating",
+        "voting",
+        "closed"
+      ],
+      "variants_removed": []
+    },
     {
       "name": "EnrollmentStatus",
       "status": "modified",
@@ -30,6 +119,62 @@
       "variants_removed": []
     }
   ],
-  "apis": [],
-  "pages": []
+  "apis": [
+    {
+      "name": "Elections",
+      "status": "added",
+      "operations_added": [
+        "list",
+        "get",
+        "create",
+        "update",
+        "delete"
+      ],
+      "operations_removed": []
+    },
+    {
+      "name": "Candidates",
+      "status": "added",
+      "operations_added": [
+        "list",
+        "get",
+        "create",
+        "update",
+        "delete"
+      ],
+      "operations_removed": []
+    },
+    {
+      "name": "VoteRecords",
+      "status": "added",
+      "operations_added": [
+        "list",
+        "get",
+        "create"
+      ],
+      "operations_removed": []
+    }
+  ],
+  "pages": [
+    {
+      "name": "ElectionList",
+      "status": "added",
+      "changed": false
+    },
+    {
+      "name": "ElectionEdit",
+      "status": "added",
+      "changed": false
+    },
+    {
+      "name": "CandidateList",
+      "status": "added",
+      "changed": false
+    },
+    {
+      "name": "CandidateEdit",
+      "status": "added",
+      "changed": false
+    }
+  ]
 }

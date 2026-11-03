@@ -29,8 +29,32 @@ erDiagram
         TIMESTAMP created_at
         TEXT note
     }
+    Election {
+        UUID id PK
+        STRING title
+        ELECTIONSTATUS status
+        TIMESTAMP starts_at
+        TIMESTAMP ends_at
+    }
+    Candidate {
+        UUID id PK
+        ELECTION election FK
+        STUDENT student FK
+        STRING slogan
+    }
+    VoteRecord {
+        UUID id PK
+        ELECTION election FK
+        CANDIDATE candidate FK
+        STUDENT voter FK
+    }
 
     Student }o--|| School : school
     Course }o--|| School : school
     Enrollment }o--|| Student : student
     Enrollment }o--|| Course : course
+    Candidate }o--|| Election : election
+    Candidate }o--|| Student : student
+    VoteRecord }o--|| Election : election
+    VoteRecord }o--|| Candidate : candidate
+    VoteRecord }o--|| Student : voter

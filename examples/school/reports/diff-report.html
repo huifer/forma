@@ -23,17 +23,26 @@ h2 { font-size:16px; margin:28px 0 12px; }
 <body>
 <h1>Forma DSL 版本差异</h1>
 <div class="muted">v1 → school · 由 Forma (gen-diff) 生成</div>
-<p><span class="summary">新增 0 · 删除 0 · 修改 2</span></p>
-<h2>实体（1）</h2>
+<p><span class="summary">新增 11 · 删除 0 · 修改 2</span></p>
+<h2>实体（4）</h2>
 <div class="entity">
   <div class="entity-head"><span class="pill" style="background:#fef9c3">修改</span> <b>Enrollment</b></div>
   <table><tr><th>字段</th><th>类型</th><th>变更</th></tr><tr class="add"><td>+ note</td><td>Text</td><td></td></tr><tr class="mod"><td>~ indexes</td><td></td><td>索引/唯一约束有变化</td></tr></table>
+</div><div class="entity">
+  <div class="entity-head"><span class="pill" style="background:#dcfce7">新增</span> <b>Election</b></div>
+  <table><tr><th>字段</th><th>类型</th><th>变更</th></tr><tr class="add"><td>+ id</td><td>Uuid</td><td></td></tr><tr class="add"><td>+ title</td><td>String</td><td></td></tr><tr class="add"><td>+ status</td><td>ElectionStatus</td><td></td></tr><tr class="add"><td>+ startsAt</td><td>Timestamp</td><td></td></tr><tr class="add"><td>+ endsAt</td><td>Timestamp</td><td></td></tr></table>
+</div><div class="entity">
+  <div class="entity-head"><span class="pill" style="background:#dcfce7">新增</span> <b>Candidate</b></div>
+  <table><tr><th>字段</th><th>类型</th><th>变更</th></tr><tr class="add"><td>+ id</td><td>Uuid</td><td></td></tr><tr class="add"><td>+ election</td><td>Election</td><td></td></tr><tr class="add"><td>+ student</td><td>Student</td><td></td></tr><tr class="add"><td>+ slogan</td><td>String</td><td></td></tr></table>
+</div><div class="entity">
+  <div class="entity-head"><span class="pill" style="background:#dcfce7">新增</span> <b>VoteRecord</b></div>
+  <table><tr><th>字段</th><th>类型</th><th>变更</th></tr><tr class="add"><td>+ id</td><td>Uuid</td><td></td></tr><tr class="add"><td>+ election</td><td>Election</td><td></td></tr><tr class="add"><td>+ candidate</td><td>Candidate</td><td></td></tr><tr class="add"><td>+ voter</td><td>Student</td><td></td></tr></table>
 </div>
 <h2>枚举</h2>
-<div class="entity"><div class="entity-head"><span class="pill" style="background:#fef9c3">修改</span> <b>EnrollmentStatus</b> <span class="pill" style="background:#dcfce7">+ cancelled</span> </div></div>
+<div class="entity"><div class="entity-head"><span class="pill" style="background:#dcfce7">新增</span> <b>ElectionStatus</b> <span class="pill" style="background:#dcfce7">+ nominating</span> <span class="pill" style="background:#dcfce7">+ voting</span> <span class="pill" style="background:#dcfce7">+ closed</span> </div></div><div class="entity"><div class="entity-head"><span class="pill" style="background:#fef9c3">修改</span> <b>EnrollmentStatus</b> <span class="pill" style="background:#dcfce7">+ cancelled</span> </div></div>
 <h2>API</h2>
-
+<div class="entity"><div class="entity-head"><span class="pill" style="background:#dcfce7">新增</span> <b>Elections</b> <span class="pill" style="background:#dcfce7">+ list</span> <span class="pill" style="background:#dcfce7">+ get</span> <span class="pill" style="background:#dcfce7">+ create</span> <span class="pill" style="background:#dcfce7">+ update</span> <span class="pill" style="background:#dcfce7">+ delete</span> </div></div><div class="entity"><div class="entity-head"><span class="pill" style="background:#dcfce7">新增</span> <b>Candidates</b> <span class="pill" style="background:#dcfce7">+ list</span> <span class="pill" style="background:#dcfce7">+ get</span> <span class="pill" style="background:#dcfce7">+ create</span> <span class="pill" style="background:#dcfce7">+ update</span> <span class="pill" style="background:#dcfce7">+ delete</span> </div></div><div class="entity"><div class="entity-head"><span class="pill" style="background:#dcfce7">新增</span> <b>VoteRecords</b> <span class="pill" style="background:#dcfce7">+ list</span> <span class="pill" style="background:#dcfce7">+ get</span> <span class="pill" style="background:#dcfce7">+ create</span> </div></div>
 <h2>页面</h2>
-
+<div class="entity"><div class="entity-head"><span class="pill" style="background:#dcfce7">新增</span> <b>ElectionList</b></div></div><div class="entity"><div class="entity-head"><span class="pill" style="background:#dcfce7">新增</span> <b>ElectionEdit</b></div></div><div class="entity"><div class="entity-head"><span class="pill" style="background:#dcfce7">新增</span> <b>CandidateList</b></div></div><div class="entity"><div class="entity-head"><span class="pill" style="background:#dcfce7">新增</span> <b>CandidateEdit</b></div></div>
 </body>
 </html>

@@ -72,6 +72,40 @@ flowchart LR
     F_EnrollmentEdit --> Q_Enrollments_create
     Q_Enrollments_create --> E_Enrollment
     R_SchoolRules -. 校验 .-> F_EnrollmentEdit
+    P_ElectionList["页面 ElectionList · 学生会竞选"]
+    USER --> P_ElectionList
+    Q_Elections["API Elections · list"]
+    P_ElectionList --> Q_Elections
+    E_Election["实体 Election"]
+    E_Election --> Q_Elections
+    P_ElectionEdit["页面 ElectionEdit · 编辑竞选"]
+    USER --> P_ElectionEdit
+    F_ElectionEdit["表单 ElectionEdit"]
+    P_ElectionEdit --> F_ElectionEdit
+    E_Election["实体 Election"]
+    Q_Elections_update["API Elections · update"]
+    F_ElectionEdit --> Q_Elections_update
+    Q_Elections_update --> E_Election
+    Q_Elections_create["API Elections · create"]
+    F_ElectionEdit --> Q_Elections_create
+    Q_Elections_create --> E_Election
+    P_CandidateList["页面 CandidateList · 候选人列表"]
+    USER --> P_CandidateList
+    Q_Candidates["API Candidates · list"]
+    P_CandidateList --> Q_Candidates
+    E_Candidate["实体 Candidate"]
+    E_Candidate --> Q_Candidates
+    P_CandidateEdit["页面 CandidateEdit · 编辑候选人"]
+    USER --> P_CandidateEdit
+    F_CandidateEdit["表单 CandidateEdit"]
+    P_CandidateEdit --> F_CandidateEdit
+    E_Candidate["实体 Candidate"]
+    Q_Candidates_create["API Candidates · create"]
+    F_CandidateEdit --> Q_Candidates_create
+    Q_Candidates_create --> E_Candidate
+    Q_VoteRecords["API VoteRecords"]
+    E_VoteRecord["实体 VoteRecord"]
+    E_VoteRecord --> Q_VoteRecords
     T_schools[("MySQL schools")]
     E_School --> T_schools
     T_students[("MySQL students")]
@@ -80,5 +114,11 @@ flowchart LR
     E_Course --> T_courses
     T_enrollments[("MySQL enrollments")]
     E_Enrollment --> T_enrollments
+    T_elections[("MySQL elections")]
+    E_Election --> T_elections
+    T_candidates[("MySQL candidates")]
+    E_Candidate --> T_candidates
+    T_vote_records[("MySQL vote_records")]
+    E_VoteRecord --> T_vote_records
     R_SchoolRules -. 校验 .-> E_Student
     R_SchoolRules -. 校验 .-> E_Course
