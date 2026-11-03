@@ -1,0 +1,40 @@
+# school · Flutter 客户端（Android / iOS）
+
+由 Forma `gen-flutter` 生成 —— 与 Rust 后端（axum）、React Web 共用同一套 DSL 契约：
+模型、REST API、校验规则三端同源，改 `.fm` 后 `forma build` 全部重生成。
+
+## 结构
+
+```
+lib/
+  models/models.dart        # 实体 + 枚举 + ListRow + Input（fromJson/toJson，键名=后端 serde）
+  api/api.dart              # REST 客户端：/api/{plural}，page/page_size/q/filters
+  validation/validators.dart# DSL rules 的 Dart 编译（与 Rust validators.rs 同源）
+  ui/format.dart            # 日期/数字展示与输入格式
+  pages/*.dart              # 列表页 + 编辑页（页面原语 → Material）
+  main.dart                 # 路由表 + {id} 参数路由匹配
+```
+
+## 运行
+
+```bash
+# 1) 准备数据库并导入种子数据（案例数据由 gen-seed 确定性生成）
+mysql -u{PASSWORD_583ugbf8} -p -e "CREATE DATABASE IF NOT EXISTS school"
+mysql -u{PASSWORD_583ugbf8} -p school < ../db/seed/seed_0.3.0.sql
+
+# 2) 启动后端（默认 127.0.0.1:3000）
+cd ../generated/backend
+DATABASE_URL="mysql://{PASSWORD_583ugbf8}:{PASSWORD_583ugbf8}@127.0.0.1:3306/school" cargo run
+
+# 3) 运行 App
+flutter pub get
+flutter run                                                    # Android 模拟器（默认 API_BASE=http://10.0.2.2:3000/api）
+flutter run --dart-define=API_BASE=http://127.0.0.1:3000/api   # iOS 模拟器 / 真机按局域网 IP
+```
+
+入口路由：`/schools`。API 地址一律通过 `--dart-define=API_BASE=...` 覆盖。
+
+## 要求
+
+- Flutter ≥ 3.35（使用 `DropdownButtonFormField.initialValue`）
+- 后端由同一 `forma.yaml` 的 `backend` target 生成，CORS 已放行

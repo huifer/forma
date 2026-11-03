@@ -19,3 +19,6 @@ targets:
     data: tanstack-query
     ui: shadcn
     out: generated/web
+  mobile:
+    framework: flutter
+    out: app_mobile

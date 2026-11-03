@@ -1,3 +1,5 @@
+# v0.1.0 快照（只读）：R1 基线 —— school/student/course/enrollment CRUD
+# db out 指向可见目录，使 `forma seed` 的案例数据链（seed_0_1_0.sql）可入库
 project:
   name: school
   version: 0.1.0
@@ -7,7 +9,7 @@ source: ["forma/**/*.fm"]
 targets:
   db:
     engine: mysql
-    out: generated/db
+    out: db
   backend:
     language: rust
     framework: axum

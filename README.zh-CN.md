@@ -94,9 +94,10 @@ DSL 里没有 axum、没有 React、没有 SQL——页面是目标无关的抽�
 | 目标 | 技术栈（当前） | 生成产物 |
 |---|---|---|
 | 数据库 | **MySQL 8**（InnoDB, utf8mb4） | 不可变基线 + 版本化 upgrade/rollback 迁移 |
+| 案例数据 | **gen-seed**（确定性，非 AI 数据） | 版本化 `db/seed/seed_{version}.sql` + 与 API 契约对齐的 JSON fixtures |
 | 后端 | **Rust**（axum + sqlx） | models、validators、routes、repositories |
 | Web | **React + TanStack Router/Query + shadcn/ui** | 类型化路由、Query hooks、表单、zod schema |
-| 移动端 | iOS / Android | 规划中（同一页面原语 → 原生或 Expo） |
+| 移动端 | **Flutter**（Android / iOS 同源） | models、REST 客户端、与后端/Web 同源的校验规则、Material 页面 |
 
 ## 版本化迁移（多版本）
 
@@ -148,13 +149,16 @@ v0.1.0（CRUD 基线）→ v0.2.0（竞选功能：3 新表 + 外键）→ v0.3.
 
 完整路线图（含每个里程碑的验收标准）：[docs/roadmap.zh-CN.md](docs/roadmap.zh-CN.md)。
 
+多轮次迭代案例与能力完整性验收矩阵：[docs/case-protocol.zh-CN.md](docs/case-protocol.zh-CN.md)。
+
 ## 开发（当前原型）
 
 ```bash
-cargo test            # 60 个集成测试
+cargo test            # 71 个集成测试
 cargo build --release
 cargo run -- migrate examples/school status      # 数据库版本链
 cargo run -- migrate examples/school verify      # 链完整性 + 重放校验
+cargo run -- build examples/school               # 全目标：db/backend/web/openapi/diagrams/seed/flutter
 cargo run -- doctor examples/order-management    # 联邦时期示例命令
 ```
 

@@ -7,3 +7,10 @@ generated/
 .DS_Store
 target/
 .memory/
+# school 快照目录的本地构建产物（种子数据链已提升至 school/db/seed/ 入库）
+examples/school/v1/db/
+examples/school/v2/db/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/

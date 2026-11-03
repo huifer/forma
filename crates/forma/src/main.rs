@@ -12,6 +12,7 @@ Usage:
   forma doctor [dir]         Full cross-standard diagnostics
   forma graph [dir]          Print semantic graph (--json | --export <file>)
   forma build [dir]          Incremental build (--force)
+  forma seed [dir]           生成确定性案例数据（db/seed/*.sql + fixtures/*.json）
   forma migrate [dir]        数据库迁移：status/history/verify/up/down [--sql] [--apply] [--to v] [--steps N]
   forma patch [dir] <file>   Apply a semantic patch (transactional)
   forma mcp [dir]            Start MCP stdio server (for Codex / Claude Code / Pi)
@@ -95,6 +96,34 @@ fn run(argv: &[String]) -> Result<i32> {
                 forma::lint::builtin_rules().len()
             );
             Ok(if by_sev("error") > 0 { 1 } else { 0 })
+        }
+        "seed" => {
+            let dir = project_dir(0);
+            let manifest = forma::manifest::load_manifest(&dir)?;
+            let source = manifest.manifest.source.clone().unwrap_or_default();
+            let (program, diagnostics) = forma::dsl::load_program(&dir, &source)?;
+            let errors = diagnostics.iter().filter(|d| d.severity == "error").count();
+            if errors > 0 {
+                for d in diagnostics.iter().filter(|d| d.severity == "error") {
+                    eprintln!("{}", forma::validate::format_diagnostic(d));
+                }
+                return Ok(1);
+            }
+            let db_out = manifest
+                .manifest
+                .targets
+                .database
+                .as_ref()
+                .and_then(|t| t.out.clone())
+                .unwrap_or_else(|| "generated/db".into());
+            let files = forma::emit::emit_seed(&dir, &program, &format!("{db_out}/seed"))?;
+            for f in &files {
+                println!("  + {} ({})", f.path, f.generator);
+            }
+            println!(
+                "✓ seed ok — 应用方式：mysql ... < db/seed/seed_*.sql（INSERT IGNORE，幂等可重放）"
+            );
+            Ok(0)
         }
         "diagrams" => {
             let dir = project_dir(0);
@@ -404,10 +433,16 @@ fn cmd_build_dsl(project_dir: PathBuf, _force: bool) -> i32 {
         .as_ref()
         .and_then(|t| t.out.clone())
         .unwrap_or_else(|| "generated/web".into());
+    let seed_out = format!("{db_out}/seed");
+    let mobile_out = targets
+        .mobile
+        .as_ref()
+        .map(|m| m.out.clone().unwrap_or_else(|| "generated/mobile".into()))
+        .unwrap_or_default();
     let api_out = "generated/api-docs";
 
     let mut all: Vec<forma::generators::GeneratedFile> = Vec::new();
-    let steps: Vec<EmitStep> = vec![
+    let mut steps: Vec<EmitStep> = vec![
         (
             "db-mysql",
             Box::new(|| forma::emit::emit_mysql(&project_dir, &program, &db_out)),
@@ -440,7 +475,17 @@ fn cmd_build_dsl(project_dir: PathBuf, _force: bool) -> i32 {
                 )
             }),
         ),
+        (
+            "seed",
+            Box::new(|| forma::emit::emit_seed(&project_dir, &program, &seed_out)),
+        ),
     ];
+    if targets.mobile.is_some() {
+        steps.push((
+            "mobile-flutter",
+            Box::new(|| forma::emit::emit_flutter(&project_dir, &program, &mobile_out, &app_name)),
+        ));
+    }
     let mut report: Vec<String> = Vec::new();
     for (name, step) in steps {
         match step() {

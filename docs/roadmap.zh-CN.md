@@ -79,7 +79,7 @@ M11 Spring/Go/.NET、原生移动、小程序、工作流运行时、支付
 | 优先级 | 技术 | 里程碑 | 说明 |
 |---|---|---|---|
 | 🔨 P1 | **Expo（React Native）** | M10 | 与 React emitter 复用度最高 |
-| 👁 P2 | Flutter | M11 | 独立组件映射 |
+| ✅ 已交付（提前于 M11） | Flutter | gen-flutter：models/api/validators/pages 四件套，与 Rust 后端 serde 契约严格对齐；school 案例 app_mobile/ 已入库 |
 | 👁 P2 | 原生 SwiftUI / Jetpack Compose | M11 | |
 | 👁 P2 | 微信小程序 / uni-app | M11 | 国内场景 |
 

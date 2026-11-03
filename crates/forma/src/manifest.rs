@@ -74,6 +74,8 @@ pub struct Targets {
     pub backend: Option<TargetConfig>,
     pub database: Option<TargetConfig>,
     pub frontend: Option<TargetConfig>,
+    /// 移动端（Flutter / Android + iOS 同源）
+    pub mobile: Option<TargetConfig>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -265,6 +267,13 @@ fn normalize_manifest(
                 .and_then(|v| v.as_mapping())
         }) {
             targets.frontend = Some(parse_target_config(cfg));
+        }
+        // 别名：mobile == flutter
+        if let Some(cfg) = ["mobile", "flutter"].iter().find_map(|n| {
+            t.get(serde_yaml::Value::String((*n).into()))
+                .and_then(|v| v.as_mapping())
+        }) {
+            targets.mobile = Some(parse_target_config(cfg));
         }
     }
 

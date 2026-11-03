@@ -141,8 +141,10 @@ target configuration selects the concrete output stack.
 | Target | Current output |
 | --- | --- |
 | MySQL 8 | Immutable baseline DDL, upgrade migrations, rollback migrations |
+| Seed data | Deterministic case data (non-AI): versioned `db/seed/seed_{version}.sql` + JSON fixtures aligned with the API contract |
 | Rust | axum + sqlx models, repositories, routes, and validators |
 | React | TanStack Router/Query, forms, types, and validation |
+| Flutter | Android/iOS client: models, REST client, same-source validation, Material pages |
 | OpenAPI | OpenAPI JSON and a local Swagger UI page |
 | Diagrams | ER, data-flow, and enum lifecycle diagrams |
 
@@ -164,9 +166,15 @@ targets:
     data: tanstack-query
     ui: shadcn
     out: generated/web
+  mobile:
+    framework: flutter
+    out: app_mobile
 ```
 
-`db` and `web` are accepted aliases for `database` and `frontend`.
+`db` and `web` are accepted aliases for `database` and `frontend`; `mobile`/`flutter` select
+the Flutter emitter. Seed data follows the db target's `out` directory (`db/seed/`), so the
+case data trail lives next to the migration chain. See the multi-round case protocol in
+[docs/case-protocol.zh-CN.md](docs/case-protocol.zh-CN.md).
 
 ## Versioned migrations
 
@@ -225,6 +233,7 @@ forma init [dir]                          Scaffold a project
 forma validate [dir]                      Validate the project
 forma check [dir]                         Check DSL semantics
 forma build [dir] [--force]              Generate all configured targets
+forma seed [dir]                          Generate deterministic case data (db/seed/*.sql + fixtures)
 forma diff <dir-a> <dir-b>                Compare two projects
 forma diagrams [dir]                      Generate diagrams and HTML preview
 forma lint [dir]                          Run built-in lint rules

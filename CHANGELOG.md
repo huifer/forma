@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **gen-seed（确定性案例数据，非 AI 数据）** — `forma seed [dir]` / 自动随 `forma build` 产出：
+  - 全部取值由 DSL 纯函数推导（类型/约束/枚举/关系），不经过任何模型；同一 DSL 生成结果
+    byte 级一致，可 hash 校验、可跨机器重放。
+  - 版本化 `db/seed/seed_{version}.sql`（INSERT IGNORE + SHA-256 派生 v5-shape 主键，幂等可重放；
+    表按拓扑序先父后子，FK 引用父表同行号主键）+ `db/seed/fixtures/*.json`（实体/列表两种形态，
+    键名与 Rust 后端 serde 序列化一致）。种子文件与迁移链版本一一对应：migrate up --to X
+    后应用 seed_X 即得到该版本完整数据集；值满足同一套 DSL rules（min/max/枚举/必填/check）。
+  - school 案例现带三轮数据链：`seed_0_1_0 → seed_0_2_0 → seed_0_3_0`（与迁移链对齐）。
+- **gen-flutter（移动端适配层，Android / iOS 同源）** — `forma.yaml` 增加 `mobile: { framework: flutter }`：
+  - `lib/models/models.dart`：实体/枚举/ListRow/Input 类，fromJson/toJson 键名与 Rust 后端
+    serde 契约严格一致（实体/ListRow 用 `{rel}_id`、Create/Update 输入用裸关系名 `{rel}`；
+    Dart 字段名 lowerCamelCase、JSON 键保持 snake_case；Decimal 走 string 保精度）。
+  - `lib/api/api.dart`：REST 客户端（`/api/{plural}`，page/page_size/q/filters+_contains），
+    API_BASE 经 `--dart-define` 注入（Android 模拟器默认 10.0.2.2）。
+  - `lib/validation/validators.dart`：同一套 DSL rules 三端同源编译
+    （Rust 权威 + Web zod + Dart），check 规则 DateTime 比较编译为 compareTo。
+  - `lib/pages/*.dart` + `lib/main.dart`：页面原语 → Material 列表/编辑页，DSL 路由
+    （含 `{id}` 参数路由与嵌套路由）→ 命名路由 + onGenerateRoute 模式匹配。
+  - 产物是普通 Flutter 工程：`flutter pub get && flutter run` 即可运行（Flutter ≥ 3.35）。
+  - 生成代码通过 `flutter analyze`（0 issues）与 `flutter build web` 生产编译。
+- **案例协议文档** `docs/case-protocol.zh-CN.md`：多轮次迭代剧本（R1 基线 → R2 增量 →
+  R3 演进）+ 12 项能力完整性验收矩阵（V1–V12），每轮固定跑同一组可脚本化命令。
+- school 示例：v1/v2 快照目录可独立 seed；`app_mobile/` 产物入库。
+
+### Changed
+- CLI：`forma seed` 子命令；`forma build` 新增 seed/mobile-flutter 两个发射步骤。
+- school 示例 `forma.yaml` 增加 `mobile` target（产物指向非 gitignored 目录，与迁移 SQL 同一可见性原则）。
+
 ### Planned
 - DMN adapter (decision tables → rule execution)
 - AsyncAPI adapter (event contracts → subscriptions)

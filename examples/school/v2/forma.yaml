@@ -1,0 +1,23 @@
+# v0.2.0 快照（只读）：R2 增量 —— +election/candidate/vote_record（含 FK 与唯一约束）
+# db out 指向可见目录，使 `forma seed` 的案例数据链（seed_0_2_0.sql）可入库
+project:
+  name: school
+  version: 0.2.0
+
+source: ["forma/**/*.fm"]
+
+targets:
+  db:
+    engine: mysql
+    out: db
+  backend:
+    language: rust
+    framework: axum
+    database: sqlx
+    out: generated/backend
+  web:
+    framework: react
+    router: tanstack
+    data: tanstack-query
+    ui: shadcn
+    out: generated/web
