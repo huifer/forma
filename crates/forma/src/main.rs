@@ -12,6 +12,7 @@ Usage:
   forma doctor [dir]         Full cross-standard diagnostics
   forma graph [dir]          Print semantic graph (--json | --export <file>)
   forma build [dir]          Incremental build (--force)
+  forma migrate [dir]        数据库迁移：status/history/verify/up/down [--sql] [--apply] [--to v] [--steps N]
   forma patch [dir] <file>   Apply a semantic patch (transactional)
   forma mcp [dir]            Start MCP stdio server (for Codex / Claude Code / Pi)
   forma --help | --version
@@ -36,7 +37,7 @@ fn run(argv: &[String]) -> Result<i32> {
         if let Some(name) = arg.strip_prefix("--") {
             if let Some(eq) = name.find('=') {
                 flags.insert(name[..eq].to_string(), name[eq + 1..].to_string());
-            } else if ["export", "out", "json"].contains(&name) {
+            } else if ["export", "out", "json", "to", "steps"].contains(&name) {
                 if let Some(v) = argv.get(i + 1) {
                     flags.insert(name.to_string(), v.clone());
                     i += 1;
@@ -231,6 +232,34 @@ fn run(argv: &[String]) -> Result<i32> {
                 outcome.skipped
             );
             Ok(0)
+        }
+        "migrate" => {
+            // forma migrate [status|history|verify|up|down] [dir] [--sql] [--apply] [--to v] [--steps N]
+            // 子命令与项目目录顺序无关：已知子命令取一个，其余第一个当作项目目录
+            let subs = ["status", "history", "verify", "up", "down"];
+            let mut sub = "status".to_string();
+            let mut dir_arg: Option<String> = None;
+            let mut sub_seen = false;
+            for arg in &positional {
+                if !sub_seen && subs.contains(&arg.as_str()) {
+                    sub = arg.clone();
+                    sub_seen = true;
+                } else if dir_arg.is_none() {
+                    dir_arg = Some(arg.clone());
+                }
+            }
+            let dir = PathBuf::from(dir_arg.as_deref().unwrap_or("."));
+            Ok(cmd_migrate(
+                &dir,
+                &sub,
+                flags.contains_key("sql"),
+                flags.contains_key("apply"),
+                flags.get("to").map(String::as_str),
+                flags
+                    .get("steps")
+                    .and_then(|s| s.parse::<usize>().ok())
+                    .unwrap_or(1),
+            ))
         }
         "patch" => {
             let Some(patch_file) = positional.get(1) else {
@@ -434,6 +463,168 @@ fn cmd_build_dsl(project_dir: PathBuf, _force: bool) -> i32 {
         report.join(", ")
     );
     0
+}
+
+fn cmd_migrate(
+    project_dir: &std::path::Path,
+    sub: &str,
+    sql_only: bool,
+    apply: bool,
+    target: Option<&str>,
+    steps: usize,
+) -> i32 {
+    let manifest = match forma::manifest::load_manifest(project_dir) {
+        Ok(m) => m,
+        Err(err) => {
+            eprintln!("✗ {err:#}");
+            return 1;
+        }
+    };
+    let out_dir = manifest
+        .manifest
+        .targets
+        .database
+        .as_ref()
+        .and_then(|t| t.out.clone())
+        .unwrap_or_else(|| "generated/db".into());
+
+    match sub {
+        "status" => {
+            println!("Migrations ({}):", out_dir);
+            let lines = forma::emit::migration_status(project_dir).unwrap_or_default();
+            for l in &lines {
+                println!("{l}");
+            }
+            let ledger = read_ledger_lenient(project_dir);
+            let applied = ledger.entries.iter().filter(|e| e.applied).count();
+            println!(
+                "\n{} migration(s): {} applied, {} pending",
+                ledger.entries.len(),
+                applied,
+                ledger.entries.len() - applied
+            );
+            println!("  full SQL trail: {out_dir}/migrations/MIGRATIONS.md");
+            0
+        }
+        "history" => {
+            println!("Migration history:");
+            for l in forma::emit::migration_status(project_dir).unwrap_or_default() {
+                println!("{l}");
+            }
+            0
+        }
+        "verify" => {
+            let source = manifest.manifest.source.clone().unwrap_or_default();
+            let (program, diagnostics) = match forma::dsl::load_program(project_dir, &source) {
+                Ok(v) => v,
+                Err(err) => {
+                    eprintln!("✗ {err:#}");
+                    return 1;
+                }
+            };
+            let errors = diagnostics.iter().filter(|d| d.severity == "error").count();
+            if errors > 0 {
+                eprintln!("✗ DSL 有 {errors} 个错误，先修复再 verify");
+                return 1;
+            }
+            let issues = match forma::emit::migration_verify(project_dir, &program, &out_dir) {
+                Ok(v) => v,
+                Err(err) => {
+                    eprintln!("✗ {err:#}");
+                    return 1;
+                }
+            };
+            if issues.is_empty() {
+                println!(
+                    "✓ 迁移链完整且与当前 DSL schema 一致（编号连续 · 升级/回滚配对 · 哈希一致 · 前向重放无漂移）"
+                );
+                0
+            } else {
+                println!("✗ 迁移链校验失败（{} 项）：", issues.len());
+                for i in &issues {
+                    println!("  - {i}");
+                }
+                1
+            }
+        }
+        "up" => {
+            let pending = match forma::emit::migration_up(project_dir, &out_dir, apply, target) {
+                Ok(v) => v,
+                Err(err) => {
+                    eprintln!("✗ {err:#}");
+                    return 1;
+                }
+            };
+            if pending.is_empty() {
+                if !sql_only {
+                    println!("✓ database is up to date — no pending migrations");
+                }
+                return 0;
+            }
+            for (file, sql) in &pending {
+                if !sql_only {
+                    println!("── {} ──", file.rsplit('/').next().unwrap_or(file));
+                }
+                println!("{sql}");
+            }
+            if sql_only {
+                return 0;
+            }
+            if apply {
+                println!("✓ applied {} migration(s)", pending.len());
+            } else {
+                println!(
+                    "⏳ {} pending migration(s) (dry run) — use --apply to mark applied",
+                    pending.len()
+                );
+            }
+            0
+        }
+        "down" => {
+            match forma::emit::migration_down(project_dir, &out_dir, apply, steps, target) {
+                Ok(rolled) if rolled.is_empty() => {
+                    println!("✓ nothing to roll back");
+                    0
+                }
+                Ok(rolled) => {
+                    for (file, sql) in &rolled {
+                        if !sql_only {
+                            println!("── {} ──", file.rsplit('/').next().unwrap_or(file));
+                        }
+                        println!("{sql}");
+                    }
+                    if sql_only {
+                        return 0;
+                    }
+                    if apply {
+                        println!("✓ rolled back {} migration(s)", rolled.len());
+                    } else {
+                        println!(
+                            "⏳ rollback plan for {} migration(s) (dry run) — use --apply",
+                            rolled.len()
+                        );
+                    }
+                    0
+                }
+                Err(err) => {
+                    eprintln!("✗ {err:#}");
+                    1
+                }
+            }
+        },
+        _ => {
+            eprintln!("unknown migrate subcommand: {sub}");
+            2
+        }
+    }
+}
+
+fn read_ledger_lenient(project_dir: &std::path::Path) -> forma::emit::MigrationLedger {
+    let p = project_dir.join(".forma").join("migrations.json");
+    forma::util::read_text(&p)
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
 }
 
 fn cmd_diff(
