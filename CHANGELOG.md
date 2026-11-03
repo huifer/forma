@@ -95,6 +95,6 @@ Specification Federation: Forma organizes existing standards instead of inventin
 ### Changed
 - Project language: TypeScript prototype → **Rust** (single binary serves CLI and MCP).
 
-[Unreleased]: https://github.com/huifer/forma/compare/v0.3.0...HEAD
-[0.3.0]: https://github.com/huifer/forma/releases/tag/v0.3.0
-[0.2.0]: https://github.com/huifer/forma/releases/tag/v0.2.0
+[Unreleased]: https://github.com/huifer/forma/commits/main
+[0.3.0]: https://github.com/huifer/forma/commit/77899ea91d79853a63cb50171c57597445cc5dbf
+[0.2.0]: https://github.com/huifer/forma/commit/5477039
