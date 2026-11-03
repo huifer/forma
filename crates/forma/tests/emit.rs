@@ -66,7 +66,9 @@ fn rust_backend_emits_compilable_shape() {
         .find(|f| f.path.ends_with("models.rs"))
         .unwrap();
     assert!(models.content.contains("pub struct Student"));
-    assert!(models.content.contains("pub school_id: Uuid"));
+    // Uuid 列在 MySQL 侧是 CHAR(36) → Rust 侧承载文本 UUID（sqlx 的 Uuid 仅支持 16 字节二进制）
+    assert!(models.content.contains("pub school_id: String"));
+    assert!(models.content.contains("pub id: String"));
     let validators = files
         .iter()
         .find(|f| f.path.ends_with("validators.rs"))

@@ -32,6 +32,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   R3 演进）+ 12 项能力完整性验收矩阵（V1–V12），每轮固定跑同一组可脚本化命令。
 - school 示例：v1/v2 快照目录可独立 seed；`app_mobile/` 产物入库。
 
+### Fixed
+- **gen-rust 产物的运行时契约（真实 MySQL 8 端到端抓出）**：
+  - SELECT 列表尾逗号/缺换行 → MySQL 1064；命名占位符 `?name` → sqlx 运行时不支持 → 改位置参数；
+  - 搜索条件三值逻辑：多字段应为 OR、NULL 列需 COALESCE（此前搜索恒空）；
+  - 关系列名：DDL 是 `{rel}_id`，INSERT/UPDATE 曾用裸名 → 1054 Unknown column；
+  - JOIN 表名曾用原始实体名（`Schools`）→ 与 gen-mysql 的 snake_case 复数不一致 → 1064；
+  - UUID 物理表示：列是 CHAR(36)，sqlx 的 `Uuid` 仅解 16 字节二进制 → Rust 侧统一用文本 UUID；
+  - 仓储函数/校验器按 api op 裁剪、导入按需生成 → 生成后端 66 warning → 0 warning。
+- **跨端端口一致性**：后端默认 8080（可用 `PORT` 覆盖）、Web vite proxy 8080、Flutter 默认
+  `API_BASE=http://10.0.2.2:8080/api`（此前 Flutter 默认 3000，连不上后端）。
+
+### Added
+- **gen-flutter 契约测试**（`app_mobile/test/live_api_test.dart`）：离线 fromJson/toJson 往返 +
+  在线「创建→读取→更新→删除」全链路（后端未启动时自动跳过，不阻塞 CI）。
+- **gen-rust 运行时契约回归测试**（`crates/forma/tests/backend_contract.rs`）：把上述 8 类
+  bug 固化为源码结构断言，防止回归。
+
 ### Changed
 - CLI：`forma seed` 子命令；`forma build` 新增 seed/mobile-flutter 两个发射步骤。
 - school 示例 `forma.yaml` 增加 `mobile` target（产物指向非 gitignored 目录，与迁移 SQL 同一可见性原则）。

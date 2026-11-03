@@ -7,10 +7,10 @@ import '../models/models.dart';
 
 /// API 基址。Android 模拟器访问宿主机用 10.0.2.2；
 /// iOS 模拟器用 127.0.0.1；真机用局域网 IP。
-/// 覆盖方式：flutter run --dart-define=API_BASE=http://127.0.0.1:3000/api
+/// 覆盖方式：flutter run --dart-define=API_BASE=http://127.0.0.1:8080/api
 const String kApiBase = String.fromEnvironment(
   'API_BASE',
-  defaultValue: 'http://10.0.2.2:3000/api',
+  defaultValue: 'http://10.0.2.2:8080/api',
 );
 
 class FieldError {

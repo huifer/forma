@@ -43,6 +43,10 @@ examples/school/
 | V10 | 移动端可编译 | `flutter build web`（或真机 build） | 编译通过 |
 | V11 | 三端同源校验 | 抽查 validators.rs / validators.ts / validators.dart | 同一条 DSL 规则（如 age min 6、enrolledAt ≥ createdAt）在三端同语义出现 |
 | V12 | 图 | `forma diagrams` | ER/数据流/生命周期图随轮次更新；状态图按枚举分块 |
+| V13 | 后端编译 | `cd generated/backend && cargo check` | 0 error **0 warning**（导入/死代码按需生成） |
+| V14 | 后端运行时契约 | 真 MySQL 8 + curl（见下方 E2E） | list/filter/search/create/update/delete/guard/分页全部正确 |
+| V15 | 移动端契约 | `cd app_mobile && flutter test` | 离线往返 + 在线全链路全绿（后端未启动时在线用例自动跳过） |
+| V16 | Web 编译 | `cd generated/web && npm i && npm run build` | tsc 0 error + vite build 成功 |
 
 ## 三轮迭代剧本
 
@@ -97,6 +101,58 @@ flutter run --dart-define=API_BASE=http://127.0.0.1:3000/api   # iOS 模拟器
 
 三端操作同一份数据：Web 改一条记录 → Flutter 列表下拉刷新可见；
 Flutter 提交违反 rules 的数据（如 capacity=0）→ 三端同源的校验规则给出同一消息。
+
+## 端到端验收（真实 MySQL 8）
+
+cargo test 覆盖不到 SQL 语义与运行时行为——**只有真库能抓到那类 bug**。
+本节是 R3 的强制流程（也是本仓库历史 bug 的来源清单）：
+
+```bash
+# 1) 起一个干净 MySQL 8
+docker run -d --name forma-mysql -e MYSQL_ROOT_PASSWORD=forma123 -e MYSQL_DATABASE=school \
+  -p 3307:3306 mysql:8.0
+until docker exec forma-mysql mysqladmin ping -uroot -pforma123; do sleep 1; done
+
+# 2) 应用迁移链（基线 + 两轮升级）→ 得到当前版本 schema
+for f in db/migrations/0001_init.sql db/migrations/0002_upgrade.sql db/migrations/0003_upgrade.sql; do
+  docker exec -i forma-mysql mysql -uroot -pforma123 school < "$f"
+done
+
+# 3) 应用案例数据（seed 与迁移版本一一对应）
+docker exec -i forma-mysql mysql -uroot -pforma123 school < db/seed/seed_0_3_0.sql
+
+# 4) 起后端（端口可用 PORT 覆盖，默认 8080——与 Web proxy / Flutter 默认 API_BASE 对齐）
+cd generated/backend && cargo build
+DATABASE_URL="mysql://root:forma123@127.0.0.1:3307/school" ./target/debug/school-backend &
+
+# 5) 打真实 API（CRUD + 规则 + 守卫 + 分页）
+B=http://127.0.0.1:8080/api
+curl -s "$B/students?page_size=2"                       # 列表（含 JOIN 显示列 school_name）
+curl -s "$B/students?q=student0"                       # 搜索（LIKE + COALESCE）
+curl -s "$B/students?school=<uuid>"                     # 过滤
+curl -s -X POST "$B/students" -H 'Content-Type: application/json' \
+  -d '{"school":"<uuid>","name":"x","email":"x@example.test","age":20}'   # 创建
+curl -s -X POST "$B/students" -H 'Content-Type: application/json' \
+  -d '{"school":"<uuid>","name":"x","email":"x@example.test","age":2}'    # 校验失败 → 400 + fields
+curl -s -X DELETE "$B/enrollments/<completed-id>"       # 守卫 → 409 + 中文原因
+
+# 6) 移动端契约测试（真实 HTTP 打真实后端）
+cd ../../app_mobile && flutter test
+```
+
+### 这条流程真实抓到的 bug（已全部修掉并固化为回归测试）
+
+| bug | 症状 | 根因 | 回归测试 |
+|---|---|---|---|
+| SELECT 尾逗号 | MySQL 1064 | `s.created_at,\nFROM` | `backend_contract.rs::select_list_has_no_trailing_comma_and_keeps_newline` |
+| 命名占位符 | MySQL 1064 | sqlx 运行时不支持 `?school` | `::where_clause_uses_positional_placeholders_only` |
+| 搜索三值逻辑 | 搜索永远空 | `FALSE OR NULL` = NULL → 整行被过滤；多字段应为 OR | `::search_is_or_semantics_with_coalesce` |
+| 关系列名 | INSERT 1054 Unknown column | DDL 是 `school_id`，SQL 用了 `school` | `::relation_columns_use_id_suffix_in_sql_but_bare_name_in_input` |
+| JOIN 表名 | MySQL 1064 | `LEFT JOIN Schools` vs `schools` | `::join_table_names_match_mysql_ddl` |
+| UUID 物理表示 | 读写永远匹配不到 | 列是 CHAR(36)，sqlx 的 Uuid 只解 16 字节二进制 | `::uuid_columns_are_text_end_to_end` |
+| op 裁剪 | 生成后端 66 个 warning | 未声明的 op 也生成仓储函数 | `::repo_functions_follow_declared_ops` |
+| 导入冗余 | unused import 警告 | post / validators / chrono 按需导入 | `::routes_imports_and_guard_binding_are_conditional` |
+| 端口不一致 | 客户端连不上 | 后端 8080 / Flutter 默认 3000 | 端到端流程（本节） |
 
 ## 新适配层的接入清单（以 gen-flutter 为例）
 

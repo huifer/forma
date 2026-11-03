@@ -22,14 +22,14 @@ lib/
 mysql -u{PASSWORD_583ugbf8} -p -e "CREATE DATABASE IF NOT EXISTS school"
 mysql -u{PASSWORD_583ugbf8} -p school < ../db/seed/seed_0.3.0.sql
 
-# 2) 启动后端（默认 127.0.0.1:3000）
+# 2) 启动后端（默认 0.0.0.0:8080）
 cd ../generated/backend
 DATABASE_URL="mysql://{PASSWORD_583ugbf8}:{PASSWORD_583ugbf8}@127.0.0.1:3306/school" cargo run
 
 # 3) 运行 App
 flutter pub get
-flutter run                                                    # Android 模拟器（默认 API_BASE=http://10.0.2.2:3000/api）
-flutter run --dart-define=API_BASE=http://127.0.0.1:3000/api   # iOS 模拟器 / 真机按局域网 IP
+flutter run                                                    # Android 模拟器（默认 API_BASE=http://10.0.2.2:8080/api）
+flutter run --dart-define=API_BASE=http://127.0.0.1:8080/api   # iOS 模拟器 / 真机按局域网 IP
 ```
 
 入口路由：`/schools`。API 地址一律通过 `--dart-define=API_BASE=...` 覆盖。

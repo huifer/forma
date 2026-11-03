@@ -14,3 +14,5 @@ examples/school/v2/db/
 .flutter-plugins
 .flutter-plugins-dependencies
 .pub-cache/
+# Flutter 构建产物
+build/
