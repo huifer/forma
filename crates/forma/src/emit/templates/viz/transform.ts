@@ -171,14 +171,17 @@ function shapeCartesian(spec: ChartSpec, rows: Row[]): ChartData {
   const seriesKey = spec.encoding.series?.dataKey;
   const temporal = spec.encoding.x?.valueType === "temporal";
 
+  // 类目键：时间维度用 epoch ms 的字符串形式，其余用原值字符串——
+  // 保证 categories 与 byCategory 用同一把钥匙对上。
+  const keyOf = (raw: unknown): string => (temporal ? String(epochMs(raw)) : String(raw ?? ""));
+
   const categories: Array<string | number> = [];
   const seen = new Set<string>();
   for (const row of rows) {
-    const raw = row[xKey];
-    const key = String(raw ?? "");
+    const key = keyOf(row[xKey]);
     if (seen.has(key)) continue;
     seen.add(key);
-    categories.push(temporal ? epochMs(raw) : key);
+    categories.push(temporal ? epochMs(row[xKey]) : String(row[xKey] ?? ""));
   }
 
   const groups = new Map<string, Row[]>();
@@ -196,7 +199,7 @@ function shapeCartesian(spec: ChartSpec, rows: Row[]): ChartData {
   const series = Array.from(groups.entries()).map(([name, bucketRows]) => {
     const byCategory = new Map<string, number | null>();
     for (const row of bucketRows) {
-      byCategory.set(String(row[xKey] ?? ""), num(row[yKey]));
+      byCategory.set(keyOf(row[xKey]), num(row[yKey]));
     }
     const data = categories.map((c) => {
       const v = byCategory.get(String(c));
