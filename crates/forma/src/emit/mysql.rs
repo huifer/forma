@@ -4,6 +4,13 @@ use super::{pluralize, EntityDecl, FieldDecl, Program};
 use crate::identity::to_snake_case;
 use serde::{Deserialize, Serialize};
 
+/// 内容派生的索引/唯一约束名：`idx_{表}_{列1}_{列2}` / `uq_{表}_{列1}_{列2}`。
+/// 必须由列签名派生而非位置序号——否则多版本链里先建 (a,b) 再加 (c) 会重名，
+/// 真实 MySQL 重放直接报 Duplicate key name。内容派生还保证回滚时可恢复名字。
+pub fn key_name(kind: &str, table: &str, cols: &[String]) -> String {
+    format!("{kind}_{table}_{}", cols.join("_"))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ColumnPlan {
     pub name: String,
@@ -176,25 +183,31 @@ pub fn render_create_table(plan: &TablePlan) -> String {
         } else {
             def.push_str(" NOT NULL");
         }
-        if col.unique {
-            def.push_str(" UNIQUE");
-        }
+        // 列级 @unique 用命名唯一键（与 ALTER 路径一致），不再用内联 UNIQUE——
+        // 否则 CREATE 与 ALTER 两条路径产出的约束名不同，重放比对无法对齐。
         lines.push(def);
     }
     lines.push(format!("  PRIMARY KEY ({})", plan.primary_key));
-    for (i, cols) in plan.uniques.iter().enumerate() {
+    for cols in plan.uniques.iter() {
         lines.push(format!(
-            "  UNIQUE KEY uq_{}_{} ({})",
-            plan.table,
-            i,
+            "  UNIQUE KEY {} ({})",
+            key_name("uq", &plan.table, cols),
             cols.join(", ")
         ));
     }
-    for (i, cols) in plan.indexes.iter().enumerate() {
+    // 列级 @unique → 命名唯一键
+    for col in plan.columns.iter().filter(|c| c.unique) {
+        let cols = vec![col.name.clone()];
         lines.push(format!(
-            "  KEY idx_{}_{} ({})",
-            plan.table,
-            i,
+            "  UNIQUE KEY {} ({})",
+            key_name("uq", &plan.table, &cols),
+            col.name
+        ));
+    }
+    for cols in plan.indexes.iter() {
+        lines.push(format!(
+            "  KEY {} ({})",
+            key_name("idx", &plan.table, cols),
             cols.join(", ")
         ));
     }
@@ -226,16 +239,14 @@ pub fn emit_mysql(
         sql.push_str("\n\n");
     }
 
+    // 基线不可变：`0001_init.sql` 只在首次构建时生成；之后的 schema 演进
+    // 全部由 gen-migrate 的增量 upgrade/rollback 迁移承载（与真实工程一致）。
     let rel = format!("{out_dir}/migrations/0001_init.sql");
     let abs = project_dir.join(&rel);
-    let content_hash = crate::util::sha256_hex(&sql);
-    let unchanged = abs.is_file()
-        && crate::util::read_text(&abs)
-            .map(|c| crate::util::sha256_hex(&c) == content_hash)
-            .unwrap_or(false);
-    if !unchanged {
-        crate::util::write_text(&abs, &sql)?;
+    if abs.is_file() {
+        return Ok(vec![]);
     }
+    crate::util::write_text(&abs, &sql)?;
 
     Ok(vec![crate::generators::GeneratedFile {
         path: rel,

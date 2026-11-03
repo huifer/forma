@@ -20,9 +20,26 @@ fn school_program() -> (PathBuf, forma::dsl::Program) {
     (loaded.dir, program)
 }
 
+fn tmp_dir(tag: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!(
+        "forma-emit-{}-{}-{:?}",
+        tag,
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
 #[test]
 fn mysql_emits_fks_indexes_and_decimal() {
-    let (dir, program) = school_program();
+    let (_dir, program) = school_program();
+    // 写入独立 tmp：基线 0001_init.sql 不可变，不能污染 examples/school 的真实基线
+    let dir = tmp_dir("baseline");
     let files = emit_mysql(&dir, &program, "generated/db").unwrap();
     assert_eq!(files.len(), 1);
     let sql = &files[0].content;
@@ -33,6 +50,10 @@ fn mysql_emits_fks_indexes_and_decimal() {
     assert!(sql.contains("UNIQUE KEY"));
     assert!(sql.contains("VARCHAR(320)")); // Email
     assert!(sql.contains("NOT NULL") && sql.contains("schools"));
+
+    // 基线不可变：后续构建不得覆写 0001_init.sql（升级走 gen-migrate 增量迁移）
+    let again = emit_mysql(&dir, &program, "generated/db").unwrap();
+    assert!(again.is_empty(), "baseline must not be rewritten");
 }
 
 #[test]
