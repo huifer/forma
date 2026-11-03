@@ -73,7 +73,11 @@ fn run(argv: &[String]) -> Result<i32> {
             let by_sev = |s: &str| lint_diags.iter().filter(|d| d.severity == s).count();
             for d in &lint_diags {
                 let entity = d.entity.as_deref().unwrap_or("");
-                let field = d.field.as_deref().map(|f| format!(" .{f}")).unwrap_or_default();
+                let field = d
+                    .field
+                    .as_deref()
+                    .map(|f| format!(" .{f}"))
+                    .unwrap_or_default();
                 println!(
                     "[{: >7}] {: <44} {}{}  ── {}",
                     d.severity, d.rule, entity, field, d.message
@@ -84,7 +88,9 @@ fn run(argv: &[String]) -> Result<i32> {
             }
             println!(
                 "\n{} errors, {} warnings, {} info — {} rule(s) checked",
-                by_sev("error"), by_sev("warning"), by_sev("info"),
+                by_sev("error"),
+                by_sev("warning"),
+                by_sev("info"),
                 forma::lint::builtin_rules().len()
             );
             Ok(if by_sev("error") > 0 { 1 } else { 0 })

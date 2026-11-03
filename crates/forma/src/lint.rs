@@ -1,19 +1,11 @@
 //! Forma Lint — DSL 质量检查器（类似 ESLint）。
 //!
-//! 内置规则分类：
-//! - naming:       命名规范（PascalCase/camelCase/snake_case）
-//! - completeness: 完备性（@id/时间戳/i18n/索引）
-//! - security:     安全（@unique/@hidden/密码字段/权限声明）
-//! - performance:  性能（索引/避免 N+1）
-//! - convention:   约定（路由风格/API 命名/关系命名）
-//!
-//! 用法：`forma lint [dir]`，输出与 Diagnostic 兼容。
+//! 内置规则分类：naming / completeness / security / performance / convention
+//! 用法：`forma lint [dir]`
 
-use crate::dsl::{EntityDecl, FieldDecl, PageBody, Program};
-use crate::validate::Diagnostic;
+use crate::dsl::Program;
 use serde::{Deserialize, Serialize};
 
-/// 规则严重级
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Severity {
     Error,
@@ -25,22 +17,13 @@ pub enum Severity {
 impl Severity {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Severity::Error => "error",
-            Severity::Warning => "warning",
-            Severity::Info => "info",
-            Severity::Off => "off",
+            Self::Error => "error",
+            Self::Warning => "warning",
+            Self::Info => "info",
+            Self::Off => "off",
         }
     }
 }
-
-/// 单条 lint 规则的配置（用于 .forma-lint.toml 覆盖默认级别）
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LintRuleConfig {
-    pub severity: Severity,
-}
-
-/// lint 规则上下文——一条规则检查整个 Program 并返回诊断
-pub type LintFn = fn(&Program) -> Vec<LintDiagnostic>;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct LintDiagnostic {
@@ -59,98 +42,495 @@ pub struct LintDiagnostic {
 }
 
 impl LintDiagnostic {
-    pub fn new(rule: &str, category: &str, severity: Severity, message: impl Into<String>) -> Self {
+    pub fn new(rule: &str, category: &str, sev: Severity, msg: impl Into<String>) -> Self {
         Self {
             rule: rule.into(),
-            severity: severity.as_str().into(),
+            severity: sev.as_str().into(),
             category: category.into(),
-            message: message.into(),
+            message: msg.into(),
             entity: None,
             field: None,
             line: None,
             fix_hint: None,
         }
     }
-
     pub fn entity(mut self, e: &str) -> Self {
         self.entity = Some(e.into());
         self
     }
-
     pub fn field(mut self, f: &str) -> Self {
         self.field = Some(f.into());
         self
     }
-
     pub fn line(mut self, l: usize) -> Self {
         self.line = Some(l);
         self
     }
-
     pub fn hint(mut self, h: &str) -> Self {
         self.fix_hint = Some(h.into());
         self
     }
-
-    pub fn format(&self) -> String {
-        let mut s = format!("[{: >7}] {: <40} {}", self.severity, self.rule, self.message);
-        if let Some(e) = &self.entity {
-            s.push_str(&format!("  (entity: {e})"));
-        }
-        if let Some(f) = &self.field {
-            s.push_str(&format!("  (field: {f})"));
-        }
-        s
-    }
 }
 
-/// 内置规则注册表——(id, category, 默认严重级, 检查函数)
-pub fn builtin_rules() -> Vec<LintRule> {
-    vec![
-        // ── naming ──
-        LintRule { id: "naming/entity-pascal-case", category: "naming", default_severity: Severity::Warning, check: lint_entity_pascal_case },
-        LintRule { id: "naming/field-camel-case", category: "naming", default_severity: Severity::Warning, check: lint_field_camel_case },
-        // ── completeness ──
-        LintRule { id: "completeness/require-id", category: "completeness", default_severity: Severity::Error, check: lint_require_id },
-        LintRule { id: "completeness/require-timestamps", category: "completeness", default_severity: Severity::Warning, check: lint_require_timestamps },
-        LintRule { id: "completeness/i18n-labels", category: "completeness", default_severity: Severity::Info, check: lint_i18n_labels },
-        LintRule { id: "completeness/no-empty-description", category: "completeness", default_severity: Severity::Info, check: lint_no_empty_description },
-        // ── security ──
-        LintRule { id: "security/email-unique", category: "security", default_severity: Severity::Warning, check: lint_email_unique },
-        LintRule { id: "security/PASSWORD-hidden", category: "security", default_severity: Severity::Warning, check: lint_PASSWORD_hidden },
-        LintRule { id: "security/entity-has-access", category: "security", default_severity: Severity::Info, check: lint_entity_has_access },
-        LintRule { id: "security/string-max-length", category: "security", default_severity: Severity::Warning, check: lint_string_max_length },
-        // ── performance ──
-        LintRule { id: "performance/missing-index", category: "performance", default_severity: Severity::Warning, check: lint_missing_index },
-        LintRule { id: "performance/enum-not-indexed", category: "performance", default_severity: Severity::Info, check: lint_enum_not_indexed },
-        // ── convention ──
-        LintRule { id: "convention/relation-naming", category: "convention", default_severity: Severity::Info, check: lint_relation_naming },
-        LintRule { id: "convention/page-route-kebab", category: "convention", default_severity: Severity::Warning, check: lint_page_route_kebab },
-        LintRule { id: "convention/api-name-plural", category: "convention", default_severity: Severity::Info, check: lint_api_name_plural },
-    ]
-}
+pub type LintFn = fn(&Program) -> Vec<LintDiagnostic>;
 
 pub struct LintRule {
     pub id: &'static str,
     pub category: &'static str,
-    pub default_severity: Severity,
+    pub severity: Severity,
     pub check: LintFn,
 }
 
-/// 运行全部 lint 规则
-pub fn run_lint(program: &Program, config: Option<&std::collections::HashMap<String, Severity>>) -> Vec<LintDiagnostic> {
+fn has_attr(f: &crate::dsl::FieldDecl, name: &str) -> bool {
+    f.attrs.iter().any(|a| a.name == name)
+}
+
+fn is_pascal(s: &str) -> bool {
+    s.chars()
+        .next()
+        .map(|c| c.is_ascii_uppercase())
+        .unwrap_or(false)
+        && s.chars().all(|c| c.is_ascii_alphanumeric())
+}
+
+fn is_camel(s: &str) -> bool {
+    s.chars()
+        .next()
+        .map(|c| c.is_ascii_lowercase())
+        .unwrap_or(false)
+        && s.chars().all(|c| c.is_ascii_alphanumeric())
+}
+
+fn to_pascal(s: &str) -> String {
+    s.split('_')
+        .map(|w| {
+            let mut c = w.chars();
+            match c.next() {
+                Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+                None => String::new(),
+            }
+        })
+        .collect()
+}
+
+fn to_camel(s: &str) -> String {
+    let p = to_pascal(s);
+    let mut c = p.chars();
+    match c.next() {
+        Some(f) => f.to_lowercase().collect::<String>() + c.as_str(),
+        None => String::new(),
+    }
+}
+
+// ── naming ──
+
+fn lint_entity_pascal(p: &Program) -> Vec<LintDiagnostic> {
+    p.entities
+        .iter()
+        .filter(|e| !is_pascal(&e.name))
+        .map(|e| {
+            LintDiagnostic::new(
+                "naming/entity-pascal-case",
+                "naming",
+                Severity::Warning,
+                format!("实体名 '{}' 应使用 PascalCase", e.name),
+            )
+            .entity(&e.name)
+            .hint(&format!("改为 '{}'", to_pascal(&e.name)))
+        })
+        .collect()
+}
+
+fn lint_field_camel(p: &Program) -> Vec<LintDiagnostic> {
+    let mut out = Vec::new();
+    for e in &p.entities {
+        for f in &e.fields {
+            if !is_camel(&f.name) {
+                out.push(
+                    LintDiagnostic::new(
+                        "naming/field-camel-case",
+                        "naming",
+                        Severity::Warning,
+                        format!("字段名 '{}' 应使用 camelCase", f.name),
+                    )
+                    .entity(&e.name)
+                    .field(&f.name)
+                    .line(f.line)
+                    .hint(&format!("改为 '{}'", to_camel(&f.name))),
+                );
+            }
+        }
+    }
+    out
+}
+
+// ── completeness ──
+
+fn lint_require_id(p: &Program) -> Vec<LintDiagnostic> {
+    p.entities
+        .iter()
+        .filter(|e| !e.fields.iter().any(|f| has_attr(f, "id")))
+        .map(|e| {
+            LintDiagnostic::new(
+                "completeness/require-id",
+                "completeness",
+                Severity::Error,
+                format!("实体 '{}' 缺少 @id 主键", e.name),
+            )
+            .entity(&e.name)
+            .hint("添加 `id Uuid @id @default(uuid)`")
+        })
+        .collect()
+}
+
+fn lint_require_timestamps(p: &Program) -> Vec<LintDiagnostic> {
+    p.entities
+        .iter()
+        .filter(|e| {
+            !e.fields
+                .iter()
+                .any(|f| f.name == "createdAt" || f.name == "created_at")
+        })
+        .map(|e| {
+            LintDiagnostic::new(
+                "completeness/require-timestamps",
+                "completeness",
+                Severity::Warning,
+                format!("实体 '{}' 缺少 createdAt", e.name),
+            )
+            .entity(&e.name)
+            .hint("添加 `createdAt Timestamp @default(now) @readonly`")
+        })
+        .collect()
+}
+
+fn lint_i18n_labels(p: &Program) -> Vec<LintDiagnostic> {
+    let mut out = Vec::new();
+    for e in &p.enums {
+        for v in &e.variants {
+            if v.labels.is_empty() {
+                out.push(
+                    LintDiagnostic::new(
+                        "completeness/i18n-labels",
+                        "completeness",
+                        Severity::Info,
+                        format!("枚举 {} 变体 '{}' 缺少 @label", e.name, v.name),
+                    )
+                    .entity(&e.name)
+                    .field(&v.name),
+                );
+            }
+        }
+    }
+    for pg in &p.pages {
+        if pg.title.is_empty() {
+            out.push(
+                LintDiagnostic::new(
+                    "completeness/i18n-labels",
+                    "completeness",
+                    Severity::Warning,
+                    format!("页面 '{}' 缺少 title", pg.name),
+                )
+                .entity(&pg.name),
+            );
+        }
+    }
+    out
+}
+
+// ── security ──
+
+fn lint_email_unique(p: &Program) -> Vec<LintDiagnostic> {
+    let mut out = Vec::new();
+    for e in &p.entities {
+        for f in &e.fields {
+            if f.type_name == "Email" && !has_attr(f, "unique") {
+                out.push(
+                    LintDiagnostic::new(
+                        "security/email-unique",
+                        "security",
+                        Severity::Warning,
+                        format!("Email 字段 {}.{} 建议添加 @unique", e.name, f.name),
+                    )
+                    .entity(&e.name)
+                    .field(&f.name),
+                );
+            }
+        }
+    }
+    out
+}
+
+fn lint_sensitive_hidden(p: &Program) -> Vec<LintDiagnostic> {
+    let mut out = Vec::new();
+    for e in &p.entities {
+        for f in &e.fields {
+            let lower = f.name.to_lowercase();
+            if (lower.contains("password") || lower.contains("secret") || lower.contains("token"))
+                && !has_attr(f, "hidden")
+            {
+                out.push(
+                    LintDiagnostic::new(
+                        "security/sensitive-hidden",
+                        "security",
+                        Severity::Warning,
+                        format!("敏感字段 {}.{} 建议添加 @hidden", e.name, f.name),
+                    )
+                    .entity(&e.name)
+                    .field(&f.name),
+                );
+            }
+        }
+    }
+    out
+}
+
+fn lint_entity_has_access(p: &Program) -> Vec<LintDiagnostic> {
+    let mut covered = std::collections::HashSet::new();
+    for r in &p.rules {
+        for g in &r.guards {
+            covered.insert(g.entity.clone());
+        }
+    }
+    let mut out = Vec::new();
+    for e in &p.entities {
+        if e.fields.iter().any(|f| f.type_name == "Email") && !covered.contains(&e.name) {
+            out.push(
+                LintDiagnostic::new(
+                    "security/entity-has-access",
+                    "security",
+                    Severity::Info,
+                    format!("实体 '{}' 包含敏感字段但没有 access/guard 规则", e.name),
+                )
+                .entity(&e.name)
+                .hint("添加 `rules` 块的 `guard` 或 `access` 声明"),
+            );
+        }
+    }
+    out
+}
+
+fn lint_string_max_length(p: &Program) -> Vec<LintDiagnostic> {
+    let mut out = Vec::new();
+    for e in &p.entities {
+        for f in &e.fields {
+            if f.type_name == "String" && f.type_args.is_empty() && !f.optional {
+                out.push(
+                    LintDiagnostic::new(
+                        "security/string-max-length",
+                        "security",
+                        Severity::Warning,
+                        format!(
+                            "必填字段 {}.{} 的 String 建议指定长度 String(n)",
+                            e.name, f.name
+                        ),
+                    )
+                    .entity(&e.name)
+                    .field(&f.name),
+                );
+            }
+        }
+    }
+    out
+}
+
+// ── performance ──
+
+fn lint_missing_index(p: &Program) -> Vec<LintDiagnostic> {
+    let mut out = Vec::new();
+    for e in &p.entities {
+        for f in &e.fields {
+            if crate::dsl::is_relation(p, &f.type_name) {
+                let col = crate::identity::to_snake_case(&f.name);
+                let has = e.indexes.iter().any(|cols| cols.contains(&col))
+                    || e.uniques.iter().any(|cols| cols.contains(&col))
+                    || has_attr(f, "indexed");
+                if !has {
+                    out.push(
+                        LintDiagnostic::new(
+                            "performance/missing-index",
+                            "performance",
+                            Severity::Warning,
+                            format!("关系字段 {}.{} 建议添加索引", e.name, f.name),
+                        )
+                        .entity(&e.name)
+                        .field(&f.name)
+                        .hint("添加到 `index [...]`"),
+                    );
+                }
+            }
+        }
+    }
+    out
+}
+
+fn lint_enum_not_indexed(p: &Program) -> Vec<LintDiagnostic> {
+    let mut out = Vec::new();
+    for e in &p.entities {
+        for f in &e.fields {
+            if p.enums.iter().any(|x| x.name == f.type_name)
+                && (f.name == "status" || f.name == "state")
+                && !e.indexes.iter().any(|cols| cols.contains(&f.name))
+            {
+                out.push(
+                    LintDiagnostic::new(
+                        "performance/enum-not-indexed",
+                        "performance",
+                        Severity::Info,
+                        format!("状态字段 {}.{} 建议添加索引", e.name, f.name),
+                    )
+                    .entity(&e.name)
+                    .field(&f.name),
+                );
+            }
+        }
+    }
+    out
+}
+
+// ── convention ──
+
+fn lint_page_route_kebab(p: &Program) -> Vec<LintDiagnostic> {
+    let mut out = Vec::new();
+    for pg in &p.pages {
+        for seg in pg
+            .route
+            .split('/')
+            .filter(|s| !s.is_empty() && !s.starts_with('{'))
+        {
+            if seg.contains('_') || seg.chars().any(|c| c.is_ascii_uppercase()) {
+                out.push(
+                    LintDiagnostic::new(
+                        "convention/page-route-kebab",
+                        "convention",
+                        Severity::Warning,
+                        format!("路由 '{}' 建议使用 kebab-case", pg.route),
+                    )
+                    .entity(&pg.name),
+                );
+            }
+        }
+    }
+    out
+}
+
+fn lint_api_name_plural(p: &Program) -> Vec<LintDiagnostic> {
+    p.apis
+        .iter()
+        .filter(|a| !a.name.ends_with('s') && !a.name.ends_with("list"))
+        .map(|a| {
+            LintDiagnostic::new(
+                "convention/api-name-plural",
+                "convention",
+                Severity::Info,
+                format!("API '{}' 建议使用复数形式", a.name),
+            )
+            .entity(&a.name)
+        })
+        .collect()
+}
+
+// ── 注册表 ──
+
+pub fn builtin_rules() -> Vec<LintRule> {
+    vec![
+        LintRule {
+            id: "naming/entity-pascal-case",
+            category: "naming",
+            severity: Severity::Warning,
+            check: lint_entity_pascal,
+        },
+        LintRule {
+            id: "naming/field-camel-case",
+            category: "naming",
+            severity: Severity::Warning,
+            check: lint_field_camel,
+        },
+        LintRule {
+            id: "completeness/require-id",
+            category: "completeness",
+            severity: Severity::Error,
+            check: lint_require_id,
+        },
+        LintRule {
+            id: "completeness/require-timestamps",
+            category: "completeness",
+            severity: Severity::Warning,
+            check: lint_require_timestamps,
+        },
+        LintRule {
+            id: "completeness/i18n-labels",
+            category: "completeness",
+            severity: Severity::Info,
+            check: lint_i18n_labels,
+        },
+        LintRule {
+            id: "security/email-unique",
+            category: "security",
+            severity: Severity::Warning,
+            check: lint_email_unique,
+        },
+        LintRule {
+            id: "security/sensitive-hidden",
+            category: "security",
+            severity: Severity::Warning,
+            check: lint_sensitive_hidden,
+        },
+        LintRule {
+            id: "security/entity-has-access",
+            category: "security",
+            severity: Severity::Info,
+            check: lint_entity_has_access,
+        },
+        LintRule {
+            id: "security/string-max-length",
+            category: "security",
+            severity: Severity::Warning,
+            check: lint_string_max_length,
+        },
+        LintRule {
+            id: "performance/missing-index",
+            category: "performance",
+            severity: Severity::Warning,
+            check: lint_missing_index,
+        },
+        LintRule {
+            id: "performance/enum-not-indexed",
+            category: "performance",
+            severity: Severity::Info,
+            check: lint_enum_not_indexed,
+        },
+        LintRule {
+            id: "convention/page-route-kebab",
+            category: "convention",
+            severity: Severity::Warning,
+            check: lint_page_route_kebab,
+        },
+        LintRule {
+            id: "convention/api-name-plural",
+            category: "convention",
+            severity: Severity::Info,
+            check: lint_api_name_plural,
+        },
+    ]
+}
+
+pub fn run_lint(
+    program: &Program,
+    config: Option<&std::collections::HashMap<String, Severity>>,
+) -> Vec<LintDiagnostic> {
     let mut all = Vec::new();
     for rule in builtin_rules() {
-        let severity = config
+        let sev = config
             .and_then(|c| c.get(rule.id))
             .copied()
-            .unwrap_or(rule.default_severity);
-        if severity == Severity::Off {
+            .unwrap_or(rule.severity);
+        if sev == Severity::Off {
             continue;
         }
         let diags = (rule.check)(program);
         for mut d in diags {
-            d.severity = severity.as_str().into();
+            d.severity = sev.as_str().into();
             d.rule = rule.id.into();
             all.push(d);
         }
@@ -163,388 +543,3 @@ pub fn run_lint(program: &Program, config: Option<&std::collections::HashMap<Str
     });
     all
 }
-
-// ── 辅助 ────────────────────────────────────────────────
-
-fn is_pascal_case(s: &str) -> bool {
-    s.chars().next().map(|c| c.is_ascii_uppercase()).unwrap_or(false)
-        && s.chars().all(|c| c.is_ascii_alphanumeric())
-        && !s.contains('_')
-        && !s.contains('-')
-}
-
-fn is_camel_case(s: &str) -> bool {
-    s.chars().next().map(|c| c.is_ascii_lowercase()).unwrap_or(false)
-        && s.chars().all(|c| c.is_ascii_alphanumeric())
-        && !s.contains('_')
-        && !s.contains('-')
-}
-
-fn is_snake_case(s: &str) -> bool {
-    s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
-        && !s.starts_with('_')
-        && !s.ends_with('_')
-        && !s.contains("__")
-}
-
-// ── naming ──────────────────────────────────────────────
-
-fn lint_entity_pascal_case(p: &Program) -> Vec<LintDiagnostic> {
-    p.entities
-        .iter()
-        .filter(|e| !is_pascal_case(&e.name))
-        .map(|e| {
-            LintDiagnostic::new(
-                "naming/entity-pascal-case", "naming", Severity::Warning,
-                format!("实体名 '{}' 应使用 PascalCase", e.name),
-            )
-            .entity(&e.name)
-            .hint(&format!("改为 '{}'", to_pascal(&e.name)))
-        })
-        .collect()
-}
-
-fn lint_field_camel_case(p: &Program) -> Vec<LintDiagnostic> {
-    let mut out = Vec::new();
-    for entity in &p.entities {
-        for field in &entity.fields {
-            if !is_camel_case(&field.name) {
-                out.push(
-                    LintDiagnostic::new(
-                        "naming/field-camel-case", "naming", Severity::Warning,
-                        format!("字段名 '{}' 应使用 camelCase", field.name),
-                    )
-                    .entity(&entity.name)
-                    .field(&field.name)
-                    .line(field.line)
-                    .hint(&format!("改为 '{}'", to_camel(&field.name))),
-                );
-            }
-        }
-    }
-    out
-}
-
-fn to_pascal(s: &str) -> String {
-    s.split('_').map(|w| {
-        let mut c = w.chars();
-        match c.next() {
-            Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-            None => String::new(),
-        }
-    }).collect()
-}
-
-fn to_camel(s: &str) -> String {
-    let pascal = to_pascal(s);
-    let mut chars = pascal.chars();
-    match chars.next() {
-        Some(c) => c.to_lowercase().collect::<String>() + chars.as_str(),
-        None => String::new(),
-    }
-}
-
-// ── completeness ────────────────────────────────────────
-
-fn lint_require_id(p: &Program) -> Vec<LintDiagnostic> {
-    p.entities
-        .iter()
-        .filter(|e| !e.fields.iter().any(|f| has_attr(f, "id")))
-        .map(|e| {
-            LintDiagnostic::new(
-                "completeness/require-id", "completeness", Severity::Error,
-                format!("实体 '{}' 缺少 @id 主键字段", e.name),
-            )
-            .entity(&e.name)
-            .hint("添加 `id Uuid @id @default(uuid)`")
-        })
-        .collect()
-}
-
-fn lint_require_timestamps(p: &Program) -> Vec<LintDiagnostic> {
-    let mut out = Vec::new();
-    for entity in &p.entities {
-        let has_created = entity.fields.iter().any(|f| f.name == "createdAt" || f.name == "created_at");
-        if !has_created {
-            out.push(
-                LintDiagnostic::new(
-                    "completeness/require-timestamps", "completeness", Severity::Warning,
-                    format!("实体 '{}' 缺少 createdAt 时间戳字段", entity.name),
-                )
-                .entity(&entity.name)
-                .hint("添加 `createdAt Timestamp @default(now) @readonly`"),
-            );
-        }
-    }
-    out
-}
-
-fn lint_i18n_labels(p: &Program) -> Vec<LintDiagnostic> {
-    let mut out = Vec::new();
-    for e in &p.enums {
-        for v in &e.variants {
-            if v.labels.is_empty() {
-                out.push(
-                    LintDiagnostic::new(
-                        "completeness/i18n-labels", "completeness", Severity::Info,
-                        format!("枚举 {} 的变体 '{}' 缺少 @label", e.name, v.name),
-                    )
-                    .entity(&e.name)
-                    .field(&v.name)
-                    .hint("添加 `@label { zh \"…\" en \"…\" }`"),
-                );
-            }
-        }
-    }
-    for page in &p.pages {
-        if page.title.is_empty() {
-            out.push(
-                LintDiagnostic::new(
-                    "completeness/i18n-labels", "completeness", Severity::Warning,
-                    format!("页面 '{}' 缺少 title", page.name),
-                )
-                .entity(&page.name),
-            );
-        }
-    }
-    out
-}
-
-fn lint_no_empty_description(p: &Program) -> Vec<LintDiagnostic> {
-    let mut out = Vec::new();
-    for entity in &p.entities {
-        for field in &entity.fields {
-            if field.type_name == "Text" || field.type_name == "String" {
-                let has_description = field.attrs.iter().any(|a| a.name == "description");
-                if !has_description {
-                    out.push(
-                        LintDiagnostic::new(
-                            "completeness/no-empty-description", "completeness", Severity::Info,
-                            format!("字段 {}.{} 缺少 description", entity.name, field.name),
-                        )
-                        .entity(&entity.name)
-                        .field(&field.name),
-                    );
-                }
-            }
-        }
-    }
-    out
-}
-
-// ── security ────────────────────────────────────────────
-
-fn lint_email_unique(p: &Program) -> Vec<LintDiagnostic> {
-    let mut out = Vec::new();
-    for entity in &p.entities {
-        for field in &entity.fields {
-            if field.type_name == "Email" && !has_attr(field, "unique") {
-                out.push(
-                    LintDiagnostic::new(
-                        "security/email-unique", "security", Severity::Warning,
-                        format!("Email 字段 {}.{} 建议添加 @unique", entity.name, field.name),
-                    )
-                    .entity(&entity.name)
-                    .field(&field.name),
-                );
-            }
-        }
-    }
-    out
-}
-
-fn lint_PASSWORD_hidden(p: &Program) -> Vec<LintDiagnostic> {
-    let mut out = Vec::new();
-    for entity in &p.entities {
-        for field in &entity.fields {
-            let lower = field.name.to_lowercase();
-            let sensitive = lower.contains("PASSWORD") || lower.contains("secret") || lower.contains("token");
-            if sensitive && !has_attr(field, "hidden") {
-                out.push(
-                    LintDiagnostic::new(
-                        "security/PASSWORD-hidden", "security", Severity::Warning,
-                        format!("敏感字段 {}.{} 建议添加 @hidden", entity.name, field.name),
-                    )
-                    .entity(&entity.name)
-                    .field(&field.name)
-                    .hint("添加 `@hidden` 防止序列化泄露"),
-                );
-            }
-        }
-    }
-    out
-}
-
-fn lint_entity_has_access(p: &Program) -> Vec<LintDiagnostic> {
-    // 检查实体是否被 access/guard 规则覆盖（信息级）
-    let mut covered_entities = std::collections::HashSet::new();
-    for rules in &p.rules {
-        for guard in &rules.guards {
-            covered_entities.insert(guard.entity.clone());
-        }
-    }
-    // MVP：只检查有 Email 字段的实体（通常是核心业务实体）
-    let mut out = Vec::new();
-    for entity in &p.entities {
-        if entity.fields.iter().any(|f| f.type_name == "Email")
-            && !covered_entities.contains(&entity.name)
-        {
-            out.push(
-                LintDiagnostic::new(
-                    "security/entity-has-access", "security", Severity::Info,
-                    format!("实体 '{}' 包含敏感字段但没有 access/guard 规则", entity.name),
-                )
-                .entity(&entity.name)
-                .hint("添加 `rules` 块的 `guard` 或 `access` 声明"),
-            );
-        }
-    }
-    out
-}
-
-fn lint_string_max_length(p: &Program) -> Vec<LintDiagnostic> {
-    let mut out = Vec::new();
-    for entity in &p.entities {
-        for field in &entity.fields {
-            if field.type_name == "String" && field.type_args.is_empty() && !field.optional {
-                out.push(
-                    LintDiagnostic::new(
-                        "security/string-max-length", "security", Severity::Warning,
-                        format!("必填字段 {}.{} 的 String 建议指定长度限制 String(n)", entity.name, field.name),
-                    )
-                    .entity(&entity.name)
-                    .field(&field.name),
-                );
-            }
-        }
-    }
-    out
-}
-
-// ── performance ─────────────────────────────────────────
-
-fn lint_missing_index(p: &Program) -> Vec<LintDiagnostic> {
-    let mut out = Vec::new();
-    for entity in &p.entities {
-        for field in &entity.fields {
-            if crate::dsl::is_relation(p, &field.type_name) {
-                // 关系字段应有索引
-                let col = crate::identity::to_snake_case(&field.name);
-                let has_index = entity.indexes.iter().any(|cols| cols.contains(&col))
-                    || entity.uniques.iter().any(|cols| cols.contains(&col))
-                    || has_attr(field, "indexed");
-                if !has_index {
-                    out.push(
-                        LintDiagnostic::new(
-                            "performance/missing-index", "performance", Severity::Warning,
-                            format!("关系字段 {}.{} 建议添加索引", entity.name, field.name),
-                        )
-                        .entity(&entity.name)
-                        .field(&field.name)
-                        .hint("添加到 `index [...]` 或使用 `@indexed`"),
-                    );
-                }
-            }
-        }
-    }
-    out
-}
-
-fn lint_enum_not_indexed(p: &Program) -> Vec<LintDiagnostic> {
-    let mut out = Vec::new();
-    for entity in &p.entities {
-        for field in &entity.fields {
-            if p.enums.iter().any(|e| e.name == field.type_name)
-                && entity.fields.iter().any(|f| f.name == "status" || f.name == "state")
-            {
-                let has_index = entity.indexes.iter().any(|cols| cols.contains(&field.name));
-                if !has_index {
-                    out.push(
-                        LintDiagnostic::new(
-                            "performance/enum-not-indexed", "performance", Severity::Info,
-                            format!("状态字段 {}.{} 建议添加索引以加速过滤查询", entity.name, field.name),
-                        )
-                        .entity(&entity.name)
-                        .field(&field.name),
-                    );
-                }
-            }
-        }
-    }
-    out
-}
-
-// ── convention ──────────────────────────────────────────
-
-fn lint_relation_naming(p: &Program) -> Vec<LintDiagnostic> {
-    let mut out = Vec::new();
-    for entity in &p.entities {
-        for field in &entity.fields {
-            if crate::dsl::is_relation(p, &field.type_name) {
-                // 关系字段名应为小写实体名或带语义前缀
-                let lower = field.type_name.to_lowercase();
-                if field.name.to_lowercase() != lower
-                    && !field.name.to_lowercase().starts_with(&lower)
-                    && !field.name.ends_with("Id")
-                {
-                    out.push(
-                        LintDiagnostic::new(
-                            "convention/relation-naming", "convention", Severity::Info,
-                            format!("关系字段 {}.{} 建议与目标实体名 '{}{}' 保持一致",
-                                entity.name, field.name, lower, "…"),
-                        )
-                        .entity(&entity.name)
-                        .field(&field.name),
-                    );
-                }
-            }
-        }
-    }
-    out
-}
-
-fn lint_page_route_kebab(p: &Program) -> Vec<LintDiagnostic> {
-    let mut out = Vec::new();
-    for page in &p.pages {
-        let segs: Vec<&str> = page.route.split('/').filter(|s| !s.is_empty() && !s.starts_with('{')).collect();
-        for seg in segs {
-            if seg.contains('_') || seg.chars().any(|c| c.is_ascii_uppercase()) {
-                out.push(
-                    LintDiagnostic::new(
-                        "convention/page-route-kebab", "convention", Severity::Warning,
-                        format!("路由 '{}' 建议使用 kebab-case（如 '/{}'）", page.route, seg.to_lowercase().replace('_', "-")),
-                    )
-                    .entity(&page.name),
-                );
-            }
-        }
-    }
-    out
-}
-
-fn lint_api_name_plural(p: &Program) -> Vec<LintDiagnostic> {
-    let mut out = Vec::new();
-    for api in &p.apis {
-        let last = api.name.chars().last().unwrap_or(' ');
-        if last != 's' && last != 'y' && !api.name.ends_with("list") {
-            // 检查是否以 s 结尾——不是则提示
-            if !api.name.ends_with('s') {
-                out.push(
-                    LintDiagnostic::new(
-                        "convention/api-name-plural", "convention", Severity::Info,
-                        format!("API '{}' 建议使用复数形式（如 '{}s'）", api.name, api.name),
-                    )
-                    .entity(&api.name),
-                );
-            }
-        }
-    }
-    out
-}
-
-// ── helpers ─────────────────────────────────────────────
-
-fn has_attr(field: &FieldDecl, name: &str) -> bool {
-    field.attrs.iter().any(|a| a.name == name)
-}
-
