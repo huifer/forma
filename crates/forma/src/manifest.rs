@@ -244,24 +244,27 @@ fn normalize_manifest(
             .map(String::from);
         for (name, slot) in [
             ("backend", &mut targets.backend),
-            ("database", &mut targets.database),
             ("frontend", &mut targets.frontend),
         ] {
             if let Some(cfg) = t
                 .get(serde_yaml::Value::String(name.into()))
                 .and_then(|v| v.as_mapping())
             {
-                *slot = Some(TargetConfig {
-                    framework: cfg
-                        .get(serde_yaml::Value::String("framework".into()))
-                        .and_then(|v| v.as_str())
-                        .map(String::from),
-                    out: cfg
-                        .get(serde_yaml::Value::String("out".into()))
-                        .and_then(|v| v.as_str())
-                        .map(String::from),
-                });
+                *slot = Some(parse_target_config(cfg));
             }
+        }
+        // 别名：db == database，web == frontend（同名键后写优先，此处别名仅在前者缺失时生效）
+        if let Some(cfg) = ["database", "db"].iter().find_map(|n| {
+            t.get(serde_yaml::Value::String((*n).into()))
+                .and_then(|v| v.as_mapping())
+        }) {
+            targets.database = Some(parse_target_config(cfg));
+        }
+        if let Some(cfg) = ["frontend", "web"].iter().find_map(|n| {
+            t.get(serde_yaml::Value::String((*n).into()))
+                .and_then(|v| v.as_mapping())
+        }) {
+            targets.frontend = Some(parse_target_config(cfg));
         }
     }
 
@@ -273,6 +276,19 @@ fn normalize_manifest(
         bindings,
         targets,
     })
+}
+
+fn parse_target_config(cfg: &serde_yaml::Mapping) -> TargetConfig {
+    TargetConfig {
+        framework: cfg
+            .get(serde_yaml::Value::String("framework".into()))
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        out: cfg
+            .get(serde_yaml::Value::String("out".into()))
+            .and_then(|v| v.as_str())
+            .map(String::from),
+    }
 }
 
 fn normalize_spec_entry(
