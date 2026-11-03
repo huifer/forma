@@ -16,8 +16,8 @@ pub use migrate::{
     migration_verify, MigrationEntry, MigrationLedger, MigrationOp,
 };
 pub use mysql::emit_mysql;
-pub use replay::{schema_diff, schema_from_plans, replay_sql, SimSchema, SimTable};
 pub use openapi::emit_openapi;
+pub use replay::{replay_sql, schema_diff, schema_from_plans, SimSchema, SimTable};
 pub use rust_backend::emit_rust_backend;
 pub use web_react::emit_web_react;
 

@@ -8,7 +8,7 @@
 //! - CLI `forma migrate {status|history|up|down}` 模拟应用/回滚并维护 applied 状态。
 
 use super::mysql::{plan_tables, render_create_table, ColumnPlan, TablePlan};
-use super::replay::{schema_diff, schema_from_plans, replay_sql, SimSchema};
+use super::replay::{replay_sql, schema_diff, schema_from_plans, SimSchema};
 use super::Program;
 use crate::util::{read_text, write_text};
 use anyhow::Result;
@@ -180,16 +180,26 @@ pub fn diff_ops(old: &[TablePlan], new: &[TablePlan]) -> Vec<MigrationOp> {
         let Some(old_t) = old_by_table.get(t.table.as_str()) else {
             continue;
         };
-        ops.extend(index_ops(t, old_t).into_iter().filter(|op| {
-            matches!(op.kind, "drop_index" | "drop_unique")
-        }));
-        ops.extend(fk_ops(t, old_t).into_iter().filter(|op| op.kind == "drop_fk"));
-        ops.extend(column_ops(t, old_t).into_iter().filter(|op| {
-            matches!(op.kind, "add_column" | "modify_column")
-        }));
-        ops.extend(index_ops(t, old_t).into_iter().filter(|op| {
-            matches!(op.kind, "add_index" | "add_unique")
-        }));
+        ops.extend(
+            index_ops(t, old_t)
+                .into_iter()
+                .filter(|op| matches!(op.kind, "drop_index" | "drop_unique")),
+        );
+        ops.extend(
+            fk_ops(t, old_t)
+                .into_iter()
+                .filter(|op| op.kind == "drop_fk"),
+        );
+        ops.extend(
+            column_ops(t, old_t)
+                .into_iter()
+                .filter(|op| matches!(op.kind, "add_column" | "modify_column")),
+        );
+        ops.extend(
+            index_ops(t, old_t)
+                .into_iter()
+                .filter(|op| matches!(op.kind, "add_index" | "add_unique")),
+        );
         ops.extend(
             fk_ops(t, old_t)
                 .into_iter()
@@ -224,12 +234,17 @@ fn column_ops(new: &TablePlan, old: &TablePlan) -> Vec<MigrationOp> {
             } else {
                 "NULL /* 回填后可收紧为 NOT NULL */".to_string()
             };
-            let up_sql =
-                format!("ALTER TABLE {t} ADD COLUMN {} {} {};", col.name, col.sql_type, null_sql);
+            let up_sql = format!(
+                "ALTER TABLE {t} ADD COLUMN {} {} {};",
+                col.name, col.sql_type, null_sql
+            );
             out.push(MigrationOp {
                 kind: "add_column",
                 table: t.clone(),
-                summary: format!("{t}: 新增列 {} {}（可空，便于存量回填）", col.name, col.sql_type),
+                summary: format!(
+                    "{t}: 新增列 {} {}（可空，便于存量回填）",
+                    col.name, col.sql_type
+                ),
                 up: vec![up_sql],
                 down: vec![format!("ALTER TABLE {t} DROP COLUMN {};", col.name)],
             });
@@ -356,29 +371,32 @@ fn index_ops(new: &TablePlan, old: &TablePlan) -> Vec<MigrationOp> {
             .map(|c| c.unique)
             .unwrap_or(false);
         if col.unique && !had_unique {
-            let name = super::mysql::key_name("uq", t, &[col.name.clone()]);
+            let name = super::mysql::key_name("uq", t, std::slice::from_ref(&col.name));
             out.push(MigrationOp {
                 kind: "add_unique",
                 table: t.clone(),
                 summary: format!("{t}: 列 {} 新增唯一约束 {}", col.name, name),
-                up: vec![format!("ALTER TABLE {t} ADD UNIQUE KEY {name} ({});", col.name)],
+                up: vec![format!(
+                    "ALTER TABLE {t} ADD UNIQUE KEY {name} ({});",
+                    col.name
+                )],
                 down: vec![format!("ALTER TABLE {t} DROP INDEX {name};")],
             });
         }
     }
     for col in &old.columns {
-        let still_unique_and_present = new
-            .columns
-            .iter()
-            .any(|c| c.name == col.name && c.unique);
+        let still_unique_and_present = new.columns.iter().any(|c| c.name == col.name && c.unique);
         if col.unique && !still_unique_and_present {
-            let name = super::mysql::key_name("uq", t, &[col.name.clone()]);
+            let name = super::mysql::key_name("uq", t, std::slice::from_ref(&col.name));
             out.push(MigrationOp {
                 kind: "drop_unique",
                 table: t.clone(),
                 summary: format!("{t}: 列 {} 移除唯一约束 {}", col.name, name),
                 up: vec![format!("ALTER TABLE {t} DROP INDEX {name};")],
-                down: vec![format!("ALTER TABLE {t} ADD UNIQUE KEY {name} ({});", col.name)],
+                down: vec![format!(
+                    "ALTER TABLE {t} ADD UNIQUE KEY {name} ({});",
+                    col.name
+                )],
             });
         }
     }
@@ -423,7 +441,11 @@ fn fk_ops(new: &TablePlan, old: &TablePlan) -> Vec<MigrationOp> {
 
 /// 表结构差异 → 升级 SQL 语句序列（兼容旧接口）。
 pub fn diff_sql(old: &[TablePlan], new: &[TablePlan]) -> String {
-    join_stmts(diff_ops(old, new).iter().flat_map(|op| op.up.iter().cloned()))
+    join_stmts(
+        diff_ops(old, new)
+            .iter()
+            .flat_map(|op| op.up.iter().cloned()),
+    )
 }
 
 /// 表结构差异 → 回滚 SQL（逆序执行反向操作）。
@@ -487,7 +509,11 @@ fn render_migrations_md(ledger: &MigrationLedger, migrations_dir: &Path) -> Stri
     out.push_str("| # | 目标版本 | 升级 | 回滚 | 状态 | 变更摘要 |\n");
     out.push_str("|---|----------|------|------|------|----------|\n");
     for e in &ledger.entries {
-        let status = if e.applied { "✅ applied" } else { "⏳ pending" };
+        let status = if e.applied {
+            "✅ applied"
+        } else {
+            "⏳ pending"
+        };
         let rollback = e
             .rollback_file
             .as_deref()
@@ -503,16 +529,9 @@ fn render_migrations_md(ledger: &MigrationLedger, migrations_dir: &Path) -> Stri
     out.push_str("\n---\n\n");
 
     for e in &ledger.entries {
-        let upgrade_abs = migrations_dir.join(
-            e.upgrade_file
-                .rsplit('/')
-                .next()
-                .unwrap_or(&e.upgrade_file),
-        );
-        out.push_str(&format!(
-            "## #{} — upgrade to v{}\n\n",
-            e.index, e.version
-        ));
+        let upgrade_abs =
+            migrations_dir.join(e.upgrade_file.rsplit('/').next().unwrap_or(&e.upgrade_file));
+        out.push_str(&format!("## #{} — upgrade to v{}\n\n", e.index, e.version));
         out.push_str("变更：\n");
         for c in &e.changes {
             out.push_str(&format!("- {c}\n"));
@@ -670,7 +689,9 @@ pub fn emit_migration(
 pub fn migration_status(project_dir: &Path) -> Result<Vec<String>> {
     let ledger = read_ledger(project_dir);
     if ledger.entries.is_empty() {
-        return Ok(vec!["(no migrations recorded — run `forma build` first)".into()]);
+        return Ok(vec![
+            "(no migrations recorded — run `forma build` first)".into()
+        ]);
     }
     let mut lines = Vec::new();
     for e in &ledger.entries {
@@ -806,7 +827,11 @@ fn version_le(a: &str, b: &str) -> bool {
 /// 2. 每个升级（除基线）都有配对回滚文件；
 /// 3. 台账哈希与迁移文件内容一致（检测手工篡改）；
 /// 4. 把全部迁移按序重放到模拟 schema，与当前 DSL 派生的 schema 逐项比对（检测基线漂移/链断裂）。
-pub fn migration_verify(project_dir: &Path, program: &Program, out_dir: &str) -> Result<Vec<String>> {
+pub fn migration_verify(
+    project_dir: &Path,
+    program: &Program,
+    out_dir: &str,
+) -> Result<Vec<String>> {
     let ledger = read_ledger(project_dir);
     let mut issues: Vec<String> = Vec::new();
     if ledger.entries.is_empty() {

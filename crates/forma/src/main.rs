@@ -580,36 +580,34 @@ fn cmd_migrate(
             }
             0
         }
-        "down" => {
-            match forma::emit::migration_down(project_dir, &out_dir, apply, steps, target) {
-                Ok(rolled) if rolled.is_empty() => {
-                    println!("✓ nothing to roll back");
-                    0
-                }
-                Ok(rolled) => {
-                    for (file, sql) in &rolled {
-                        if !sql_only {
-                            println!("── {} ──", file.rsplit('/').next().unwrap_or(file));
-                        }
-                        println!("{sql}");
+        "down" => match forma::emit::migration_down(project_dir, &out_dir, apply, steps, target) {
+            Ok(rolled) if rolled.is_empty() => {
+                println!("✓ nothing to roll back");
+                0
+            }
+            Ok(rolled) => {
+                for (file, sql) in &rolled {
+                    if !sql_only {
+                        println!("── {} ──", file.rsplit('/').next().unwrap_or(file));
                     }
-                    if sql_only {
-                        return 0;
-                    }
-                    if apply {
-                        println!("✓ rolled back {} migration(s)", rolled.len());
-                    } else {
-                        println!(
-                            "⏳ rollback plan for {} migration(s) (dry run) — use --apply",
-                            rolled.len()
-                        );
-                    }
-                    0
+                    println!("{sql}");
                 }
-                Err(err) => {
-                    eprintln!("✗ {err:#}");
-                    1
+                if sql_only {
+                    return 0;
                 }
+                if apply {
+                    println!("✓ rolled back {} migration(s)", rolled.len());
+                } else {
+                    println!(
+                        "⏳ rollback plan for {} migration(s) (dry run) — use --apply",
+                        rolled.len()
+                    );
+                }
+                0
+            }
+            Err(err) => {
+                eprintln!("✗ {err:#}");
+                1
             }
         },
         _ => {

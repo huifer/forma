@@ -205,7 +205,7 @@ fn apply_create_table(schema: &mut SimSchema, body: &str) -> anyhow::Result<()> 
                 .split_once("REFERENCES ")
                 .ok_or_else(|| anyhow::anyhow!("FOREIGN KEY 缺 REFERENCES: {line}"))?;
             let col = col.trim().trim_start_matches('(').trim_end_matches(')');
-            let reftable = refpart.trim().split_whitespace().next().unwrap_or_default();
+            let reftable = refpart.split_whitespace().next().unwrap_or_default();
             t.fks.push((cname, col.to_string(), reftable.to_string()));
         } else {
             // 列定义: name TYPE [NULL|NOT NULL] [UNIQUE]
@@ -305,9 +305,7 @@ fn apply_alter(schema: &mut SimSchema, rest: &str) -> anyhow::Result<()> {
     } else if let Some(def) = action.strip_prefix("ADD INDEX ") {
         let (name, cols) = parse_key_def(def)?;
         let t = schema.table_mut(&table)?;
-        if t.uniques.iter().any(|(n, _)| *n == name)
-            || t.indexes.iter().any(|(n, _)| *n == name)
-        {
+        if t.uniques.iter().any(|(n, _)| *n == name) || t.indexes.iter().any(|(n, _)| *n == name) {
             bail!("ALTER TABLE {table} ADD INDEX {name}: 索引重名（Duplicate key name）");
         }
         t.indexes.push((name, cols));
@@ -335,7 +333,7 @@ fn apply_alter(schema: &mut SimSchema, rest: &str) -> anyhow::Result<()> {
             .split_once("REFERENCES ")
             .ok_or_else(|| anyhow::anyhow!("FOREIGN KEY 缺 REFERENCES: {def}"))?;
         let col = col.trim().trim_start_matches('(').trim_end_matches(')');
-        let reftable = refpart.trim().split_whitespace().next().unwrap_or_default();
+        let reftable = refpart.split_whitespace().next().unwrap_or_default();
         schema
             .table_mut(&table)?
             .fks
@@ -356,7 +354,7 @@ fn apply_alter(schema: &mut SimSchema, rest: &str) -> anyhow::Result<()> {
 
 // ── schema 等价性比较（与 TablePlan 派生结果逐项对齐） ─────
 
-fn sort_cols(v: &mut Vec<(String, Vec<String>)>) {
+fn sort_cols(v: &mut [(String, Vec<String>)]) {
     v.sort_by(|a, b| a.0.cmp(&b.0));
 }
 
@@ -402,21 +400,30 @@ pub fn schema_diff(actual: &SimSchema, expected: &SimSchema) -> Vec<String> {
         sort_cols(&mut exp_uq);
         sort_cols(&mut act_uq);
         if exp_uq != act_uq {
-            diffs.push(format!("{} 唯一约束不符: 期望 {exp_uq:?}，实际 {act_uq:?}", t.name));
+            diffs.push(format!(
+                "{} 唯一约束不符: 期望 {exp_uq:?}，实际 {act_uq:?}",
+                t.name
+            ));
         }
         let mut exp_idx = t.indexes.clone();
         let mut act_idx = a.indexes.clone();
         sort_cols(&mut exp_idx);
         sort_cols(&mut act_idx);
         if exp_idx != act_idx {
-            diffs.push(format!("{} 索引不符: 期望 {exp_idx:?}，实际 {act_idx:?}", t.name));
+            diffs.push(format!(
+                "{} 索引不符: 期望 {exp_idx:?}，实际 {act_idx:?}",
+                t.name
+            ));
         }
         let mut exp_fk = t.fks.clone();
         let mut act_fk = a.fks.clone();
         exp_fk.sort();
         act_fk.sort();
         if exp_fk != act_fk {
-            diffs.push(format!("{} 外键不符: 期望 {exp_fk:?}，实际 {act_fk:?}", t.name));
+            diffs.push(format!(
+                "{} 外键不符: 期望 {exp_fk:?}，实际 {act_fk:?}",
+                t.name
+            ));
         }
         if a.primary_key != t.primary_key {
             diffs.push(format!(

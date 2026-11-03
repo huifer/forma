@@ -227,10 +227,7 @@ pub fn status_mermaid(program: &Program) -> Vec<String> {
         // 枚举变体名直接当状态节点，可能撞 Mermaid 关键字（note、state…）——
         // 统一加命名空间前缀，语义由 title state 承载。
         let sid = |v: &str| format!("{}_{}", sanitize_id(&e.name), sanitize_id(v));
-        out.push_str(&format!(
-            "    [*] --> {}\n",
-            sid(&e.variants[0].name)
-        ));
+        out.push_str(&format!("    [*] --> {}\n", sid(&e.variants[0].name)));
         for w in e.variants.windows(2) {
             out.push_str(&format!(
                 "    {} --> {}\n",
@@ -314,7 +311,8 @@ pub fn emit_diagrams(
     let status = status_diagrams.join("\n\n");
     // 每个枚举的状态图必须是独立渲染块：一个 <pre class="mermaid"> 只能承载一份 diagram
     let status_cards = if status_diagrams.is_empty() {
-        "<div class=\"card\"><p class=\"muted\">无状态枚举（enum 未被实体字段引用）</p></div>".to_string()
+        "<div class=\"card\"><p class=\"muted\">无状态枚举（enum 未被实体字段引用）</p></div>"
+            .to_string()
     } else {
         status_diagrams
             .iter()

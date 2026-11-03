@@ -201,11 +201,7 @@ fn migration_chain_generates_paired_upgrade_and_rollback() {
     // 台账：3 条记录，版本递进，含哈希与 applied=false
     let ledger = read_ledger(&dir);
     assert_eq!(ledger.entries.len(), 3);
-    let versions: Vec<&str> = ledger
-        .entries
-        .iter()
-        .map(|e| e.version.as_str())
-        .collect();
+    let versions: Vec<&str> = ledger.entries.iter().map(|e| e.version.as_str()).collect();
     assert_eq!(versions, vec!["0.1.0", "0.2.0", "0.3.0"], "{versions:?}");
     assert!(ledger.entries[1].rollback_file.is_some());
     assert!(ledger.entries[1].up_hash.len() == 64);
@@ -263,10 +259,13 @@ fn migrate_up_and_down_track_applied_state() {
     assert!(md.contains("✅ applied"));
 
     // down --apply：回滚最近一次（#0003），台账回退
-    let rolled = migration_down(&dir, "generated/db", true, 1, None)
-        .unwrap();
+    let rolled = migration_down(&dir, "generated/db", true, 1, None).unwrap();
     assert_eq!(rolled.len(), 1);
-    assert!(rolled[0].0.ends_with("0003_rollback.sql"), "{}", rolled[0].0);
+    assert!(
+        rolled[0].0.ends_with("0003_rollback.sql"),
+        "{}",
+        rolled[0].0
+    );
     assert!(rolled[0].1.contains("DROP COLUMN email"), "{}", rolled[0].1);
     let ledger = read_ledger(&dir);
     assert_eq!(ledger.entries.iter().filter(|e| e.applied).count(), 2);
@@ -386,7 +385,12 @@ fn up_to_applies_target_version_only() {
     let dir = build_chain("up-to");
     // up --to 0.2.0：只应应用 #0001 与 #0002
     let plan = migration_up(&dir, "generated/db", false, Some("0.2.0")).unwrap();
-    assert_eq!(plan.len(), 2, "{:?}", plan.iter().map(|f| &f.0).collect::<Vec<_>>());
+    assert_eq!(
+        plan.len(),
+        2,
+        "{:?}",
+        plan.iter().map(|f| &f.0).collect::<Vec<_>>()
+    );
     assert!(plan.iter().all(|(f, _)| !f.contains("0003")));
 
     // apply 后再 up（无 target）只补 0003
@@ -460,7 +464,10 @@ fn index_names_are_content_derived_and_collision_free() {
     // CREATE TABLE 里生成的名字同样内容派生
     let create = forma::emit::mysql::render_create_table(&v2[0]);
     assert!(create.contains("KEY idx_"), "{create}");
-    assert!(!create.contains("idx_0 ") && !create.contains("_0 ("), "{create}");
+    assert!(
+        !create.contains("idx_0 ") && !create.contains("_0 ("),
+        "{create}"
+    );
 }
 
 // ── 可视化图表 ─────────────────────────────────────────
@@ -521,7 +528,9 @@ rules R {
     // 变体名加枚举命名空间前缀，避免撞 Mermaid 关键字（note/state/end…）
     assert!(status.content.contains("[*] --> Status_pending"));
     assert!(status.content.contains("Status_pending --> Status_active"));
-    assert!(status.content.contains("Status_active --> Status_completed"));
+    assert!(status
+        .content
+        .contains("Status_active --> Status_completed"));
     assert!(status
         .content
         .contains("note right of Status_completed : completed 时不可 删除"));
