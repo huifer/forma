@@ -347,3 +347,68 @@ api DoIt {
     let err = emit_rust_backend(&dir, &program, "generated/backend", "demo").unwrap_err();
     assert!(format!("{err:#}").contains("仅支持枚举变体"), "{err:#}");
 }
+
+// ── auth module（JWT 全栈）────────────────────────────────
+
+#[test]
+fn auth_module_generates_full_stack_auth() {
+    let (_dir, program) = school_program();
+    let dir = std::env::temp_dir().join(format!(
+        "forma-auth-{}-{:?}",
+        std::process::id(),
+        std::time::SystemTime::now()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let files = emit_rust_backend(&dir, &program, "generated/backend", "school").unwrap();
+
+    // auth.rs：注册/登录/校验/中间件
+    let auth = files
+        .iter()
+        .find(|f| f.path.ends_with("auth.rs"))
+        .expect("auth.rs 应随 auth module 生成");
+    assert!(auth.content.contains("pub async fn register("));
+    assert!(auth.content.contains("pub async fn login("));
+    assert!(auth.content.contains("pub async fn me("));
+    assert!(auth.content.contains("pub async fn require_auth("));
+    assert!(auth.content.contains("jsonwebtoken::decode"));
+    assert!(auth.content.contains("argon2"));
+
+    // 路由：公开端点 + 受保护业务路由
+    let routes = file_ending(&files, "routes.rs");
+    assert!(routes.contains(".route(\"/api/auth/register\", post(crate::auth::register))"));
+    assert!(routes.contains(".route(\"/api/auth/login\", post(crate::auth::login))"));
+    assert!(routes.contains(".route(\"/api/auth/me\", get(crate::auth::me))"));
+    // 保护层只作用于业务路由（先 merge 后 layer）
+    let layer_pos = routes.find("from_fn(crate::auth::require_auth)").unwrap();
+    let merge_pos = routes.find("app = app.merge(protected);").unwrap();
+    assert!(
+        layer_pos < merge_pos,
+        "保护层必须先挂到 protected 再并入 app"
+    );
+
+    // 依赖按需加入
+    let cargo = files
+        .iter()
+        .find(|f| f.path.ends_with("Cargo.toml"))
+        .unwrap();
+    assert!(cargo.content.contains("argon2"));
+    assert!(cargo.content.contains("jsonwebtoken"));
+}
+
+#[test]
+fn audit_records_actor_from_current_user() {
+    let (_dir, program) = school_program();
+    let dir = std::env::temp_dir().join(format!(
+        "forma-audit-actor-{}-{:?}",
+        std::process::id(),
+        std::time::SystemTime::now()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let files = emit_rust_backend(&dir, &program, "generated/backend", "school").unwrap();
+    let routes = file_ending(&files, "routes.rs");
+    // 命令 handler 注入当前用户 → 审计 actor
+    assert!(routes.contains("axum::Extension<crate::auth::CurrentUser>"));
+    assert!(routes.contains("Some(req_user.username.as_str())"));
+}

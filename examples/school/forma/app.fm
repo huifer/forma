@@ -19,6 +19,14 @@ enum EnrollmentStatus {
   cancelled @label { zh "已取消" en "Cancelled" }
 }
 
+// ── 认证：注册/登录（argon2 + JWT），实体与命令路由需带 Bearer token ──
+
+auth module {
+  provider jwt
+  roles [admin, teacher, student]
+  tokenHours 12
+}
+
 // ── 数据层：学校 ← 学生 / 课程 ← 报名（三重关系关联） ──
 
 entity School {

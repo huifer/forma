@@ -49,6 +49,7 @@ pub fn load_program(
         apis: Vec::new(),
         commands: Vec::new(),
         charts: Vec::new(),
+        auth: None,
         pages: Vec::new(),
     };
     let mut diagnostics = Vec::new();
@@ -134,6 +135,21 @@ fn merge_program(
         }
     }
     program.rules.extend(part.rules);
+    // 认证模块（单例）
+    if let Some(auth) = part.auth {
+        if program.auth.is_some() {
+            diagnostics.push(Diagnostic {
+                severity: "error".into(),
+                code: "dsl-duplicate".into(),
+                message: "duplicate auth module".into(),
+                file: Some(file.into()),
+                line: None,
+                nodes: None,
+            });
+        } else {
+            program.auth = Some(auth);
+        }
+    }
     for c in part.commands {
         if program.commands.iter().any(|x| x.name == c.name) {
             diagnostics.push(Diagnostic {

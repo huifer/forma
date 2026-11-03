@@ -19,7 +19,7 @@ breaking_change: false
 
 ## 1. Metadata
 
-见 frontmatter。本 RFC 定义 Forma 的全局架构边界、依赖方向与治理规则；crate 级实现细节不在本文件范围，见伴侣文档 [architecture.zh-CN.md](../architecture.zh-CN.md)。
+见 frontmatter。本 RFC 定义 Forma 的全局架构边界、依赖方向与治理规则；crate 级实现细节不在本文件范围，见伴侣文档 [architecture.zh-CN.md](../../architecture.zh-CN.md)。
 
 ## 2. Abstract
 
@@ -43,7 +43,7 @@ Forma 是一层 DSL 中间层：一套 DSL（`.fm`）描述前端、后端、数
 
 - 定义 Forma 的子系统边界与依赖方向。
 - 明确 Tier 1 / Tier 2 / Tier 3 稳定性分层。
-- 规定「什么变更改什么文件」（见 [README §8](README.md) 演进规则表）。
+- 规定「什么变更改什么文件」（见 [README §8](../README.md) 演进规则表）。
 
 ## 5. Non-goals
 
@@ -53,8 +53,8 @@ Forma 是一层 DSL 中间层：一套 DSL（`.fm`）描述前端、后端、数
 
 ## 6. Terminology
 
-- **DSL / IR / Adapter / Runtime / Capability**：见 [README §0](README.md)。
-- **Tier 1/2/3**：见 [README §5](README.md)。
+- **DSL / IR / Adapter / Runtime / Capability**：见 [README §0](../README.md)。
+- **Tier 1/2/3**：见 [README §5](../README.md)。
 - **Stable Identity**：实体 / 字段 / 关系的稳定标识符，跨版本不变。
 
 ## 7. Architectural Context
@@ -102,7 +102,7 @@ Tier 1（Stable Foundation）  ◀──  Tier 2（Extensible）  ◀──  Tie
 
 ### 8.1 Conceptual Model
 
-系统由五类边界清晰的层组成：RFC（边界）/ Specification（语义）/ ADR（决策）/ Capability（功能）/ Conformance（兼容）。见 [README §0](README.md)。
+系统由五类边界清晰的层组成：RFC（边界）/ Specification（语义）/ ADR（决策）/ Capability（功能）/ Conformance（兼容）。见 [README §0](../README.md)。
 
 ### 8.2 Architecture
 
@@ -180,7 +180,7 @@ Stable Identity 是跨版本稳定的标识符，由 IR 节点承载（`NodeKind
 
 ## 17. Acceptance Criteria
 
-- 新 Capability 接入无需改核心架构；新 Adapter 接入无需改 IR；改规格不破坏无关产物（[README §10](README.md) Phase 1 标准）。
+- 新 Capability 接入无需改核心架构；新 Adapter 接入无需改 IR；改规格不破坏无关产物（[README §10](../README.md) Phase 1 标准）。
 
 ## 18. Open Questions
 
@@ -189,10 +189,10 @@ Stable Identity 是跨版本稳定的标识符，由 IR 节点承载（`NodeKind
 
 ## 19. References
 
-- 伴侣蓝图：[architecture.zh-CN.md](../architecture.zh-CN.md)
-- 治理总入口：[README.md](README.md)
-- 审查清单：[REVIEW-CHECKLIST.zh-CN.md](REVIEW-CHECKLIST.zh-CN.md)
-- 验证体系：[../verification.zh-CN.md](../verification.zh-CN.md)
+- 伴侣蓝图：[architecture.zh-CN.md](../../architecture.zh-CN.md)
+- 治理总入口：[README.md](../README.md)
+- 审查清单：[REVIEW-CHECKLIST.zh-CN.md](../REVIEW-CHECKLIST.zh-CN.md)
+- 验证体系：[verification.zh-CN.md](../../verification.zh-CN.md)
 
 ## 20. Change Log
 

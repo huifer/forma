@@ -261,7 +261,7 @@ page EnrollmentDashboard {
 - **产物**（web-react）：`src/viz/spec.ts` + `transform.ts`（适配器无关的类型与变换执行器）、`echarts.ts`（按需注册本工程用到的图表/组件）、`runtime.tsx`（`<FormaChart>`）、`src/viz/charts/<Name>.ts`（Spec/Option/Source 三件套）。无 `chart` 块的工程不产出任何 viz 文件、不引入 echarts 依赖。
 - **MCP**：`forma_viz_catalog`（能力词表）、`forma_viz_describe`（单类型规格）、`forma_viz_validate`（校验 + 图表语义摘要）。
 
-设计全文与 Dashboard IR（V0.3）见 [RFC-0001：可视化规格与渲染系统](docs/architecture/rfc/RFC-0010-visualization.zh-CN.md)。
+设计全文与 Dashboard IR（V0.3）见 [RFC-0001：可视化规格与渲染系统](architecture/rfc/RFC-0010-visualization.zh-CN.md)。
 
 ## 11b. page（UI 层，目标无关原语）
 

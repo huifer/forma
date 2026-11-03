@@ -110,7 +110,7 @@ fn mcp_check_reports_diagnostics_and_lint() {
 fn mcp_build_matches_cli_pipeline() {
     let dir = school_dir();
     let build = call_tool(&dir, "forma_build", &args()).unwrap();
-    assert_eq!(build["totalFiles"], 89); // +audit.rs（命令）+ 2 图表页（flutter）+ viz 模板 5 + school 图表 2? 按实际
+    assert_eq!(build["totalFiles"], 92); // +auth.rs +Web Login.tsx +Flutter login.dart // +audit.rs（命令）+ 2 图表页（flutter）+ viz 模板 5 + school 图表 2? 按实际
     let steps: Vec<&str> = build["steps"]
         .as_array()
         .unwrap()
@@ -142,7 +142,7 @@ fn mcp_migrate_reports_version_chain() {
         .iter()
         .map(|e| e["version"].as_str().unwrap())
         .collect();
-    assert_eq!(versions, vec!["0.1.0", "0.2.0", "0.3.0", "0.3.0"]); // +audit_logs 迁移
+    assert_eq!(versions, vec!["0.3.0", "0.2.0", "0.3.0", "0.3.0"]); // 基线版本号不可从文件恢复 → 回退当前版本
 }
 
 // ── MCP：联邦工程向后兼容 ─────────────────────────────────

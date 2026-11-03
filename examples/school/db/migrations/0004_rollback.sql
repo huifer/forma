@@ -3,7 +3,9 @@
 -- Counterpart: migrations/0004_upgrade.sql
 -- 逆序执行反向操作:
 --   - 新增表 audit_logs（7 列）
+--   - 新增表 users（5 列）
 --
 -- DOWN
 
 DROP TABLE IF EXISTS audit_logs;
+DROP TABLE IF EXISTS users;

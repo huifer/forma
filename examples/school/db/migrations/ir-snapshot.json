@@ -1,0 +1,478 @@
+{
+  "version": 2,
+  "app_version": "0.3.0",
+  "tables": [
+    {
+      "entity": "User",
+      "table": "users",
+      "columns": [
+        {
+          "name": "id",
+          "sql_type": "CHAR(36)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "username",
+          "sql_type": "VARCHAR(64)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "password_hash",
+          "sql_type": "VARCHAR(255)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "role",
+          "sql_type": "VARCHAR(64)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "created_at",
+          "sql_type": "DATETIME(3)",
+          "nullable": false,
+          "unique": false
+        }
+      ],
+      "primary_key": "id",
+      "uniques": [
+        [
+          "username"
+        ]
+      ],
+      "indexes": [],
+      "fks": []
+    },
+    {
+      "entity": "School",
+      "table": "schools",
+      "columns": [
+        {
+          "name": "id",
+          "sql_type": "CHAR(36)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "name",
+          "sql_type": "VARCHAR(100)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "city",
+          "sql_type": "VARCHAR(50)",
+          "nullable": true,
+          "unique": false
+        },
+        {
+          "name": "created_at",
+          "sql_type": "DATETIME(3)",
+          "nullable": false,
+          "unique": false
+        }
+      ],
+      "primary_key": "id",
+      "uniques": [],
+      "indexes": [],
+      "fks": []
+    },
+    {
+      "entity": "Student",
+      "table": "students",
+      "columns": [
+        {
+          "name": "id",
+          "sql_type": "CHAR(36)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "school_id",
+          "sql_type": "CHAR(36)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "name",
+          "sql_type": "VARCHAR(50)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "email",
+          "sql_type": "VARCHAR(320)",
+          "nullable": false,
+          "unique": true
+        },
+        {
+          "name": "phone",
+          "sql_type": "VARCHAR(20)",
+          "nullable": true,
+          "unique": false
+        },
+        {
+          "name": "age",
+          "sql_type": "BIGINT",
+          "nullable": true,
+          "unique": false
+        },
+        {
+          "name": "created_at",
+          "sql_type": "DATETIME(3)",
+          "nullable": false,
+          "unique": false
+        }
+      ],
+      "primary_key": "id",
+      "uniques": [],
+      "indexes": [
+        [
+          "school_id",
+          "name"
+        ]
+      ],
+      "fks": [
+        {
+          "column": "school_id",
+          "ref_table": "schools"
+        }
+      ]
+    },
+    {
+      "entity": "Course",
+      "table": "courses",
+      "columns": [
+        {
+          "name": "id",
+          "sql_type": "CHAR(36)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "school_id",
+          "sql_type": "CHAR(36)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "title",
+          "sql_type": "VARCHAR(200)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "capacity",
+          "sql_type": "BIGINT",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "created_at",
+          "sql_type": "DATETIME(3)",
+          "nullable": false,
+          "unique": false
+        }
+      ],
+      "primary_key": "id",
+      "uniques": [],
+      "indexes": [
+        [
+          "school_id"
+        ]
+      ],
+      "fks": [
+        {
+          "column": "school_id",
+          "ref_table": "schools"
+        }
+      ]
+    },
+    {
+      "entity": "Enrollment",
+      "table": "enrollments",
+      "columns": [
+        {
+          "name": "id",
+          "sql_type": "CHAR(36)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "student_id",
+          "sql_type": "CHAR(36)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "course_id",
+          "sql_type": "CHAR(36)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "status",
+          "sql_type": "VARCHAR(64)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "enrolled_at",
+          "sql_type": "DATETIME(3)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "created_at",
+          "sql_type": "DATETIME(3)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "note",
+          "sql_type": "TEXT",
+          "nullable": true,
+          "unique": false
+        }
+      ],
+      "primary_key": "id",
+      "uniques": [
+        [
+          "student_id",
+          "course_id"
+        ]
+      ],
+      "indexes": [
+        [
+          "status"
+        ],
+        [
+          "student_id",
+          "course_id"
+        ]
+      ],
+      "fks": [
+        {
+          "column": "student_id",
+          "ref_table": "students"
+        },
+        {
+          "column": "course_id",
+          "ref_table": "courses"
+        }
+      ]
+    },
+    {
+      "entity": "Election",
+      "table": "elections",
+      "columns": [
+        {
+          "name": "id",
+          "sql_type": "CHAR(36)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "title",
+          "sql_type": "VARCHAR(200)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "status",
+          "sql_type": "VARCHAR(64)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "starts_at",
+          "sql_type": "DATETIME(3)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "ends_at",
+          "sql_type": "DATETIME(3)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "remark",
+          "sql_type": "TEXT",
+          "nullable": true,
+          "unique": false
+        }
+      ],
+      "primary_key": "id",
+      "uniques": [],
+      "indexes": [],
+      "fks": []
+    },
+    {
+      "entity": "Candidate",
+      "table": "candidates",
+      "columns": [
+        {
+          "name": "id",
+          "sql_type": "CHAR(36)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "election_id",
+          "sql_type": "CHAR(36)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "student_id",
+          "sql_type": "CHAR(36)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "slogan",
+          "sql_type": "VARCHAR(500)",
+          "nullable": false,
+          "unique": false
+        }
+      ],
+      "primary_key": "id",
+      "uniques": [],
+      "indexes": [
+        [
+          "election_id"
+        ]
+      ],
+      "fks": [
+        {
+          "column": "election_id",
+          "ref_table": "elections"
+        },
+        {
+          "column": "student_id",
+          "ref_table": "students"
+        }
+      ]
+    },
+    {
+      "entity": "VoteRecord",
+      "table": "vote_records",
+      "columns": [
+        {
+          "name": "id",
+          "sql_type": "CHAR(36)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "election_id",
+          "sql_type": "CHAR(36)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "candidate_id",
+          "sql_type": "CHAR(36)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "voter_id",
+          "sql_type": "CHAR(36)",
+          "nullable": false,
+          "unique": false
+        }
+      ],
+      "primary_key": "id",
+      "uniques": [
+        [
+          "election_id",
+          "voter_id"
+        ]
+      ],
+      "indexes": [
+        [
+          "voter_id"
+        ]
+      ],
+      "fks": [
+        {
+          "column": "election_id",
+          "ref_table": "elections"
+        },
+        {
+          "column": "candidate_id",
+          "ref_table": "candidates"
+        },
+        {
+          "column": "voter_id",
+          "ref_table": "students"
+        }
+      ]
+    },
+    {
+      "entity": "AuditLog",
+      "table": "audit_logs",
+      "columns": [
+        {
+          "name": "id",
+          "sql_type": "CHAR(36)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "action",
+          "sql_type": "VARCHAR(191)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "entity",
+          "sql_type": "VARCHAR(191)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "entity_id",
+          "sql_type": "CHAR(36)",
+          "nullable": false,
+          "unique": false
+        },
+        {
+          "name": "actor",
+          "sql_type": "VARCHAR(191)",
+          "nullable": true,
+          "unique": false
+        },
+        {
+          "name": "payload",
+          "sql_type": "JSON",
+          "nullable": true,
+          "unique": false
+        },
+        {
+          "name": "created_at",
+          "sql_type": "DATETIME(3)",
+          "nullable": false,
+          "unique": false
+        }
+      ],
+      "primary_key": "id",
+      "uniques": [],
+      "indexes": [
+        [
+          "created_at"
+        ],
+        [
+          "entity",
+          "entity_id"
+        ]
+      ],
+      "fks": []
+    }
+  ]
+}

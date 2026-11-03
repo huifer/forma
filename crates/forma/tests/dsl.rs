@@ -99,3 +99,59 @@ entity A {
         .unwrap();
     assert!(note.optional);
 }
+
+#[test]
+fn auth_module_parses() {
+    let dsl = r#"
+app demo { version = "0.1.0" }
+auth module {
+  provider jwt
+  roles [admin, teacher, student]
+  tokenHours 12
+}
+"#;
+    let program = forma::dsl::parser::parse(&forma::dsl::lexer::lex(dsl)).program;
+    let auth = program.auth.expect("auth module");
+    assert_eq!(auth.provider, "jwt");
+    assert_eq!(auth.roles, vec!["admin", "teacher", "student"]);
+    assert_eq!(auth.token_hours, 12);
+}
+
+#[test]
+fn command_operations_parse() {
+    let dsl = r#"
+app demo { version = "0.1.0" }
+enum St { pending approved }
+entity Order {
+  id Uuid @id @default(uuid)
+  status St @default(pending)
+  note Text?
+}
+api OrderApprove {
+  POST "/orders/{id}/approve"
+  label { zh "审批" en "Approve" }
+  input { comment Text? }
+  pre { status == "pending" }
+  message { zh "只有待审批的订单可以审批" en "Only pending orders can be approved" }
+  effect {
+    set Order.status = approved
+    set Order.note = input.comment
+  }
+  audit { action "order.approve" }
+}
+"#;
+    let outcome = forma::dsl::parser::parse(&forma::dsl::lexer::lex(dsl));
+    assert!(outcome.errors.is_empty(), "{:?}", outcome.errors);
+    let program = outcome.program;
+    assert_eq!(program.commands.len(), 1);
+    let cmd = &program.commands[0];
+    assert_eq!(cmd.method, "POST");
+    assert_eq!(cmd.path, "/orders/{id}/approve");
+    assert_eq!(cmd.input.len(), 1);
+    assert_eq!(cmd.input[0].name, "comment");
+    assert!(cmd.input[0].optional);
+    assert!(cmd.pre.is_some());
+    assert_eq!(cmd.effects.len(), 2);
+    assert_eq!(cmd.audit.as_deref(), Some("order.approve"));
+    assert_eq!(cmd.label.len(), 2);
+}

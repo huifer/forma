@@ -68,14 +68,26 @@ docs/architecture/
 ├── rfc/                           ← Layer 1：RFC（基础 0001–0009，领域 0010+）
 │   ├── TEMPLATE.md                ← 标准 RFC 模板（强制）
 │   ├── RFC-0001-architecture-overview.zh-CN.md
+│   ├── RFC-0002-specification-system.zh-CN.md
+│   ├── RFC-0003-semantic-core.zh-CN.md
 │   ├── RFC-0004-capability-system.zh-CN.md
+│   ├── RFC-0005-application-runtime.zh-CN.md
+│   ├── RFC-0006-agent-engineering.zh-CN.md
+│   ├── RFC-0007-build-and-artifact.zh-CN.md
+│   ├── RFC-0008-security-and-governance.zh-CN.md
+│   ├── RFC-0009-developer-experience-and-studio.zh-CN.md
 │   └── RFC-0010-visualization.zh-CN.md   ← 由 docs/rfc 迁入的既有可视化 RFC
 │
 ├── specifications/                ← Layer 2：Specification（语义契约）
-│   ├── ir/  types/  protocols/  manifests/  serialization/  compatibility/
+│   ├── ir/ir-contract.zh-CN.md    ← 统一语义 IR 契约（Tier 1）
+│   ├── types/  protocols/  manifests/  serialization/  compatibility/
 │
 ├── adr/                           ← Layer 3：ADR（决策记录）
-│   ├── accepted/  proposed/  rejected/  deprecated/
+│   ├── accepted/ADR-0001-adopt-rfc-governance.zh-CN.md
+│   ├── accepted/ADR-0002-canonical-ir-program-over-federation-graph.zh-CN.md
+│   ├── accepted/ADR-0003-artifact-ownership-and-no-silent-overwrite.zh-CN.md
+│   ├── accepted/ADR-0004-server-authoritative-authorization.zh-CN.md
+│   ├── proposed/  rejected/  deprecated/
 │   └── TEMPLATE.md
 │
 ├── capability/                    ← Layer 4：Capability（功能扩展）
@@ -151,6 +163,30 @@ breaking_change: false
 - **领域 RFC（RFC-0010+）**：具体能力 / 子系统演进（如可视化、数据库适配、Agent 协议）。
 - **文件名**：`RFC-XXXX-kebab-title.zh-CN.md`（英文编号 + 英文短名 + 语言后缀，与仓库现有 `.zh-CN.md` 约定一致）。
 - **状态流转**通过修改 frontmatter 的 `status` 字段表达，不靠文件名。
+
+### 4.1 现有 RFC 一览
+
+| ID | 主题 | 状态 | 一句话职责 |
+|---|---|---|---|
+| [RFC-0001](rfc/RFC-0001-architecture-overview.zh-CN.md) | Architecture Overview | Accepted | 全局边界、依赖方向、Tier 分层 |
+| [RFC-0002](rfc/RFC-0002-specification-system.zh-CN.md) | Specification System | Proposed | 规格领域划分、语法元规则、标准互通保真度 |
+| [RFC-0003](rfc/RFC-0003-semantic-core.zh-CN.md) | Semantic Core | Proposed | IR 稳定契约、类型系统、Stable Identity、依赖图 |
+| [RFC-0004](rfc/RFC-0004-capability-system.zh-CN.md) | Capability System | Proposed | Capability Manifest、注册/发现/验证、三层 IR |
+| [RFC-0005](rfc/RFC-0005-application-runtime.zh-CN.md) | Application Runtime | Proposed | 运行时模块契约、配置分层、错误契约、产物独立性 |
+| [RFC-0006](rfc/RFC-0006-agent-engineering.zh-CN.md) | Agent Engineering | Proposed | 任务型工具面、补丁事务、风险分级、人工审批门 |
+| [RFC-0007](rfc/RFC-0007-build-and-artifact.zh-CN.md) | Build & Artifact | Proposed | 产物三分类归属、产物清单、冲突检测、增量与可复现构建 |
+| [RFC-0008](rfc/RFC-0008-security-and-governance.zh-CN.md) | Security & Governance | Proposed | 权限四层模型、密钥与审计契约、验证门槛映射 |
+| [RFC-0009](rfc/RFC-0009-developer-experience-and-studio.zh-CN.md) | Developer Experience | Proposed | CLI 契约、诊断统一结构、Studio 阶段与边界 |
+| [RFC-0010](rfc/RFC-0010-visualization.zh-CN.md) | Visualization | Accepted | Chart IR、ECharts Adapter、React Runtime（领域范例） |
+
+### 4.2 现有 ADR 一览
+
+| ID | 主题 | 状态 |
+|---|---|---|
+| [ADR-0001](adr/accepted/ADR-0001-adopt-rfc-governance.zh-CN.md) | 采纳 RFC 治理与可扩展架构 v1.0 | Accepted |
+| [ADR-0002](adr/accepted/ADR-0002-canonical-ir-program-over-federation-graph.zh-CN.md) | DSL 主线 `Program` 为规范语义表示，联邦语义图为导入视图 | Accepted |
+| [ADR-0003](adr/accepted/ADR-0003-artifact-ownership-and-no-silent-overwrite.zh-CN.md) | 产物分三类归属，人工修改不被静默覆盖 | Accepted |
+| [ADR-0004](adr/accepted/ADR-0004-server-authoritative-authorization.zh-CN.md) | 权限服务端权威执行，前端显隐不构成安全边界 | Accepted |
 
 ---
 
@@ -252,18 +288,24 @@ ADR/Spec 引用有效、兼容性变更有声明、验收标准明确、重要�
 
 按以下顺序建设，避免一次性堆砌 60 个章节：
 
-| 顺序 | 交付物 | 目的 |
-|---|---|---|
-| 1 | RFC Governance（本文件） | 确定 RFC 管理规则 |
-| 2 | Architecture Overview（RFC-0001） | 确定全局架构边界 |
-| 3 | Core Specification | 稳定 IR / Identity / Type System |
-| 4 | Capability Specification（RFC-0004） | 建立能力扩展机制 |
-| 5 | Adapter Contract | 建立技术适配契约 |
-| 6 | Runtime Contract | 明确软件运行模型 |
-| 7 | Build and Artifact | 可复现、增量编译 |
-| 8 | Agent Protocol | 安全语义操作 |
-| 9 | Conformance Suite | 兼容性测试 |
-| 10 | Reference Application | 用真实应用验证架构 |
+| 顺序 | 交付物 | 目的 | 状态 |
+|---|---|---|---|
+| 1 | RFC Governance（本文件） | 确定 RFC 管理规则 | ✅ 已交付 |
+| 2 | Architecture Overview（RFC-0001） | 确定全局架构边界 | ✅ 已交付 |
+| 3 | Core Specification（RFC-0003 + `spec:ir`） | 稳定 IR / Identity / Type System | ✅ 文档已交付，实现待落地 |
+| 4 | Capability Specification（RFC-0004） | 建立能力扩展机制 | ✅ 文档已交付 |
+| 5 | Adapter Contract（RFC-0003 §8.4 + RFC-0007） | 建立技术适配契约 | ✅ 文档已交付 |
+| 6 | Runtime Contract（RFC-0005） | 明确软件运行模型 | ✅ 文档已交付 |
+| 7 | Build and Artifact（RFC-0007） | 可复现、增量编译 | ✅ 文档已交付 |
+| 8 | Agent Protocol（RFC-0006） | 安全语义操作 | ✅ 文档已交付 |
+| 9 | Specification System（RFC-0002） | 规格领域与标准互通契约 | ✅ 文档已交付 |
+| 10 | Security & Governance（RFC-0008） | 权限、密钥、审计、验证门槛 | ✅ 文档已交付 |
+| 11 | Developer Experience（RFC-0009） | CLI 契约、Studio | ✅ 文档已交付 |
+| 12 | Conformance Suite | 兼容性测试 | 🔨 待建（`conformance/` 目录已就位） |
+| 13 | Reference Application | 用真实应用验证架构 | 🔨 待建 |
+
+> 基础 RFC（0001–0009）已全部起草完成（状态：`Proposed`，待审查转 `Accepted`）。
+> **文档齐备 ≠ 架构可扩容**——Phase 1 的三条完成标准仍需靠实现与 Conformance 测试证明。
 
 **Phase 1 完成标准不是文档数量，而是**：
 

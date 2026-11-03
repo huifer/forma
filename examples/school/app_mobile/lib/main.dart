@@ -15,6 +15,7 @@ import 'pages/candidate_list.dart';
 import 'pages/candidate_edit.dart';
 import 'pages/course_capacity_page.dart';
 import 'pages/enrollment_trend_page.dart';
+import 'pages/login.dart';
 
 void main() => runApp(const SchoolApp());
 
@@ -28,6 +29,7 @@ class SchoolApp extends StatelessWidget {
       theme: ThemeData(colorSchemeSeed: const Color(0xFF2563EB)),
       home: const SchoolList(),
       routes: {
+        '/login': (_) => const LoginPage(),
         '/schools': (_) => const SchoolList(),
         '/students': (_) => const StudentList(),
         '/courses': (_) => const CourseList(),

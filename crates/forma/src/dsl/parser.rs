@@ -13,6 +13,8 @@ pub struct Program {
     pub pages: Vec<PageDecl>,
     /// 可视化图表（Chart IR 的 DSL 载体，RFC-0001 §3.1）
     pub charts: Vec<ChartDecl>,
+    /// 认证模块（M5）；None = 纯公开应用
+    pub auth: Option<AuthDecl>,
 }
 
 #[derive(Debug, Clone)]
@@ -107,6 +109,19 @@ pub struct GuardDecl {
 pub struct DenyDecl {
     pub expr: Expr,
     pub reason: Message,
+}
+
+// ── 认证模块（spec M5）──────────────────────────────────
+
+/// `auth module { provider jwt }`：用户/角色/会话 + 登录注册端点 + 中间件。
+#[derive(Debug, Clone)]
+pub struct AuthDecl {
+    /// jwt | session（当前仅 jwt 落地；其余按宪法显式报错）
+    pub provider: String,
+    /// 角色枚举成员（缺省 [admin, user]）
+    pub roles: Vec<String>,
+    /// token 有效期（小时，缺省 24）
+    pub token_hours: u64,
 }
 
 // ── 可视化（Chart）── RFC-0001 ─────────────────────────────
@@ -522,6 +537,7 @@ impl<'a> Parser<'a> {
             commands: Vec::new(),
             pages: Vec::new(),
             charts: Vec::new(),
+            auth: None,
         };
         while self.peek().kind != TokKind::Eof {
             let tok = self.peek().clone();
@@ -556,6 +572,11 @@ impl<'a> Parser<'a> {
                 "page" if tok.kind == TokKind::Ident => {
                     if let Some(p) = self.parse_page() {
                         program.pages.push(p);
+                    }
+                }
+                "auth" if tok.kind == TokKind::Ident => {
+                    if let Some(a) = self.parse_auth() {
+                        program.auth = Some(a);
                     }
                 }
                 "chart" if tok.kind == TokKind::Ident => {
@@ -1073,6 +1094,69 @@ impl<'a> Parser<'a> {
                         &tok,
                         format!("unknown api entry '{other}' (commands/auth: later milestone)"),
                     );
+                    self.next();
+                    if self.is_punct("{") {
+                        self.next();
+                        self.skip_to_block_end();
+                    }
+                }
+            }
+        }
+        self.expect_punct("}");
+        Some(decl)
+    }
+
+    /// 认证模块（M5）：
+    /// ```fm
+    /// auth module {
+    ///   provider jwt
+    ///   roles [admin, teacher, user]
+    ///   tokenHours 24
+    /// }
+    /// ```
+    fn parse_auth(&mut self) -> Option<AuthDecl> {
+        self.next(); // auth
+        let kw = self.expect_ident()?;
+        if kw != "module" {
+            let t = self.toks[(self.pos - 1).min(self.toks.len() - 1)].clone();
+            self.error_at(&t, format!("expected 'auth module', found 'auth {kw}'"));
+            return None;
+        }
+        let mut decl = AuthDecl {
+            provider: "jwt".into(),
+            roles: vec!["admin".into(), "user".into()],
+            token_hours: 24,
+        };
+        if !self.expect_punct("{") {
+            return Some(decl);
+        }
+        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+            if self.eat_punct(";") {
+                continue;
+            }
+            let tok = self.peek().clone();
+            match tok.value.as_str() {
+                "provider" if tok.kind == TokKind::Ident => {
+                    self.next();
+                    if let Some(p) = self.expect_ident() {
+                        decl.provider = p;
+                    }
+                }
+                "roles" if tok.kind == TokKind::Ident => {
+                    self.next();
+                    let roles = self.parse_ident_list();
+                    if roles.is_empty() {
+                        self.error_at(&tok, "auth roles must not be empty");
+                    } else {
+                        decl.roles = roles;
+                    }
+                }
+                "tokenHours" if tok.kind == TokKind::Ident => {
+                    self.next();
+                    decl.token_hours = self.parse_number() as u64;
+                }
+                other => {
+                    self.error_at(&tok, format!("unknown auth entry '{other}'"));
                     self.next();
                     if self.is_punct("{") {
                         self.next();

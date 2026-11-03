@@ -48,6 +48,8 @@ examples/school/
 | V15 | 移动端契约 | `cd app_mobile && flutter test` | 离线往返 + 在线全链路全绿（后端未启动时在线用例自动跳过） |
 | V16 | Web 编译 | `cd generated/web && npm i && npm run build` | tsc 0 error + vite build 成功 |
 | V17 | 数据确定性 | `forma seed --verify` | 磁盘种子与 DSL 推导 byte 级一致（SHA-256 发布前/CI 必跑） |
+| V18 | 认证链路 | 真库：注册/登录/401/带 token 访问/命令鉴权/审计 actor | 全部符合预期（auth module 存在时） |
+| V19 | 迁移链自愈 | 删掉 `.forma/` 后 `forma build` + `forma migrate verify` | 增量链可从入库文件重建，校验仍通过 |
 | V18 | 可视化 | `forma build` 后检查 `generated/web/src/viz/` + 浏览器打开图表页 | chart 三件套（Spec/Option/Source）齐全；V16 的 tsc 覆盖 viz 运行时；浏览器渲染无 console error，ECharts 实例数据绑定正确（RFC-0001 V0.1） |
 
 ## 三轮迭代剧本
@@ -160,6 +162,36 @@ cd ../../app_mobile && flutter test
 | op 裁剪 | 生成后端 66 个 warning | 未声明的 op 也生成仓储函数 | `::repo_functions_follow_declared_ops` |
 | 导入冗余 | unused import 警告 | post / validators / chrono 按需导入 | `::routes_imports_and_guard_binding_are_conditional` |
 | 端口不一致 | 客户端连不上 | 后端 8080 / Flutter 默认 3000 | 端到端流程（本节） |
+
+## 认证（auth module）
+
+`auth module` 开启后，业务路由与命令路由全部需要 Bearer token：
+
+```fm
+auth module {
+  provider jwt
+  roles [admin, teacher, student]
+  tokenHours 12
+}
+```
+
+| 环节 | 产物 |
+|---|---|
+| 表 | `users`（username 唯一、password_hash 仅存 argon2 哈希、role） |
+| 端点 | `POST /api/auth/register`、`POST /api/auth/login`（公开）；`GET /api/auth/me`（需登录） |
+| 中间件 | `require_auth` 校验 JWT → 注入 `CurrentUser`；业务路由走 `protected` 子 router |
+| Web | token 存内存 + `Authorization` 头 + 401 事件 + `/login` 页（登录/注册切换） |
+| Flutter | `Api.authToken` + 401 回调 + `AuthApi` + 登录页 |
+| 审计 | 命令的 `actor` 自动记录当前登录用户 |
+
+验收（真库）：
+```bash
+curl -i "$B/schools"                                    # 401
+TOKEN=$(curl -s -X POST "$B/auth/login" -H 'Content-Type: application/json' \
+  -d '{"username":"teacher01","password":"secret123"}' | jq -r .token)
+curl -s -H "Authorization: Bearer $TOKEN" "$B/schools"   # 200
+curl -s -H "Authorization: Bearer $TOKEN" "$B/auth/me"    # {"username":"teacher01","role":"admin"}
+```
 
 ## MCP（AI 编码环境集成）
 

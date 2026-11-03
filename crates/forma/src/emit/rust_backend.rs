@@ -39,7 +39,7 @@ pub fn emit_rust_backend(
     files.push(file(
         out_dir,
         "Cargo.toml",
-        cargo_toml(&pkg, has_commands),
+        cargo_toml(&pkg, has_commands, program.auth.is_some()),
         "gen-rust",
     ));
     files.push(file(out_dir, "src/error.rs", error_rs(), "gen-rust"));
@@ -73,6 +73,14 @@ pub fn emit_rust_backend(
     ));
     if has_audit {
         files.push(file(out_dir, "src/audit.rs", audit_rs(), "gen-rust"));
+    }
+    if program.auth.is_some() {
+        files.push(file(
+            out_dir,
+            "src/auth.rs",
+            auth_rs(program, app_name),
+            "gen-rust",
+        ));
     }
     files.push(file(
         out_dir,
@@ -125,9 +133,14 @@ fn file(
     }
 }
 
-fn cargo_toml(pkg: &str, has_commands: bool) -> String {
+fn cargo_toml(pkg: &str, has_commands: bool, has_auth: bool) -> String {
     let tracing_deps = if has_commands {
         "\ntracing = \"0.1\"\ntracing-subscriber = \"0.3\""
+    } else {
+        ""
+    };
+    let auth_deps = if has_auth {
+        "\nargon2 = \"0.5\"\njsonwebtoken = \"9\""
     } else {
         ""
     };
@@ -143,7 +156,7 @@ tokio = {{ version = "1", features = ["full"] }}
 serde = {{ version = "1", features = ["derive"] }}
 serde_json = "1"
 sqlx = {{ version = "0.8", features = ["runtime-tokio", "mysql", "uuid", "chrono", "rust_decimal"] }}
-uuid = {{ version = "1", features = ["v4", "serde"] }}{tracing_deps}
+uuid = {{ version = "1", features = ["v4", "serde"] }}{tracing_deps}{auth_deps}
 chrono = {{ version = "0.4", features = ["serde"] }}
 rust_decimal = {{ version = "1", features = ["serde"] }}
 tower-http = {{ version = "0.5", features = ["cors"] }}
@@ -183,6 +196,8 @@ pub enum AppError {
     Validation(Vec<FieldError>),
     NotFound,
     Conflict(String),
+    /// 认证失败（401）：缺失/无效 token 或错误凭据
+    Auth(String),
     Db(sqlx::Error),
 }
 
@@ -192,6 +207,7 @@ impl IntoResponse for AppError {
             AppError::Validation(fields) => (StatusCode::BAD_REQUEST, "validation failed".to_string(), Some(fields)),
             AppError::NotFound => (StatusCode::NOT_FOUND, "not found".to_string(), None),
             AppError::Conflict(msg) => (StatusCode::CONFLICT, msg, None),
+            AppError::Auth(msg) => (StatusCode::UNAUTHORIZED, msg, None),
             AppError::Db(e) => {
                 if matches!(e, sqlx::Error::RowNotFound) {
                     (StatusCode::NOT_FOUND, "not found".to_string(), None)
@@ -1310,11 +1326,11 @@ fn routes_rs_with_commands(program: &Program, has_commands: bool) -> anyhow::Res
             ));
         }
         let commands_router = format!(
-            "    app = app.merge(\n        Router::new()\n{route_lines}            .with_state(db.clone()),\n    );\n"
+            "    protected = protected.merge(\n        Router::new()\n{route_lines}            .with_state(db.clone()),\n    );\n"
         );
         out = out.replace(
-            "    app.layer(",
-            &format!("{commands_router}    app.layer("),
+            "    app = app.merge(protected);",
+            &format!("{commands_router}    app = app.merge(protected);"),
         );
         // 审计查询（倒序分页）：独立 router（自有 Query 提取器）——插到 layer 之前
         let has_audit = program.commands.iter().any(|c| c.audit.is_some());
@@ -1347,9 +1363,26 @@ async fn list_audit_logs_handler(
             );
         }
         // handlers 追加到文件尾部
+        // /auth/me 需要当前用户 → 挂在受保护路由上
+        if program.auth.is_some() {
+            out = out.replace(
+                "    app = app.merge(protected);",
+                "    protected = protected.merge(\n        Router::new()\n            .route(\"/api/auth/me\", get(crate::auth::me))\n            .with_state(db.clone()),\n    );\n    app = app.merge(protected);",
+            );
+        }
         out.push('\n');
         out.push_str(&handlers);
     }
+    // 保护层：所有受保护路由 merge 完成后统一挂载（axum layer 只影响已挂载路由）
+    let protect = if program.auth.is_some() {
+        "    protected = protected.layer(axum::middleware::from_fn(crate::auth::require_auth));\n"
+    } else {
+        ""
+    };
+    out = out.replace(
+        "    app = app.merge(protected);",
+        &format!("{protect}    app = app.merge(protected);"),
+    );
     Ok(out)
 }
 
@@ -1561,16 +1594,32 @@ fn routes_rs(program: &Program) -> String {
         }
     }
 
+    // 认证路由（公开：注册/登录；受保护：me）
+    if program.auth.is_some() {
+        out.push_str(
+            "pub fn auth_routes(db: Db) -> Router {\n    Router::new()\n        .route(\"/api/auth/register\", post(crate::auth::register))\n        .route(\"/api/auth/login\", post(crate::auth::login))\n        .with_state(db)\n}\n\n",
+        );
+    }
+
     // router 汇总
     out.push_str("pub fn router(db: sqlx::MySqlPool) -> Router {\n");
     out.push_str("    let db = Arc::new(db);\n");
     out.push_str("    let mut app = Router::new();\n");
+    out.push_str("    let mut protected = Router::new();\n");
+    // 认证：公开端点独立挂载；实体与命令路由统一挂 require_auth 中间件
+    let has_auth = program.auth.is_some();
+    if has_auth {
+        out.push_str("    app = app.merge(auth_routes(db.clone()));\n");
+    }
     for entity in &program.entities {
         let snake_name = snake(&entity.name);
         out.push_str(&format!(
-            "    app = app.merge({snake_name}_routes(db.clone()));\n"
+            "    protected = protected.merge({snake_name}_routes(db.clone()));\n"
         ));
     }
+    // 受保护路由整体并入；保护层在 routes_rs_with_commands 中、所有受保护路由
+    // merge 之后才加（axum 的 layer 只作用于调用时已挂载的路由）。
+    out.push_str("    app = app.merge(protected);\n");
     out.push_str("    app.layer(tower_http::cors::CorsLayer::permissive())\n}\n");
     out
 }
@@ -1582,6 +1631,11 @@ fn main_rs(program: &Program, has_commands: bool, has_audit: bool) -> String {
         .map(|a| a.name.clone())
         .unwrap_or_else(|| "forma-app".into());
     let audit_mod = if has_audit { "\nmod audit;" } else { "" };
+    let auth_mod = if program.auth.is_some() {
+        "\nmod auth;"
+    } else {
+        ""
+    };
     let tracing_init = if has_commands {
         "\n    tracing_subscriber::fmt::init();"
     } else {
@@ -1593,7 +1647,7 @@ mod error;
 mod models;
 mod repo;
 mod routes;
-mod validators;{audit_mod}
+mod validators;{audit_mod}{auth_mod}
 
 use routes::router;
 
@@ -1613,7 +1667,11 @@ async fn main() {{{tracing_init}
     println!("{app_name} backend listening on http://{{}}", addr);
     axum::serve(listener, app).await.expect("serve");
 }}
-"#
+"#,
+        app_name = app_name,
+        audit_mod = audit_mod,
+        auth_mod = auth_mod,
+        tracing_init = tracing_init,
     )
 }
 
@@ -1907,6 +1965,16 @@ fn command_routes_rs(program: &Program) -> anyhow::Result<(String, Vec<(String, 
             String::new()
         };
 
+        let user_arg = if program.auth.is_some() {
+            "req_user: axum::Extension<crate::auth::CurrentUser>, "
+        } else {
+            ""
+        };
+        let actor = if program.auth.is_some() {
+            "Some(req_user.username.as_str())"
+        } else {
+            "None"
+        };
         let audit_call = cmd
             .audit
             .as_ref()
@@ -1915,18 +1983,16 @@ fn command_routes_rs(program: &Program) -> anyhow::Result<(String, Vec<(String, 
                     "None".to_string()
                 } else {
                     // 输入体序列化进审计载荷（可追溯操作参数）
-                    format!(
-                        "Some(serde_json::to_value(&input).unwrap_or(serde_json::Value::Null))"
-                    )
+                    "Some(serde_json::to_value(&input).unwrap_or(serde_json::Value::Null))".to_string()
                 };
                 format!(
-                    "    crate::audit::log_action(&db, \"{a}\", \"{entity_name}\", &id, None, {payload}).await?;\n"
+                    "    crate::audit::log_action(&db, \"{a}\", \"{entity_name}\", &id, {actor}, {payload}).await?;\n"
                 )
             })
             .unwrap_or_default();
 
         handlers.push_str(&format!(
-            r#"async fn {fn_name}_handler(State(db): State<Db>, Path(id): Path<String>, Json(input): Json<{struct_name}Input>) -> AppResult<Json<serde_json::Value>> {{
+            r#"async fn {fn_name}_handler(State(db): State<Db>, {user_arg}Path(id): Path<String>, Json(input): Json<{struct_name}Input>) -> AppResult<Json<serde_json::Value>> {{
     let errs = crate::validators::validate_{fn_name}(&input);
     if !errs.is_empty() {{
         return Err(AppError::Validation(errs));
@@ -1942,6 +2008,206 @@ fn command_routes_rs(program: &Program) -> anyhow::Result<(String, Vec<(String, 
         routes.push((axum_path, format!("{fn_name}_handler")));
     }
     Ok((handlers, routes))
+}
+
+/// auth.rs：注册/登录/me + JWT 签发校验 + 保护中间件。
+fn auth_rs(program: &Program, app_name: &str) -> String {
+    let auth = program.auth.as_ref().unwrap();
+    let first_role = auth.roles.first().cloned().unwrap_or_else(|| "user".into());
+    let token_hours = auth.token_hours.to_string();
+    let n_roles = auth.roles.len().to_string();
+    let roles_list = auth
+        .roles
+        .iter()
+        .map(|r| format!("\"{r}\""))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let template = r#"// @generated by Forma (gen-rust) — do not edit manually.
+//! 认证：注册/登录（argon2 哈希 + JWT）、Bearer 校验中间件、当前用户。
+
+use axum::{
+    extract::State,
+    http::HeaderMap,
+    middleware::Next,
+    response::Response,
+    Json,
+};
+use serde::{Deserialize, Serialize};
+
+use crate::error::{AppError, AppResult};
+use crate::routes::Db;
+
+pub const ROLES: [&str; __N_ROLES__] = [__ROLES_LIST__];
+
+#[derive(Debug, Deserialize)]
+pub struct RegisterInput {
+    pub username: String,
+    pub password: String,
+    #[serde(default)]
+    pub role: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LoginInput {
+    pub username: String,
+    pub password: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TokenResponse {
+    pub token: String,
+    pub username: String,
+    pub role: String,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+pub struct UserRow {
+    #[allow(dead_code)] // 行标识（当前仅用于扩展）
+    pub id: String,
+    pub username: String,
+    pub password_hash: String,
+    pub role: String,
+}
+
+fn jwt_secret() -> String {
+    std::env::var("JWT_SECRET").unwrap_or_else(|_| "__APP__-dev-secret-change-me".into())
+}
+
+fn issue_token(username: &str, role: &str) -> String {
+    use jsonwebtoken::{encode, EncodingKey, Header};
+    let claims = serde_json::json!({
+        "sub": username,
+        "role": role,
+        "exp": (chrono::Utc::now() + chrono::Duration::hours(__TOKEN_HOURS__)).timestamp(),
+    });
+    encode(&Header::default(), &claims, &EncodingKey::from_secret(jwt_secret().as_bytes()))
+        .expect("sign jwt")
+}
+
+fn hash_password(pw: &str) -> String {
+    use argon2::password_hash::{rand_core::OsRng, SaltString};
+    use argon2::{Argon2, PasswordHasher};
+    let salt = SaltString::generate(&mut OsRng);
+    Argon2::default()
+        .hash_password(pw.as_bytes(), &salt)
+        .expect("hash password")
+        .to_string()
+}
+
+fn verify_password(pw: &str, hash: &str) -> bool {
+    use argon2::password_hash::PasswordHash;
+    use argon2::{Argon2, PasswordVerifier};
+    PasswordHash::new(hash)
+        .map(|parsed| Argon2::default().verify_password(pw.as_bytes(), &parsed).is_ok())
+        .unwrap_or(false)
+}
+
+/// 受保护路由的中间件：校验 Bearer token 并注入当前用户。
+pub async fn require_auth(
+    headers: HeaderMap,
+    req: axum::extract::Request,
+    next: Next,
+) -> Result<Response, AppError> {
+    let token = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .ok_or_else(|| AppError::Auth("missing bearer token".into()))?;
+    let data = jsonwebtoken::decode::<serde_json::Value>(
+        token,
+        &jsonwebtoken::DecodingKey::from_secret(jwt_secret().as_bytes()),
+        &jsonwebtoken::Validation::default(),
+    )
+    .map_err(|_| AppError::Auth("invalid token".into()))?;
+    let username = data.claims["sub"].as_str().unwrap_or("").to_string();
+    let role = data.claims["role"].as_str().unwrap_or("").to_string();
+    let mut req = req;
+    req.extensions_mut().insert(CurrentUser { username, role });
+    Ok(next.run(req).await)
+}
+
+/// 当前用户（由 require_auth 注入请求扩展）。
+#[derive(Debug, Clone)]
+pub struct CurrentUser {
+    pub username: String,
+    pub role: String,
+}
+
+pub async fn register(
+    State(db): State<Db>,
+    Json(input): Json<RegisterInput>,
+) -> AppResult<Json<TokenResponse>> {
+    if input.username.trim().is_empty() || input.password.len() < 6 {
+        return Err(AppError::Validation(vec![crate::error::FieldError::new(
+            "password",
+            "用户名不能为空且密码至少 6 位",
+        )]));
+    }
+    let role = input.role.clone().unwrap_or_else(|| "__FIRST_ROLE__".into());
+    if !ROLES.contains(&role.as_str()) {
+        return Err(AppError::Validation(vec![crate::error::FieldError::new(
+            "role",
+            format!("role 必须是 {}", ROLES.join("/")),
+        )]));
+    }
+    let exists: Option<(String,)> =
+        sqlx::query_as("SELECT id FROM users WHERE username = ?")
+            .bind(&input.username)
+            .fetch_optional(db.as_ref())
+            .await
+            .map_err(AppError::Db)?;
+    if exists.is_some() {
+        return Err(AppError::Conflict("用户名已存在".into()));
+    }
+    let id = uuid::Uuid::new_v4().to_string();
+    sqlx::query("INSERT INTO users (id, username, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)")
+        .bind(&id)
+        .bind(&input.username)
+        .bind(hash_password(&input.password))
+        .bind(&role)
+        .bind(chrono::Utc::now())
+        .execute(db.as_ref())
+        .await
+        .map_err(AppError::Db)?;
+    let token = issue_token(&input.username, &role);
+    Ok(Json(TokenResponse { token, username: input.username, role }))
+}
+
+pub async fn login(
+    State(db): State<Db>,
+    Json(input): Json<LoginInput>,
+) -> AppResult<Json<TokenResponse>> {
+    let row: Option<UserRow> = sqlx::query_as(
+        "SELECT id, username, password_hash, role FROM users WHERE username = ?",
+    )
+    .bind(&input.username)
+    .fetch_optional(db.as_ref())
+    .await
+    .map_err(AppError::Db)?;
+    let Some(user) = row else {
+        return Err(AppError::Auth("用户名或密码错误".into()));
+    };
+    if !verify_password(&input.password, &user.password_hash) {
+        return Err(AppError::Auth("用户名或密码错误".into()));
+    }
+    let token = issue_token(&user.username, &user.role);
+    Ok(Json(TokenResponse { token, username: user.username, role: user.role }))
+}
+
+/// 当前用户信息（要求已登录）。
+pub async fn me(req_user: axum::Extension<CurrentUser>) -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "username": req_user.username,
+        "role": req_user.role,
+    }))
+}
+"#;
+    template
+        .replace("__N_ROLES__", &n_roles)
+        .replace("__ROLES_LIST__", &roles_list)
+        .replace("__TOKEN_HOURS__", &token_hours)
+        .replace("__FIRST_ROLE__", &first_role)
+        .replace("__APP__", app_name)
 }
 
 /// audit.rs：审计钩子 = 结构化日志 + audit_logs 表落库（actor 待 auth 模块接入）。

@@ -85,7 +85,7 @@ M11 Spring/Go/.NET、原生移动、小程序、工作流运行时、支付
 | 👁 P2 | AntV 适配层（图分析/关系可视化）、GIS、金融/工业领域图表 | V0.6 | 同一 Chart IR 换 Adapter |
 | 👁 P2 | 移动端图表投影 | V0.6+ | Flutter 自绘/内嵌图 |
 
-设计全文：[docs/architecture/rfc/RFC-0010-visualization.zh-CN.md](docs/architecture/rfc/RFC-0010-visualization.zh-CN.md)。
+设计全文：[architecture/rfc/RFC-0010-visualization.zh-CN.md](architecture/rfc/RFC-0010-visualization.zh-CN.md)。
 
 ### 2.5 移动端
 

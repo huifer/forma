@@ -2,10 +2,20 @@
 -- Migration #0004 — upgrade to v0.3.0
 -- Rollback: migrations/0004_rollback.sql
 -- 变更:
+--   - 新增表 users（5 列）
 --   - 新增表 audit_logs（7 列）
 --
 -- UP
 
+CREATE TABLE users (
+  id CHAR(36) NOT NULL,
+  username VARCHAR(64) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  role VARCHAR(64) NOT NULL,
+  created_at DATETIME(3) NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_users_username (username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 CREATE TABLE audit_logs (
   id CHAR(36) NOT NULL,
   action VARCHAR(191) NOT NULL,

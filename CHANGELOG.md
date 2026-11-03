@@ -8,6 +8,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **架构治理体系完整化：基础 RFC 全部补齐（RFC-0002…RFC-0009）+ 4 条 ADR + `spec:ir`** — 按
+  [RFC-0001](docs/architecture/rfc/RFC-0001-architecture-overview.zh-CN.md) 与
+  [ADR-0001](docs/architecture/adr/accepted/ADR-0001-adopt-rfc-governance.zh-CN.md) 建立的
+  五层治理体系（RFC / Specification / ADR / Capability / Conformance）落地，每份文档均按
+  `rfc/TEMPLATE.md` 的 20 节模板撰写：
+  - **[RFC-0002 规格系统](docs/architecture/rfc/RFC-0002-specification-system.zh-CN.md)** — 规格领域划分
+    （数据/规则/API/UI/可视化/规划中的查询·指标·工作流·集成）、8 条语法元规则、Specification/Project/
+    IR/Migration 四类版本关系、标准互通的**保真度声明**（Lossless/Lossy/Partial/Unsupported）与往返测试契约。
+    补齐设计宪法 G6「外部标准导入必须记录语义损失」这一**当前完全缺失**的条款。
+  - **[RFC-0003 语义内核](docs/architecture/rfc/RFC-0003-semantic-core.zh-CN.md)** — 统一语义 IR 契约：
+    Stable Identity、类型系统、来源追踪、依赖边、IR 版本；给出**四步渐进迁移路径**，不破坏既有 emitter 契约。
+  - **[RFC-0005 应用运行时](docs/architecture/rfc/RFC-0005-application-runtime.zh-CN.md)** — Runtime Module 契约、
+    配置四层（构建期/环境/租户/用户）、Secret Provider、统一错误契约、生命周期约定，以及
+    「产物脱离 Forma 独立运行」的**可验证判据**。
+  - **[RFC-0006 Agent 工程协议](docs/architecture/rfc/RFC-0006-agent-engineering.zh-CN.md)** — 任务型工具面
+    （取代命令镜像式暴露）、补丁事务协议（预览→校验→影响→风险→审批→原子应用→验证→报告）、
+    风险分级与**人工审批门**。
+  - **[RFC-0007 构建与产物系统](docs/architecture/rfc/RFC-0007-build-and-artifact.zh-CN.md)** — 产物三类归属
+    （Generated/Extension/Adopted）、产物清单、**冲突检测（人工修改不被静默覆盖）**、语义级增量、可复现构建。
+  - **[RFC-0008 安全与治理](docs/architecture/rfc/RFC-0008-security-and-governance.zh-CN.md)** — 权限四层模型
+    （认证/策略/资源级/行级/字段级）、密钥与审计契约、**验证门槛映射**（变更类型 → 最低验证等级）。
+  - **[RFC-0009 开发者体验与 Studio](docs/architecture/rfc/RFC-0009-developer-experience-and-studio.zh-CN.md)** —
+    CLI 契约与命令面组织原则、诊断统一结构、Studio 三阶段与能力边界、`forma docs` 治理校验。
+  - **[`spec:ir` 统一语义 IR 契约](docs/architecture/specifications/ir/ir-contract.zh-CN.md)** — Layer 2 的机器可读
+    语义契约（节点结构/标识规则/依赖边/来源/版本/扩展/类型系统/检查契约/序列化），并记录 **7 项现状差距**。
+  - **ADR-0002** DSL 主线 `Program` 为规范语义表示，联邦语义图降级为导入视图；
+    **ADR-0003** 产物三分类归属与「人工修改不被静默覆盖」；
+    **ADR-0004** 权限服务端权威执行、前端显隐不构成安全边界。
+  - 全部 RFC 均以**源码核对与实跑复现**为依据，记录了当前实现的真实缺口而非推测。
+
 - **可视化子系统（RFC-0001：Visualization Specification & Rendering System，V0.1）** — DSL 新增顶层
   `chart` 块与页面挂载 `page { chart <Name> }`，可视化成为与 Data/API/Business/UI 并列的一等能力：
   - **Chart IR**（`crates/forma/src/visualization/`）：与语法、目标图表库双重解耦的统一语义——
@@ -66,6 +96,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - school 示例：v1/v2 快照目录可独立 seed；`app_mobile/` 产物入库。
 
 ### Fixed
+- **文档链接失效（架构目录重构后遗留）** — `docs/rfc/` 迁入 `docs/architecture/rfc/` 后，
+  RFC-0001/0004/0010 与 ADR-0001 内的相对链接层级错误（`../README.md` 应为 `../../README.md` 等），
+  `docs/architecture.zh-CN.md` / `roadmap.zh-CN.md` / `dsl-spec.zh-CN.md` 中的仓库根路径链接亦失效。
+  全部修正后全仓 Markdown 相对链接零失效（history 归档除外）。
 - **forma_patch：多行 required 数组漏改**——字段改名后 `required` 里遗留旧名（旧 fixture 为
   单行数组未暴露）。现在单行/多行两种排版都能正确改名。
 - **gen-rust 产物的运行时契约（真实 MySQL 8 端到端抓出）**：
@@ -79,6 +113,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `API_BASE=http://10.0.2.2:8080/api`（此前 Flutter 默认 3000，连不上后端）。
 
 ### Added
+- **auth module（M5，全栈认证）** —— `auth module { provider jwt; roles [...]; tokenHours N }`：
+  - DSL 解析（`AuthDecl`：provider / roles / tokenHours）；users 表随 schema 管线自动附加
+    （id/username/password_hash/role/created_at，密码仅存 argon2 哈希）；
+  - gen-rust：auth.rs（注册/登录/me + JWT 签发校验 + Bearer 中间件 + CurrentUser 注入）、
+    公开端点 `/api/auth/register|login` 与受保护业务路由（protected 子 router 先 merge 后 layer）、
+    `AppError::Auth` → 401；
+  - gen-web：token 存储与 Authorization 头、401 事件、登录/注册页（`/login` 路由）；
+  - gen-flutter：Api.authToken + 401 回调、AuthApi 客户端、登录/注册页；
+  - 审计 actor 自动取当前登录用户（命令 handler 注入 CurrentUser）。
+- **迁移链自愈（架构修复）**：增量迁移与 `migrate verify` 改为以**入库的迁移文件**为权威
+    （此前依赖本机 `.forma/` 快照与台账 → 新克隆仓库无法重建增量链、无法校验）。
+    IR 快照随链入库（`db/migrations/ir-snapshot.json`），快照缺失时从链上 SQL 重放重建；
+    台账退化为纯 applied 状态（缺失时从链上重建），哈希校验只针对已应用迁移。
 - **`forma seed --verify`**：确定性校验——磁盘种子与当前 DSL 的纯函数推导 byte 级一致
   （SHA-256 报告；手工改动 / DSL 演进后未重建 → 非 0 退出）。「案例数据不是 AI 数据」
   从设计承诺变成 CI 可执行的命令。

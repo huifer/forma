@@ -236,7 +236,7 @@ DSL chart/dashboard 块 → Chart IR / Dashboard IR → Adapter（ECharts…）�
 | Check | `dsl/mod.rs` + `visualization/validate.rs` | `viz-*` 诊断码，`forma build` 硬失败 |
 
 设计原则：DSL 不泄漏 ECharts 概念；变换语义属于 IR（AntV/D3 适配器复用同一执行器）；
-`nativeExtension` 提供受控逃逸口。全文见 [docs/architecture/rfc/RFC-0010-visualization.zh-CN.md](docs/architecture/rfc/RFC-0010-visualization.zh-CN.md)。
+`nativeExtension` 提供受控逃逸口。全文见 [architecture/rfc/RFC-0010-visualization.zh-CN.md](architecture/rfc/RFC-0010-visualization.zh-CN.md)。
 
 ## 8. 生态互通层
 

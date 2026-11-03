@@ -48,10 +48,10 @@ Forma 已从 v0.2「标准联邦」演进为 v0.3「DSL 中间层」，并落地
 
 ## 5. References（引用）
 
-- 治理总入口：[docs/architecture/README.md](README.md)
-- RFC-0001：[rfc/RFC-0001-architecture-overview.zh-CN.md](rfc/RFC-0001-architecture-overview.zh-CN.md)
-- RFC-0004：[rfc/RFC-0004-capability-system.zh-CN.md](rfc/RFC-0004-capability-system.zh-CN.md)
-- 原可视化 RFC（迁入后）：[rfc/RFC-0010-visualization.zh-CN.md](rfc/RFC-0010-visualization.zh-CN.md)
+- 治理总入口：[docs/architecture/README.md](../../README.md)
+- RFC-0001：[rfc/RFC-0001-architecture-overview.zh-CN.md](../../rfc/RFC-0001-architecture-overview.zh-CN.md)
+- RFC-0004：[rfc/RFC-0004-capability-system.zh-CN.md](../../rfc/RFC-0004-capability-system.zh-CN.md)
+- 原可视化 RFC（迁入后）：[rfc/RFC-0010-visualization.zh-CN.md](../../rfc/RFC-0010-visualization.zh-CN.md)
 
 ## 6. Change Log（变更记录）
 

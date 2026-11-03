@@ -27,12 +27,190 @@ pub struct IrSnapshot {
     pub tables: Vec<TablePlan>,
 }
 
-fn snapshot_path(project_dir: &Path) -> PathBuf {
-    project_dir.join(".forma").join("ir-snapshot.json")
+/// 从入库的迁移文件重建台账（applied 一律 pending）。
+fn ledger_from_chain(
+    project_dir: &Path,
+    out_dir: &str,
+    app_version: &str,
+) -> Result<MigrationLedger> {
+    let mut ledger = MigrationLedger::default();
+    for f in chain_files(project_dir, out_dir) {
+        let up_abs = project_dir.join(&f.upgrade_file);
+        let up_hash = if up_abs.is_file() {
+            let text = read_text(&up_abs)?;
+            let section = extract_section(&up_abs, UP_MARKER).unwrap_or(text);
+            crate::util::sha256_hex(&section)
+        } else {
+            String::new()
+        };
+        let changes = vec![format!("迁移 #{} 已入库", f.index)];
+        // 版本从迁移文件头注释恢复（"-- Migration #N — upgrade to vX.Y.Z"），
+        // 拿不到时回退到当前 app_version
+        let version = crate::util::read_text(&up_abs)
+            .ok()
+            .and_then(|text| {
+                text.lines()
+                    .find(|l| l.contains("upgrade to v"))
+                    .and_then(|l| l.split("upgrade to v").nth(1))
+                    .map(|v| v.trim().trim_end_matches('*').trim().to_string())
+            })
+            .filter(|v| !v.is_empty())
+            .unwrap_or_else(|| app_version.to_string());
+        ledger.entries.push(MigrationEntry {
+            index: f.index,
+            version,
+            upgrade_file: f.upgrade_file.clone(),
+            rollback_file: f.rollback_file.clone(),
+            changes,
+            up_hash,
+            down_hash: None,
+            applied: false,
+        });
+    }
+    Ok(ledger)
 }
 
-fn read_snapshot(project_dir: &Path) -> Option<IrSnapshot> {
-    let p = snapshot_path(project_dir);
+/// 链上的一个迁移（以**入库文件**为准）。
+pub struct ChainFile {
+    pub index: u32,
+    pub upgrade_file: String,
+    pub rollback_file: Option<String>,
+}
+
+/// 扫描迁移目录 → 按编号排序的链（0001_init.sql 视作 #1）。
+fn chain_files(project_dir: &Path, out_dir: &str) -> Vec<ChainFile> {
+    let dir = project_dir.join(out_dir).join("migrations");
+    let mut ups: Vec<(u32, String)> = Vec::new();
+    let mut rollbacks: Vec<(u32, String)> = Vec::new();
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+    for e in entries.flatten() {
+        let path = e.path();
+        let name = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        if !name.ends_with(".sql") {
+            continue;
+        }
+        let Some(num) = name.split('_').next() else {
+            continue;
+        };
+        let Ok(index) = num.parse::<u32>() else {
+            continue;
+        };
+        let rel = format!("{out_dir}/migrations/{name}");
+        if name.contains("rollback") {
+            rollbacks.push((index, rel));
+        } else {
+            ups.push((index, rel));
+        }
+    }
+    ups.sort();
+    rollbacks.sort();
+    ups.into_iter()
+        .map(|(index, upgrade_file)| ChainFile {
+            index,
+            upgrade_file,
+            rollback_file: rollbacks
+                .iter()
+                .find(|(i, _)| *i == index)
+                .map(|(_, p)| p.clone()),
+        })
+        .collect()
+}
+
+/// SimSchema（重放结果）→ TablePlan（迁移 diff 的输入形态）。
+fn sim_to_plans(schema: &crate::emit::replay::SimSchema) -> Vec<TablePlan> {
+    schema
+        .tables
+        .iter()
+        .map(|t| TablePlan {
+            entity: t.name.clone(),
+            table: t.name.clone(),
+            columns: t
+                .columns
+                .iter()
+                .map(|c| ColumnPlan {
+                    name: c.name.clone(),
+                    sql_type: c.sql_type.clone(),
+                    nullable: c.nullable,
+                    unique: c.unique
+                        || t.uniques
+                            .iter()
+                            .any(|(_, cols)| cols.len() == 1 && cols[0] == c.name),
+                })
+                .collect(),
+            primary_key: t.primary_key.clone(),
+            // 与 plan_tables 的表示对齐：单列 UNIQUE KEY → 列级 unique 标记；
+            // 多列 UNIQUE KEY → 表级 uniques（否则 diff 会产生伪 ALTER）
+            uniques: t
+                .uniques
+                .iter()
+                .filter(|(_, cols)| cols.len() > 1)
+                .map(|(_, cols)| cols.clone())
+                .collect(),
+            indexes: t.indexes.iter().map(|(_, cols)| cols.clone()).collect(),
+            fks: t
+                .fks
+                .iter()
+                .map(|(_, col, ref_table)| crate::emit::mysql::FkPlan {
+                    column: col.clone(),
+                    ref_table: ref_table.clone(),
+                })
+                .collect(),
+        })
+        .collect()
+}
+
+/// 从**已入库的迁移链**重建「链上最新 schema」：
+/// 新克隆仓库没有 IR 快照，但迁移 SQL 是权威历史——重放它们即可还原基线，
+/// 增量链因此可以在一台新机器上继续生成（快照只是加速缓存）。
+fn rebuild_snapshot_from_chain(project_dir: &Path, out_dir: &str) -> Option<IrSnapshot> {
+    let dir = project_dir.join(out_dir).join("migrations");
+    let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .ok()?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| {
+            let name = p.file_name().unwrap_or_default().to_string_lossy();
+            name.ends_with(".sql") && !name.contains("rollback") && !name.starts_with("ir-snapshot")
+        })
+        .collect();
+    files.sort();
+    let mut schema = crate::emit::replay::SimSchema::default();
+    let mut any = false;
+    for f in files {
+        let sql = crate::util::read_text(&f).ok()?;
+        if crate::emit::replay::replay_sql(&mut schema, &sql).is_err() {
+            // 重放失败（超出模拟器子集）→ 放弃重建，交由快照路径处理
+            return None;
+        }
+        any = true;
+    }
+    if !any {
+        return None;
+    }
+    Some(IrSnapshot {
+        version: SNAPSHOT_VERSION,
+        app_version: String::new(),
+        tables: sim_to_plans(&schema),
+    })
+}
+
+/// IR 快照随迁移链入库（`{out_dir}/migrations/ir-snapshot.json`）：
+/// 增量迁移必须能在一台新机器上从「已入库的迁移链」继续——
+/// 若快照只存本机（.forma/，gitignored），克隆仓库就无法重建后续迁移。
+fn snapshot_path(project_dir: &Path, out_dir: &str) -> PathBuf {
+    project_dir
+        .join(out_dir)
+        .join("migrations")
+        .join("ir-snapshot.json")
+}
+
+fn read_snapshot(project_dir: &Path, out_dir: &str) -> Option<IrSnapshot> {
+    let p = snapshot_path(project_dir, out_dir);
     let text = crate::util::read_text(&p).ok()?;
     let snap: IrSnapshot = serde_json::from_str(&text).ok()?;
     if snap.version == SNAPSHOT_VERSION {
@@ -42,14 +220,19 @@ fn read_snapshot(project_dir: &Path) -> Option<IrSnapshot> {
     }
 }
 
-fn save_snapshot(project_dir: &Path, app_version: &str, tables: &[TablePlan]) -> Result<()> {
+fn save_snapshot(
+    project_dir: &Path,
+    out_dir: &str,
+    app_version: &str,
+    tables: &[TablePlan],
+) -> Result<()> {
     let snap = IrSnapshot {
         version: SNAPSHOT_VERSION,
         app_version: app_version.into(),
         tables: tables.to_vec(),
     };
     write_text(
-        &snapshot_path(project_dir),
+        &snapshot_path(project_dir, out_dir),
         &serde_json::to_string_pretty(&snap)?,
     )?;
     Ok(())
@@ -270,9 +453,13 @@ pub fn migration_risk_lines(ops: &[MigrationOp]) -> Vec<String> {
 /// 计算「自上次构建以来」的待执行迁移操作（旧快照 → 当前 DSL schema）。
 /// 首次构建（无快照）视为全量建表，均为 Low。
 /// 供 `forma migrate risk` 在 apply 之前评估破坏性。
-pub fn pending_migration_ops(project_dir: &Path, program: &Program) -> Result<Vec<MigrationOp>> {
+pub fn pending_migration_ops(
+    project_dir: &Path,
+    out_dir: &str,
+    program: &Program,
+) -> Result<Vec<MigrationOp>> {
     let new_plans = plan_tables_with_internal(program);
-    match read_snapshot(project_dir) {
+    match read_snapshot(project_dir, out_dir) {
         Some(snap) => Ok(diff_ops(&snap.tables, &new_plans)),
         None => Ok(diff_ops(&[], &new_plans)),
     }
@@ -731,10 +918,18 @@ pub fn emit_migration(
     let app_version = app_version_of(program);
     let migrations_dir = project_dir.join(out_dir).join("migrations");
     let mut ledger = read_ledger(project_dir);
+    // 台账只承载 applied 状态；台账缺失（新克隆）时从**入库的迁移文件**重建，
+    // applied 一律 pending（真实是否已执行由数据库决定）。
+    if ledger.entries.is_empty() {
+        ledger = ledger_from_chain(project_dir, out_dir, &app_version)?;
+        save_ledger(project_dir, &ledger)?;
+    }
 
-    let Some(old_snapshot) = read_snapshot(project_dir) else {
+    let old_snapshot = read_snapshot(project_dir, out_dir)
+        .or_else(|| rebuild_snapshot_from_chain(project_dir, out_dir));
+    let Some(old_snapshot) = old_snapshot else {
         // 首次：登记基线（迁移文件由 gen-mysql 的 0001_init.sql 承载）
-        save_snapshot(project_dir, &app_version, &new_plans)?;
+        save_snapshot(project_dir, out_dir, &app_version, &new_plans)?;
         if ledger.entries.is_empty() {
             let changes = if new_plans.is_empty() {
                 vec!["空 schema 基线".to_string()]
@@ -815,7 +1010,7 @@ pub fn emit_migration(
         applied: false,
     });
     save_ledger(project_dir, &ledger)?;
-    save_snapshot(project_dir, &app_version, &new_plans)?;
+    save_snapshot(project_dir, out_dir, &app_version, &new_plans)?;
     write_migration_docs(project_dir, out_dir, &ledger)?;
 
     Ok(Some(crate::generators::GeneratedFile {
@@ -976,50 +1171,58 @@ pub fn migration_verify(
 ) -> Result<Vec<String>> {
     let ledger = read_ledger(project_dir);
     let mut issues: Vec<String> = Vec::new();
-    if ledger.entries.is_empty() {
-        issues.push("台账为空——先运行 `forma build` 生成基线".into());
+
+    // 链的权威 = 已入库的迁移文件（台账只记录 applied 状态与哈希参考）：
+    // 否则新克隆仓库没有台账 → 校验与增量生成都会断链。
+    let chain = chain_files(project_dir, out_dir);
+    if chain.is_empty() {
+        issues.push("迁移目录为空——先运行 `forma build` 生成基线".into());
         return Ok(issues);
     }
 
     // 1. 编号连续
-    for (want, e) in ledger.entries.iter().enumerate() {
-        if e.index != (want + 1) as u32 {
+    for (want, f) in chain.iter().enumerate() {
+        if f.index != (want + 1) as u32 {
             issues.push(format!(
-                "编号不连续：第 {} 条记录序号应为 {}，实际 {}",
+                "编号不连续：第 {} 个迁移应为 {}，实际 {}",
                 want + 1,
                 want + 1,
-                e.index
+                f.index
             ));
         }
     }
 
-    // 2/3. 文件存在 + 回滚配对 + 哈希一致
+    // 2/3. 文件存在 + 回滚配对 + 哈希一致（台账有记录时才做哈希比对）
     let mut replay_sql_all = String::new();
-    for e in &ledger.entries {
-        let up_abs = project_dir.join(&e.upgrade_file);
+    for f in &chain {
+        let up_abs = project_dir.join(&f.upgrade_file);
         if !up_abs.is_file() {
-            issues.push(format!("升级文件缺失: {}", e.upgrade_file));
+            issues.push(format!("升级文件缺失: {}", f.upgrade_file));
             continue;
         }
         let text = read_text(&up_abs)?;
         let section = extract_section(&up_abs, UP_MARKER).unwrap_or_else(|| text.clone());
         replay_sql_all.push_str(&section);
         replay_sql_all.push('\n');
-        if !e.up_hash.is_empty() && crate::util::sha256_hex(&section) != e.up_hash {
-            issues.push(format!(
-                "#{} {} 内容哈希与台账不符——迁移文件被手工修改",
-                e.index,
-                e.upgrade_file.rsplit('/').next().unwrap_or("")
-            ));
+        if let Some(e) = ledger.entries.iter().find(|e| e.index == f.index) {
+            // 只对**已应用**的迁移做哈希比对：未应用的文件可随 DSL 演进重新生成
+            if e.applied && !e.up_hash.is_empty() && crate::util::sha256_hex(&section) != e.up_hash
+            {
+                issues.push(format!(
+                    "#{} {} 内容哈希与台账不符——迁移文件被手工修改",
+                    f.index,
+                    f.upgrade_file.rsplit('/').next().unwrap_or("")
+                ));
+            }
         }
-        match &e.rollback_file {
-            None if e.index != 1 => {
-                issues.push(format!("#{} 缺少配对回滚文件", e.index));
+        match &f.rollback_file {
+            None if f.index != 1 => {
+                issues.push(format!("#{} 缺少配对回滚文件", f.index));
             }
             Some(rb) => {
                 let rb_abs = project_dir.join(rb);
                 if !rb_abs.is_file() {
-                    issues.push(format!("#{} 回滚文件缺失: {rb}", e.index));
+                    issues.push(format!("回滚文件缺失: {rb}"));
                 }
             }
             _ => {}

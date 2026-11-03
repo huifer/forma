@@ -19,7 +19,7 @@ breaking_change: false
 
 > 状态：**已接受（Accepted）· 实现分期 V0.1 落地中**（本 RFC 由 docs/rfc/0001-visualization.zh-CN.md 迁入治理体系统一编号）
 > 日期：2026-11-05
-> 关联：RFC-0001（架构总览）、RFC-0004（能力系统）、[dsl-spec.zh-CN.md](../dsl-spec.zh-CN.md) §11、[roadmap.zh-CN.md](../roadmap.zh-CN.md)
+> 关联：RFC-0001（架构总览）、RFC-0004（能力系统）、[dsl-spec.zh-CN.md](../../dsl-spec.zh-CN.md) §11、[roadmap.zh-CN.md](../../roadmap.zh-CN.md)
 > 决策人：Forma 维护者
 > 影响范围：DSL 语法（新增 `chart` / `dashboard` 顶层构造）、Unified IR、web-react 适配层、MCP 工具面、Verify
 

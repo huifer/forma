@@ -37,7 +37,7 @@ Forma 的长期扩容能力取决于一条铁律：**新增功能不应要求修
 
 ### 3.3 Expected Outcomes
 
-- 新增 Capability 不必改核心架构（[README §10](README.md) Phase 1 标准之一）。
+- 新增 Capability 不必改核心架构（[README §10](../README.md) Phase 1 标准之一）。
 - 新增 Adapter 不必改 IR。
 - 能力可独立安装、替换、升级、废弃。
 
@@ -235,10 +235,10 @@ extensions:
 
 ## 19. References
 
-- 治理总入口：[README.md](README.md)
+- 治理总入口：[README.md](../README.md)
 - 架构总览：[RFC-0001-architecture-overview.zh-CN.md](RFC-0001-architecture-overview.zh-CN.md)
 - 可视化范例：[RFC-0010-visualization.zh-CN.md](RFC-0010-visualization.zh-CN.md)
-- 迁移安全：[../migration-safety.zh-CN.md](../migration-safety.zh-CN.md)
+- 迁移安全：[migration-safety.zh-CN.md](../../migration-safety.zh-CN.md)
 
 ## 20. Change Log
 

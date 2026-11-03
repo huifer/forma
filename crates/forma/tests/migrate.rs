@@ -361,8 +361,11 @@ fn verify_passes_on_intact_chain_and_flags_drift() {
     );
     std::fs::write(&p, tampered).unwrap();
     let issues = migration_verify(&dir, &program(V6_VERSIONED), "generated/db").unwrap();
+    // 篡改必须被发现：已应用的迁移 → 哈希不符；未应用的 → 前向重放与 DSL schema 漂移
     assert!(
-        issues.iter().any(|i| i.contains("哈希与台账不符")),
+        issues
+            .iter()
+            .any(|i| i.contains("哈希与台账不符") || i.contains("漂移")),
         "篡改未被发现: {issues:?}"
     );
 }

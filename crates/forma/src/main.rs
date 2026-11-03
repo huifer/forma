@@ -533,7 +533,7 @@ fn cmd_migrate(
                 eprintln!("✗ DSL 有 {errors} 个错误，先修复再评估迁移风险");
                 return 1;
             }
-            let ops = match forma::emit::pending_migration_ops(project_dir, &program) {
+            let ops = match forma::emit::pending_migration_ops(project_dir, &out_dir, &program) {
                 Ok(v) => v,
                 Err(err) => {
                     eprintln!("✗ {err:#}");

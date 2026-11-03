@@ -78,6 +78,31 @@ pub fn mysql_type(program: &Program, field: &FieldDecl) -> String {
     }
 }
 
+/// users 表列计划（`auth module` 存在时自动附加：密码仅存哈希）。
+fn users_plan() -> TablePlan {
+    let col = |name: &str, sql_type: &str, nullable: bool, unique: bool| ColumnPlan {
+        name: name.into(),
+        sql_type: sql_type.into(),
+        nullable,
+        unique,
+    };
+    TablePlan {
+        entity: "User".into(),
+        table: "users".into(),
+        columns: vec![
+            col("id", "CHAR(36)", false, false),
+            col("username", "VARCHAR(64)", false, false),
+            col("password_hash", "VARCHAR(255)", false, false),
+            col("role", "VARCHAR(64)", false, false),
+            col("created_at", "DATETIME(3)", false, false),
+        ],
+        primary_key: "id".into(),
+        uniques: vec![vec!["username".into()]],
+        indexes: vec![],
+        fks: vec![],
+    }
+}
+
 /// 审计表列计划（`audit { action }` 命令存在时自动附加，actor 由 auth 模块提供）。
 fn audit_log_plan() -> TablePlan {
     let col = |name: &str, sql_type: &str, nullable: bool| ColumnPlan {
@@ -112,6 +137,9 @@ fn audit_log_plan() -> TablePlan {
 /// 含内部表：存在 `audit { action }` 命令时附加 audit_logs（走同一套迁移/verify 管线）。
 pub fn plan_tables_with_internal(program: &Program) -> Vec<TablePlan> {
     let mut plans = plan_tables(program);
+    if program.auth.is_some() && !plans.iter().any(|p| p.table == "users") {
+        plans.insert(0, users_plan());
+    }
     let has_audit = program.commands.iter().any(|c| c.audit.is_some());
     if has_audit && !plans.iter().any(|p| p.table == "audit_logs") {
         plans.push(audit_log_plan());

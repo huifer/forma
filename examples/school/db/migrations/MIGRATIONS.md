@@ -5,17 +5,17 @@
 
 | # | 目标版本 | 升级 | 回滚 | 状态 | 变更摘要 |
 |---|----------|------|------|------|----------|
-| 1 | 0.1.0 | 0001_init.sql | — | ⏳ pending | 基线建表 schools/students/courses/enrollments |
-| 2 | 0.2.0 | 0002_upgrade.sql | 0002_rollback.sql | ⏳ pending | 新增表 elections（5 列）；新增表 candidates（4 列）；新增表 vote_records（4 列）；enrollments: 新增列 note TEXT（可空，便于存量回填）；enrollments: 新增索引 idx_enrollments_status (status) |
-| 3 | 0.3.0 | 0003_upgrade.sql | 0003_rollback.sql | ⏳ pending | students: 新增列 phone VARCHAR(20)（可空，便于存量回填）；courses: 列 title 类型 VARCHAR(120) NOT NULL → VARCHAR(200) NOT NULL；elections: 新增列 remark TEXT（可空，便于存量回填）；vote_records: 新增索引 idx_vote_records_voter_id (voter_id) |
-| 4 | 0.3.0 | 0004_upgrade.sql | 0004_rollback.sql | ⏳ pending | 新增表 audit_logs（7 列） |
+| 1 | 0.3.0 | 0001_init.sql | — | ⏳ pending | 迁移 #1 已入库 |
+| 2 | 0.2.0 | 0002_upgrade.sql | 0002_rollback.sql | ⏳ pending | 迁移 #2 已入库 |
+| 3 | 0.3.0 | 0003_upgrade.sql | 0003_rollback.sql | ⏳ pending | 迁移 #3 已入库 |
+| 4 | 0.3.0 | 0004_upgrade.sql | 0004_rollback.sql | ⏳ pending | 迁移 #4 已入库 |
 
 ---
 
-## #1 — upgrade to v0.1.0
+## #1 — upgrade to v0.3.0
 
 变更：
-- 基线建表 schools/students/courses/enrollments
+- 迁移 #1 已入库
 
 ```sql
 -- UP
@@ -69,11 +69,7 @@ CREATE TABLE enrollments (
 ## #2 — upgrade to v0.2.0
 
 变更：
-- 新增表 elections（5 列）
-- 新增表 candidates（4 列）
-- 新增表 vote_records（4 列）
-- enrollments: 新增列 note TEXT（可空，便于存量回填）
-- enrollments: 新增索引 idx_enrollments_status (status)
+- 迁移 #2 已入库
 
 ```sql
 -- UP
@@ -121,10 +117,7 @@ DROP TABLE IF EXISTS elections;
 ## #3 — upgrade to v0.3.0
 
 变更：
-- students: 新增列 phone VARCHAR(20)（可空，便于存量回填）
-- courses: 列 title 类型 VARCHAR(120) NOT NULL → VARCHAR(200) NOT NULL
-- elections: 新增列 remark TEXT（可空，便于存量回填）
-- vote_records: 新增索引 idx_vote_records_voter_id (voter_id)
+- 迁移 #3 已入库
 
 ```sql
 -- UP
@@ -144,10 +137,19 @@ ALTER TABLE students DROP COLUMN phone;
 ## #4 — upgrade to v0.3.0
 
 变更：
-- 新增表 audit_logs（7 列）
+- 迁移 #4 已入库
 
 ```sql
 -- UP
+CREATE TABLE users (
+  id CHAR(36) NOT NULL,
+  username VARCHAR(64) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  role VARCHAR(64) NOT NULL,
+  created_at DATETIME(3) NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_users_username (username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 CREATE TABLE audit_logs (
   id CHAR(36) NOT NULL,
   action VARCHAR(191) NOT NULL,
@@ -164,5 +166,6 @@ CREATE TABLE audit_logs (
 ```sql
 -- DOWN（回滚）
 DROP TABLE IF EXISTS audit_logs;
+DROP TABLE IF EXISTS users;
 ```
 

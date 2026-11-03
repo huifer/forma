@@ -36,6 +36,10 @@ class ApiException implements Exception {
 class Api {
   final http.Client client;
   final String baseUrl;
+  /// 认证 token（auth module 存在时）
+  static String? authToken;
+  /// 登录态失效回调（401）→ 跳登录页
+  static void Function()? onUnauthorized;
   Api({http.Client? client, String? baseUrl})
       : client = client ?? http.Client(),
         baseUrl = baseUrl ?? kApiBase;
@@ -46,7 +50,14 @@ class Api {
       req.headers['Content-Type'] = 'application/json';
       req.body = jsonEncode(body);
     }
+    if (authToken != null && authToken!.isNotEmpty) {
+      req.headers['Authorization'] = 'Bearer $authToken';
+    }
     final res = await http.Response.fromStream(await client.send(req));
+    if (res.statusCode == 401) {
+      authToken = null;
+      onUnauthorized?.call();
+    }
     if (res.statusCode >= 400) {
       Map<String, dynamic> err = const {};
       try {
@@ -348,3 +359,47 @@ class EnrollmentRejectApi {
       client.post('/enrollments/$id/reject', input.toJson());
 }
 
+/// 认证响应（token + 用户信息）。
+class AuthToken {
+  final String token;
+  final String username;
+  final String role;
+  const AuthToken({required this.token, required this.username, required this.role});
+
+  factory AuthToken.fromJson(Map<String, dynamic> j) => AuthToken(
+        token: j['token'] as String,
+        username: j['username'] as String,
+        role: j['role'] as String,
+      );
+}
+
+/// 当前用户。
+class AuthUser {
+  final String username;
+  final String role;
+  const AuthUser({required this.username, required this.role});
+
+  factory AuthUser.fromJson(Map<String, dynamic> j) => AuthUser(
+        username: j['username'] as String,
+        role: j['role'] as String,
+      );
+}
+
+class AuthApi {
+  final Api client;
+  AuthApi(this.client);
+
+  Future<AuthToken> login(String username, String password) async {
+    final res = await client.post('/auth/login', {'username': username, 'password': password});
+    return AuthToken.fromJson(res as Map<String, dynamic>);
+  }
+
+  Future<AuthToken> register(String username, String password) async {
+    final res = await client.post('/auth/register', {'username': username, 'password': password});
+    return AuthToken.fromJson(res as Map<String, dynamic>);
+  }
+
+  Future<AuthUser> me() async {
+    return client.get('/auth/me', AuthUser.fromJson);
+  }
+}
