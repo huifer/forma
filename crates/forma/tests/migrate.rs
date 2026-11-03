@@ -1,8 +1,12 @@
 use forma::dsl::lexer::lex;
 use forma::dsl::parser::parse;
+use forma::emit::migrate::diff_down_sql;
 use forma::emit::migrate::diff_sql;
 use forma::emit::mysql::plan_tables;
-use forma::emit::{diff_programs, emit_diagrams, emit_migration, emit_mysql};
+use forma::emit::{
+    diff_programs, emit_diagrams, emit_migration, emit_mysql, migration_down, migration_status,
+    migration_up,
+};
 use std::path::PathBuf;
 
 fn tmp_dir(tag: &str) -> PathBuf {
@@ -58,6 +62,29 @@ const V4_DROP_TABLE: &str = r#"
 app demo { version = "0.1.0" }
 "#;
 
+const V5_VERSIONED: &str = r#"
+app demo { version = "0.2.0" }
+entity Student {
+  id Uuid @id @default(uuid)
+  name String(50) @required
+  phone String(20)?
+  tag String(20)?
+  index [name]
+}
+"#;
+
+const V6_VERSIONED: &str = r#"
+app demo { version = "0.3.0" }
+entity Student {
+  id Uuid @id @default(uuid)
+  name String(50) @required
+  phone String(20)?
+  email Email? @unique
+  tag String(20)?
+  index [name]
+}
+"#;
+
 #[test]
 fn migration_add_column_on_schema_change() {
     let dir = tmp_dir("addcol");
@@ -85,16 +112,6 @@ fn migration_drop_column() {
     let old = forma::emit::mysql::plan_tables(&p1);
     let new = forma::emit::mysql::plan_tables(&p3);
     let sql = forma::emit::migrate::diff_sql(&old, &new);
-    eprintln!(
-        "DEBUG sql={:?} old={:?} new={:?}",
-        sql.len(),
-        old.iter()
-            .map(|t| (t.table.clone(), t.columns.len()))
-            .collect::<Vec<_>>(),
-        new.iter()
-            .map(|t| (t.table.clone(), t.columns.len()))
-            .collect::<Vec<_>>()
-    );
     assert!(!sql.is_empty(), "diff_sql returned empty");
 }
 
@@ -144,6 +161,306 @@ fn no_migration_when_schema_unchanged() {
     emit_migration(&dir, &p1, "generated/db").unwrap();
     let again = emit_migration(&dir, &p1, "generated/db").unwrap();
     assert!(again.is_none(), "schema unchanged → no migration");
+}
+
+// ── 多版本迁移链：upgrade/rollback 配对 + 台账 + MIGRATIONS.md ──
+
+fn read_ledger(dir: &std::path::Path) -> forma::emit::MigrationLedger {
+    let text = std::fs::read_to_string(dir.join(".forma/migrations.json")).unwrap();
+    serde_json::from_str(&text).unwrap()
+}
+
+#[test]
+fn migration_chain_generates_paired_upgrade_and_rollback() {
+    let dir = tmp_dir("chain");
+    let p1 = program(V1);
+    emit_mysql(&dir, &p1, "generated/db").unwrap(); // 基线 0001_init.sql
+    emit_migration(&dir, &p1, "generated/db").unwrap(); // 登记基线
+
+    // v0.2.0：新增 phone 列 → #0002 upgrade + rollback 配对
+    let up2 = emit_migration(&dir, &program(V5_VERSIONED), "generated/db")
+        .unwrap()
+        .expect("v0.2 upgrade");
+    assert!(up2.path.ends_with("0002_upgrade.sql"), "{}", up2.path);
+    assert!(up2.content.contains("-- UP"), "{}", up2.content);
+    assert!(up2
+        .content
+        .contains("ALTER TABLE students ADD COLUMN phone VARCHAR(20) NULL;"));
+
+    let rollback2 = std::fs::read_to_string(dir.join("generated/db/migrations/0002_rollback.sql"))
+        .expect("rollback file");
+    assert!(rollback2.contains("-- DOWN"), "{rollback2}");
+    assert!(rollback2.contains("ALTER TABLE students DROP COLUMN phone;"));
+
+    // v0.3.0：新增 email 列 → #0003
+    let up3 = emit_migration(&dir, &program(V6_VERSIONED), "generated/db")
+        .unwrap()
+        .expect("v0.3 upgrade");
+    assert!(up3.path.ends_with("0003_upgrade.sql"), "{}", up3.path);
+
+    // 台账：3 条记录，版本递进，含哈希与 applied=false
+    let ledger = read_ledger(&dir);
+    assert_eq!(ledger.entries.len(), 3);
+    let versions: Vec<&str> = ledger
+        .entries
+        .iter()
+        .map(|e| e.version.as_str())
+        .collect();
+    assert_eq!(versions, vec!["0.1.0", "0.2.0", "0.3.0"], "{versions:?}");
+    assert!(ledger.entries[1].rollback_file.is_some());
+    assert!(ledger.entries[1].up_hash.len() == 64);
+    assert!(!ledger.entries[2].applied);
+
+    // MIGRATIONS.md 可见化：版本链 + SQL 更新全部在文档里
+    let md = std::fs::read_to_string(dir.join("generated/db/migrations/MIGRATIONS.md")).unwrap();
+    assert!(md.contains("# Migrations — 数据库版本台账"));
+    assert!(md.contains("| 2 | 0.2.0 | 0002_upgrade.sql | 0002_rollback.sql |"));
+    assert!(md.contains("## #2 — upgrade to v0.2.0"));
+    assert!(md.contains("ALTER TABLE students ADD COLUMN phone"));
+    assert!(md.contains("-- DOWN（回滚）"));
+}
+
+#[test]
+fn rollback_sql_is_inverse_of_upgrade() {
+    let v1 = program(V1);
+    let v2 = program(V5_VERSIONED);
+    let old = plan_tables(&v1);
+    let new = plan_tables(&v2);
+    let up = diff_sql(&old, &new);
+    let down = diff_down_sql(&old, &new);
+    assert!(up.contains("ADD COLUMN phone VARCHAR(20)"), "{up}");
+    assert!(down.contains("DROP COLUMN phone"), "{down}");
+    // 升级里新增的每一个动作，回滚里都能找到反向动作
+    assert!(up.matches("ALTER TABLE").count() == down.matches("ALTER TABLE").count());
+}
+
+#[test]
+fn migrate_up_and_down_track_applied_state() {
+    let dir = tmp_dir("apply");
+    let p1 = program(V1);
+    emit_mysql(&dir, &p1, "generated/db").unwrap();
+    emit_migration(&dir, &p1, "generated/db").unwrap();
+    emit_migration(&dir, &program(V5_VERSIONED), "generated/db").unwrap();
+    emit_migration(&dir, &program(V6_VERSIONED), "generated/db").unwrap();
+
+    // 初始全部 pending
+    let ledger = read_ledger(&dir);
+    assert_eq!(ledger.entries.iter().filter(|e| e.applied).count(), 0);
+
+    // up（dry run）不改变状态，输出包含基线 + 两个升级
+    let plan = migration_up(&dir, "generated/db", false, None).unwrap();
+    assert_eq!(plan.len(), 3, "{}", plan.len());
+    assert!(plan[0].0.ends_with("0001_init.sql"));
+    assert!(plan.iter().any(|(_, s)| s.contains("ADD COLUMN phone")));
+    let ledger = read_ledger(&dir);
+    assert_eq!(ledger.entries.iter().filter(|e| e.applied).count(), 0);
+
+    // up --apply：全部标记 applied，MIGRATIONS.md 状态刷新
+    migration_up(&dir, "generated/db", true, None).unwrap();
+    let ledger = read_ledger(&dir);
+    assert_eq!(ledger.entries.iter().filter(|e| e.applied).count(), 3);
+    let md = std::fs::read_to_string(dir.join("generated/db/migrations/MIGRATIONS.md")).unwrap();
+    assert!(md.contains("✅ applied"));
+
+    // down --apply：回滚最近一次（#0003），台账回退
+    let rolled = migration_down(&dir, "generated/db", true, 1, None)
+        .unwrap();
+    assert_eq!(rolled.len(), 1);
+    assert!(rolled[0].0.ends_with("0003_rollback.sql"), "{}", rolled[0].0);
+    assert!(rolled[0].1.contains("DROP COLUMN email"), "{}", rolled[0].1);
+    let ledger = read_ledger(&dir);
+    assert_eq!(ledger.entries.iter().filter(|e| e.applied).count(), 2);
+
+    // status 渲染含 pending/applied 混合
+    let status = migration_status(&dir).unwrap();
+    assert_eq!(status.len(), 3);
+    assert!(status[0].contains("[applied]"));
+    assert!(status[2].contains("[pending]"));
+}
+
+#[test]
+fn migrate_down_at_head_returns_none() {
+    let dir = tmp_dir("head");
+    let p1 = program(V1);
+    emit_mysql(&dir, &p1, "generated/db").unwrap();
+    emit_migration(&dir, &p1, "generated/db").unwrap();
+    let rolled = migration_down(&dir, "generated/db", false, 1, None).unwrap();
+    assert!(rolled.is_empty(), "nothing applied → nothing to roll back");
+}
+
+#[test]
+fn migrate_down_on_baseline_errors_with_clear_message() {
+    let dir = tmp_dir("baseline-down");
+    let p1 = program(V1);
+    emit_mysql(&dir, &p1, "generated/db").unwrap();
+    emit_migration(&dir, &p1, "generated/db").unwrap();
+    migration_up(&dir, "generated/db", true, None).unwrap();
+    let err = migration_down(&dir, "generated/db", true, 1, None).unwrap_err();
+    assert!(err.to_string().contains("基线没有回滚脚本"), "{err}");
+}
+
+// ── 多版本重放保障：verify / up --to / down --steps ──────
+
+use forma::emit::{migration_verify, replay_sql, schema_diff, schema_from_plans, SimSchema};
+
+fn build_chain(tag: &str) -> PathBuf {
+    let dir = tmp_dir(tag);
+    emit_mysql(&dir, &program(V1), "generated/db").unwrap();
+    emit_migration(&dir, &program(V1), "generated/db").unwrap();
+    emit_migration(&dir, &program(V5_VERSIONED), "generated/db").unwrap();
+    emit_migration(&dir, &program(V6_VERSIONED), "generated/db").unwrap();
+    dir
+}
+
+/// 核心保证：把基线 + 全部升级按序重放 = 最新 DSL schema；
+/// 再逆序回滚 = 回到基线。等价于在真实 MySQL 上跑一遍 up 全链 + down 全链。
+#[test]
+fn migration_chain_replays_forward_to_latest_and_backward_to_baseline() {
+    let dir = build_chain("replay");
+    let migrations = dir.join("generated/db/migrations");
+    let read_up = |name: &str| -> String {
+        let text = std::fs::read_to_string(migrations.join(name)).unwrap();
+        match text.find("-- UP") {
+            Some(pos) => text[pos + 5..].trim().to_string(),
+            None => text, // 基线无标记段，整体即 SQL
+        }
+    };
+    let read_down = |name: &str| -> String {
+        let text = std::fs::read_to_string(migrations.join(name)).unwrap();
+        text[text.find("-- DOWN").unwrap() + 7..].trim().to_string()
+    };
+
+    // 前向：空 schema → 0001 → 0002 → 0003
+    let mut schema = SimSchema::default();
+    replay_sql(&mut schema, &read_up("0001_init.sql")).unwrap();
+    replay_sql(&mut schema, &read_up("0002_upgrade.sql")).unwrap();
+    replay_sql(&mut schema, &read_up("0003_upgrade.sql")).unwrap();
+    let expected_latest = schema_from_plans(&plan_tables(&program(V6_VERSIONED)));
+    let diffs = schema_diff(&schema, &expected_latest);
+    assert!(diffs.is_empty(), "前向重放漂移: {diffs:?}");
+
+    // 反向：0003↓ → 0002↓ → 回到基线
+    replay_sql(&mut schema, &read_down("0003_rollback.sql")).unwrap();
+    replay_sql(&mut schema, &read_down("0002_rollback.sql")).unwrap();
+    let expected_base = schema_from_plans(&plan_tables(&program(V1)));
+    let diffs = schema_diff(&schema, &expected_base);
+    assert!(diffs.is_empty(), "回滚后与基线漂移: {diffs:?}");
+}
+
+#[test]
+fn verify_passes_on_intact_chain_and_flags_drift() {
+    let dir = build_chain("verify-ok");
+    let issues = migration_verify(&dir, &program(V6_VERSIONED), "generated/db").unwrap();
+    assert!(issues.is_empty(), "完整链不应有 issue: {issues:?}");
+
+    // 篡改一个迁移文件 → verify 必须报出来（CI 拦截点）
+    let p = dir.join("generated/db/migrations/0002_upgrade.sql");
+    let tampered = std::fs::read_to_string(&p).unwrap().replace(
+        "ALTER TABLE students ADD COLUMN phone VARCHAR(20) NULL;",
+        "ALTER TABLE students ADD COLUMN phone VARCHAR(30) NULL;",
+    );
+    std::fs::write(&p, tampered).unwrap();
+    let issues = migration_verify(&dir, &program(V6_VERSIONED), "generated/db").unwrap();
+    assert!(
+        issues.iter().any(|i| i.contains("哈希与台账不符")),
+        "篡改未被发现: {issues:?}"
+    );
+}
+
+#[test]
+fn verify_flags_replay_drift_when_chain_is_missing_a_migration() {
+    // 只有基线 + 0002（缺 0003）→ 重放结果 != 最新 schema
+    let dir = tmp_dir("verify-drift");
+    emit_mysql(&dir, &program(V1), "generated/db").unwrap();
+    emit_migration(&dir, &program(V1), "generated/db").unwrap();
+    emit_migration(&dir, &program(V5_VERSIONED), "generated/db").unwrap();
+    let issues = migration_verify(&dir, &program(V6_VERSIONED), "generated/db").unwrap();
+    assert!(
+        issues.iter().any(|i| i.contains("不一致")),
+        "缺迁移未被发现: {issues:?}"
+    );
+}
+
+#[test]
+fn up_to_applies_target_version_only() {
+    let dir = build_chain("up-to");
+    // up --to 0.2.0：只应应用 #0001 与 #0002
+    let plan = migration_up(&dir, "generated/db", false, Some("0.2.0")).unwrap();
+    assert_eq!(plan.len(), 2, "{:?}", plan.iter().map(|f| &f.0).collect::<Vec<_>>());
+    assert!(plan.iter().all(|(f, _)| !f.contains("0003")));
+
+    // apply 后再 up（无 target）只补 0003
+    migration_up(&dir, "generated/db", true, Some("0.2.0")).unwrap();
+    let rest = migration_up(&dir, "generated/db", true, None).unwrap();
+    assert_eq!(rest.len(), 1);
+    assert!(rest[0].0.contains("0003"));
+}
+
+#[test]
+fn down_steps_and_down_to_rollback_multiple_versions() {
+    let dir = build_chain("down-multi");
+    migration_up(&dir, "generated/db", true, None).unwrap();
+
+    // down --steps 2：回滚 #0003、#0002
+    let rolled = migration_down(&dir, "generated/db", true, 2, None).unwrap();
+    assert_eq!(rolled.len(), 2);
+    assert!(rolled[0].0.contains("0003"));
+    assert!(rolled[1].0.contains("0002"));
+    let ledger = read_ledger(&dir);
+    assert_eq!(ledger.entries.iter().filter(|e| e.applied).count(), 1);
+
+    // down --to 0.1.0：基线版本 ≤ 0.1.0，无可回滚
+    let rolled = migration_down(&dir, "generated/db", true, 99, Some("0.1.0")).unwrap();
+    assert!(rolled.is_empty(), "目标版本之下不应回滚基线");
+}
+
+#[test]
+fn index_names_are_content_derived_and_collision_free() {
+    // 回归：位置序号命名（idx_{t}_{i}）在多版本链里会重名——基线已建
+    // idx_enrollments_0 (student_id, course_id)，升级再加 idx_enrollments_0 (status)
+    // 时，真实 MySQL 直接报 Duplicate key name。内容派生命名（idx_{t}_{列…}）必须：
+    // 1) 不同列集 → 不同名字；2) 升级里 ADD 的索引名不与基线已有名字冲突。
+    let v1 = plan_tables(&program(V1));
+    let v2 = plan_tables(&program(V5_VERSIONED));
+
+    let baseline_names: std::collections::HashSet<String> = v1
+        .iter()
+        .flat_map(|t| {
+            t.indexes
+                .iter()
+                .map(|cols| forma::emit::mysql::key_name("idx", &t.table, cols))
+                .chain(
+                    t.uniques
+                        .iter()
+                        .map(|cols| forma::emit::mysql::key_name("uq", &t.table, cols)),
+                )
+                .collect::<Vec<_>>()
+        })
+        .collect();
+
+    let upgrade = diff_sql(&v1, &v2);
+    for stmt in upgrade.lines().filter(|l| l.contains("ADD INDEX")) {
+        // ALTER TABLE t ADD INDEX idx_{t}_{cols} (...);
+        let name = stmt
+            .split("ADD INDEX ")
+            .nth(1)
+            .and_then(|rest| rest.split_whitespace().next())
+            .unwrap_or("");
+        assert!(!name.is_empty(), "{stmt}");
+        assert!(
+            !name.chars().all(|c| c.is_ascii_digit() || c == '_'),
+            "索引名仍是位置序号: {stmt}"
+        );
+        assert!(
+            !baseline_names.contains(name),
+            "升级索引与基线重名（重放会失败）: {stmt}"
+        );
+    }
+
+    // CREATE TABLE 里生成的名字同样内容派生
+    let create = forma::emit::mysql::render_create_table(&v2[0]);
+    assert!(create.contains("KEY idx_"), "{create}");
+    assert!(!create.contains("idx_0 ") && !create.contains("_0 ("), "{create}");
 }
 
 // ── 可视化图表 ─────────────────────────────────────────

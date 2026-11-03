@@ -5,13 +5,18 @@ pub mod diff;
 pub mod migrate;
 pub mod mysql;
 pub mod openapi;
+pub mod replay;
 pub mod rust_backend;
 pub mod web_react;
 
 pub use diagram::emit_diagrams;
 pub use diff::{diff_programs, emit_diff, DiffReport};
-pub use migrate::emit_migration;
+pub use migrate::{
+    diff_down_sql, diff_ops, emit_migration, migration_down, migration_status, migration_up,
+    migration_verify, MigrationEntry, MigrationLedger, MigrationOp,
+};
 pub use mysql::emit_mysql;
+pub use replay::{schema_diff, schema_from_plans, replay_sql, SimSchema, SimTable};
 pub use openapi::emit_openapi;
 pub use rust_backend::emit_rust_backend;
 pub use web_react::emit_web_react;
