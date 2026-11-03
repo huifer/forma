@@ -38,3 +38,111 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
+
+  # 案例协议 V9/V15：生成的 Flutter 工程必须 analyze 干净 + 契约测试通过。
+  # 在线用例在后端不可达时自动跳过，因此这里不需要数据库。
+  flutter:
+    name: flutter contract (analyze + test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Analyze
+        working-directory: examples/school/app_mobile
+        run: |
+          flutter pub get
+          flutter analyze
+      - name: Contract tests (offline roundtrips; live cases auto-skip)
+        working-directory: examples/school/app_mobile
+        run: flutter test
+
+  # 案例协议 V16：生成的 React Web 必须通过 tsc 与 vite 生产构建。
+  web:
+    name: generated web (tsc + vite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Generate artifacts
+        run: cargo run --locked -- build examples/school
+      - name: Type check
+        working-directory: examples/school/generated/web
+        run: |
+          npm install --no-audit --no-fund
+          npx tsc --noEmit
+      - name: Production build
+        working-directory: examples/school/generated/web
+        run: npm run build
+
+  # 案例协议 V14：真实 MySQL 8 端到端——迁移链 + 种子数据 + 后端 + API 冒烟
+  # （list/filter/search/create/validation-error/guard）。这是历史上抓出 8 类
+  # 生成器运行时 bug 的那道防线，必须留在 CI。
+  e2e:
+    name: end-to-end (MySQL 8 + backend + API)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: forma123
+          MYSQL_DATABASE: school
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd="mysqladmin ping -uroot -pforma123"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install mysql client
+        run: sudo apt-get update && sudo apt-get install -y mysql-client
+      - name: Generate artifacts
+        run: cargo run --locked -- build examples/school
+      - name: Apply migration chain + seed
+        working-directory: examples/school
+        run: |
+          for f in db/migrations/0001_init.sql db/migrations/0002_upgrade.sql db/migrations/0003_upgrade.sql; do
+            mysql -h 127.0.0.1 -P 3307 -uroot -pforma123 school < "$f"
+          done
+          mysql -h 127.0.0.1 -P 3307 -uroot -pforma123 school < db/seed/seed_0_3_0.sql
+      - name: Run backend
+        working-directory: examples/school/generated/backend
+        run: |
+          cargo build --locked
+          DATABASE_URL="mysql://root:forma123@127.0.0.1:3307/school" \
+            ./target/debug/school-backend &> /tmp/backend.log &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8080/api/schools > /dev/null && break
+            sleep 1
+          done
+      - name: API smoke (list / search / create / validation / guard)
+        run: |
+          B=http://127.0.0.1:8080/api
+          # 列表（含 JOIN 显示列）
+          curl -sf "$B/students?page_size=2" | grep -q school_name
+          # 搜索（LIKE + 三值逻辑 COALESCE）
+          curl -sf "$B/students?q=student0" | grep -q student0
+          # 过滤（FK 列）
+          SCHOOL=$(curl -s "$B/schools" | python3 -c "import sys,json;print(json.load(sys.stdin)[0]['id'])")
+          curl -sf "$B/students?school=$SCHOOL" | grep -q "$SCHOOL"
+          # 创建（关系载荷）
+          curl -sf -X POST "$B/schools" -H 'Content-Type: application/json' \
+            -d '{"name":"CI School","city":"CI"}' | grep -q '"ok":true'
+          # 规则校验失败 → 400 + fields
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$B/students" \
+            -H 'Content-Type: application/json' \
+            -d "{\"school\":\"$SCHOOL\",\"name\":\"x\",\"email\":\"ci-$GITHUB_RUN_ID@example.test\",\"age\":2}")
+          test "$CODE" = "400"
+          # 守卫：删除已结课报名 → 409
+          ENR=$(curl -s "$B/enrollments" | python3 -c "import sys,json;print([e['id'] for e in json.load(sys.stdin) if e['status']=='completed'][0])")
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "$B/enrollments/$ENR")
+          test "$CODE" = "409"

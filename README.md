@@ -10,7 +10,7 @@ backend code, frontend code, APIs, validation, and diagrams.
 [![CI](https://github.com/huifer/forma/actions/workflows/ci.yml/badge.svg)](https://github.com/huifer/forma/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org/)
-[![Tests](https://img.shields.io/badge/tests-60%20passing-brightgreen.svg)](#development)
+[![Tests](https://img.shields.io/badge/tests-92%20passing-brightgreen.svg)](#development)
 [![MCP](https://img.shields.io/badge/MCP-compatible-purple.svg)](#ai-integration)
 
 [English](README.md) · [简体中文](README.zh-CN.md)
@@ -260,7 +260,7 @@ cargo run -- mcp examples/school
 ## Development
 
 ```bash
-cargo test --locked                         # 60 tests across 12 suites
+cargo test --locked                         # 92 tests across 12 suites
 cargo build --locked --all-targets
 cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings

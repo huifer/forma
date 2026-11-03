@@ -154,6 +154,24 @@ cd ../../app_mobile && flutter test
 | 导入冗余 | unused import 警告 | post / validators / chrono 按需导入 | `::routes_imports_and_guard_binding_are_conditional` |
 | 端口不一致 | 客户端连不上 | 后端 8080 / Flutter 默认 3000 | 端到端流程（本节） |
 
+## MCP（AI 编码环境集成）
+
+在 Claude Code / Codex / Pi 里挂上 MCP 后，AI 可以走完整的 DSL 工作流
+（不需要读写生成物——生成物永远由 build 产出）：
+
+```bash
+forma mcp examples/school
+```
+
+| 工具 | 适用工程 | 作用 |
+|---|---|---|
+| `forma_graph` | DSL / 联邦 | DSL：实体（字段/关系）、枚举、API、页面、规则摘要；联邦：跨标准语义图 |
+| `forma_check` | DSL | .fm 诊断（error/warning）+ lint + 结构摘要 |
+| `forma_build` | DSL | 与 CLI 同一条管线重建全部产物，返回每 emitter 的文件清单 |
+| `forma_migrate` | DSL | 迁移链版本/applied 状态 |
+| `forma_validate` | 联邦 | 跨标准校验 |
+| `forma_impact` / `forma_patch` | 联邦 | 影响闭包 / 语义补丁（DSL 工程会得到带替代指引的报错） |
+
 ## 新适配层的接入清单（以 gen-flutter 为例）
 
 1. `manifest.rs`：`Targets` 增加目标槽位 + 键名别名（`mobile`/`flutter`）；

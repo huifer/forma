@@ -1,9 +1,10 @@
 use forma::engine::load_project;
 use forma::patch::{apply_patch, PatchDocument, PatchFieldSpec, PatchOperation};
-use forma::scaffold::scaffold_project;
 use std::fs;
 use std::path::PathBuf;
 
+/// `forma init` 现在生成 v0.3 DSL 工程；语义补丁（联邦管线）的测试
+/// 用仓库里的 order-management 原型（Order 实体）作 fixture。
 fn tmp_project() -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
         "forma-patch-{}-{:?}",
@@ -15,14 +16,39 @@ fn tmp_project() -> PathBuf {
     ));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
-    scaffold_project(&dir).unwrap();
+    let src = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../examples/order-management")
+        .canonicalize()
+        .unwrap();
+    copy_dir(&src, &dir);
     dir
+}
+
+fn copy_dir(src: &PathBuf, dst: &PathBuf) {
+    fs::create_dir_all(dst).unwrap();
+    for entry in fs::read_dir(src).unwrap() {
+        let entry = entry.unwrap();
+        let name = entry.file_name().to_string_lossy().to_string();
+        // 跳过本机构建缓存（.forma 增量缓存会让 fixture 首建即“无产物”）
+        if matches!(
+            name.as_str(),
+            ".forma" | "generated" | "node_modules" | "target" | "dist"
+        ) {
+            continue;
+        }
+        let target = dst.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_dir(&entry.path(), &target);
+        } else {
+            fs::copy(entry.path(), target).unwrap();
+        }
+    }
 }
 
 fn add_payment_status_patch() -> PatchDocument {
     PatchDocument {
         operations: vec![PatchOperation::AddEntityField {
-            entity: "User".into(),
+            entity: "Order".into(),
             field: PatchFieldSpec {
                 name: "paymentStatus".into(),
                 r#type: "string".into(),
@@ -54,7 +80,7 @@ fn add_entity_field_propagates_to_all_standards() {
     assert!(sql.contains("payment_status TEXT"), "{sql}");
 
     let schema: serde_json::Value = serde_json::from_str(
-        &fs::read_to_string(dir.join("specs/schemas/user.schema.json")).unwrap(),
+        &fs::read_to_string(dir.join("specs/schemas/order.schema.json")).unwrap(),
     )
     .unwrap();
     let payment = schema.pointer("/properties/paymentStatus").unwrap();
@@ -70,7 +96,7 @@ fn add_entity_field_propagates_to_all_standards() {
     assert!(openapi.contains("- unpaid"));
 
     let ui: serde_json::Value =
-        serde_json::from_str(&fs::read_to_string(dir.join("specs/ui/user-form.ui.json")).unwrap())
+        serde_json::from_str(&fs::read_to_string(dir.join("specs/ui/order-form.ui.json")).unwrap())
             .unwrap();
     let scopes: Vec<&str> = ui
         .get("elements")
@@ -94,7 +120,7 @@ fn add_entity_field_propagates_to_all_standards() {
         .graph
         .nodes_by_kind(foma_entity_field())
         .iter()
-        .any(|n| n.name == "User.paymentStatus"));
+        .any(|n| n.name == "Order.paymentStatus"));
 }
 
 fn foma_entity_field() -> forma::graph::NodeKind {
@@ -108,7 +134,7 @@ fn rename_entity_field_renames_everywhere() {
         &dir,
         &PatchDocument {
             operations: vec![PatchOperation::RenameEntityField {
-                entity: "User".into(),
+                entity: "Order".into(),
                 from: "status".into(),
                 to: "accountStatus".into(),
             }],
@@ -125,7 +151,7 @@ fn rename_entity_field_renames_everywhere() {
     assert!(!sql.contains("\n    status TEXT"));
 
     let schema: serde_json::Value = serde_json::from_str(
-        &fs::read_to_string(dir.join("specs/schemas/user.schema.json")).unwrap(),
+        &fs::read_to_string(dir.join("specs/schemas/order.schema.json")).unwrap(),
     )
     .unwrap();
     assert!(schema.pointer("/properties/accountStatus").is_some());
@@ -140,7 +166,7 @@ fn rename_entity_field_renames_everywhere() {
         .collect();
     assert!(required.contains(&"accountStatus"), "{required:?}");
 
-    let ui = fs::read_to_string(dir.join("specs/ui/user-form.ui.json")).unwrap();
+    let ui = fs::read_to_string(dir.join("specs/ui/order-form.ui.json")).unwrap();
     assert!(ui.contains("#/properties/accountStatus"));
 }
 
@@ -151,8 +177,8 @@ fn set_entity_field_required_toggles_not_null_and_required() {
         &dir,
         &PatchDocument {
             operations: vec![PatchOperation::SetEntityFieldRequired {
-                entity: "User".into(),
-                field: "name".into(),
+                entity: "Order".into(),
+                field: "customerEmail".into(),
                 required: false,
             }],
         },
@@ -164,10 +190,10 @@ fn set_entity_field_required_toggles_not_null_and_required() {
         report.operations[0]
     );
     let sql = fs::read_to_string(dir.join("specs/database/schema.sql")).unwrap();
-    assert!(!sql.contains("name TEXT NOT NULL"));
+    assert!(!sql.contains("customer_email TEXT NOT NULL"));
 
     let schema: serde_json::Value = serde_json::from_str(
-        &fs::read_to_string(dir.join("specs/schemas/user.schema.json")).unwrap(),
+        &fs::read_to_string(dir.join("specs/schemas/order.schema.json")).unwrap(),
     )
     .unwrap();
     let required: Vec<&str> = schema
@@ -178,7 +204,7 @@ fn set_entity_field_required_toggles_not_null_and_required() {
         .iter()
         .map(|r| r.as_str().unwrap())
         .collect();
-    assert!(!required.contains(&"name"));
+    assert!(!required.contains(&"customerEmail"));
 }
 
 #[test]

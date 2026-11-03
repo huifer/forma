@@ -1,4 +1,9 @@
-# order-management — Forma 端到端示例
+# order-management（联邦原型示例）
+
+> ⚠️ **这是 v0.2 联邦引擎（specifications 导入）的示例**：把 SQL / JSON Schema / OpenAPI /
+> UI JSON 导入为统一语义图，用 `forma doctor` / `forma graph` / `forma patch` 做跨标准校验与
+> 语义补丁。它**不是** v0.3 DSL 工作流——DSL 主线请看 [`examples/school`](../school)。
+> MCP 的 forma_impact / forma_patch 仅适用于本类工程。
 
 一个由五种现有标准描述的订单管理项目。**没有任何 Forma 自有业务语法**：
 

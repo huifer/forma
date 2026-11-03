@@ -15,6 +15,20 @@ pub fn emit_rust_backend(
     if program.entities.is_empty() {
         return Ok(vec![]);
     }
+    // 设计宪法 6.2：不支持的构造显式报错，不做静默降级（cursor 分页尚无 emitter 实现）
+    for api in &program.apis {
+        if let Some(list) = &api.list {
+            if let Some(p) = &list.paginate {
+                if p != "offset" {
+                    anyhow::bail!(
+                        "api {}.list: paginate `{p}` 尚无 emitter 实现（当前仅支持 offset）。\
+                         如需 cursor 分页请先在 emitter 落地。",
+                        api.entity
+                    );
+                }
+            }
+        }
+    }
     let pkg = format!("{}-backend", app_name.to_lowercase());
     let mut files: Vec<crate::generators::GeneratedFile> = Vec::new();
 
@@ -989,13 +1003,25 @@ fn repo_rs(program: &Program) -> String {
         };
         let _ = binds;
 
+        // 多字段排序（spec：sort [createdAt desc, amount]）——逐项生成，不做静默截断
         let order = program
             .apis
             .iter()
             .find(|a| a.entity == *name)
             .and_then(|a| a.list.as_ref())
-            .and_then(|l| l.sort.first())
-            .map(|(f, desc)| format!("{s}.{} {}", snake(f), if *desc { "DESC" } else { "ASC" }))
+            .map(|l| {
+                if l.sort.is_empty() {
+                    format!("{s}.id")
+                } else {
+                    l.sort
+                        .iter()
+                        .map(|(f, desc)| {
+                            format!("{s}.{} {}", snake(f), if *desc { "DESC" } else { "ASC" })
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                }
+            })
             .unwrap_or_else(|| format!("{s}.id"));
 
         // ListParams（q 仅在该 api 声明 search 字段时存在——否则 serde 字段恒空 → dead_code）

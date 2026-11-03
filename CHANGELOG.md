@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - school 示例：v1/v2 快照目录可独立 seed；`app_mobile/` 产物入库。
 
 ### Fixed
+- **forma_patch：多行 required 数组漏改**——字段改名后 `required` 里遗留旧名（旧 fixture 为
+  单行数组未暴露）。现在单行/多行两种排版都能正确改名。
 - **gen-rust 产物的运行时契约（真实 MySQL 8 端到端抓出）**：
   - SELECT 列表尾逗号/缺换行 → MySQL 1064；命名占位符 `?name` → sqlx 运行时不支持 → 改位置参数；
   - 搜索条件三值逻辑：多字段应为 OR、NULL 列需 COALESCE（此前搜索恒空）；
@@ -44,6 +46,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `API_BASE=http://10.0.2.2:8080/api`（此前 Flutter 默认 3000，连不上后端）。
 
 ### Added
+- **MCP 认识 v0.3 DSL 工程**（此前全部工具走联邦引擎，对 DSL 工程返回空）：
+  - 新工具 `forma_check`（DSL 诊断 + lint + 结构摘要）、`forma_build`（与 CLI `forma build`
+    同一条管线的产物清单）、`forma_migrate`（迁移链状态）；
+  - `forma_graph` 双模式：DSL 工程 → 实体/枚举/API/页面/规则摘要；联邦工程 → 原语义图；
+  - `forma_impact` / `forma_patch` 在 DSL 工程上给出带替代工具指引的明确报错；
+  - AI 工作流闭环：读模型（graph）→ 改 .fm → 校验（check）→ 重建（build）→ 看迁移链（migrate）。
+- **`forma init` 对齐 v0.3**：脚手架从联邦原型改为 DSL 工程（forma/app.fm 起步示例 +
+  forma.yaml 含 mobile target + README + .gitignore）——init 后 validate/build/migrate verify
+  开箱全绿（集成测试锁定）。
+- **多字段排序**：`sort [createdAt desc, amount]` 逐项生成 ORDER BY（此前静默截断到第一个）。
+- **cursor 分页显式报错**：按设计宪法 6.2，未实现的构造不再静默降级（写盘前失败并说明支持范围）。
+- **CI 补齐案例协议 V13–V16**：flutter（analyze + 契约测试）、web（tsc + vite）、
+  e2e（MySQL 8 service + 迁移链 + seed + API 冒烟：list/search/create/校验 400/守卫 409）。
+- **测试体系适配**：build/patch 套件的联邦 fixture 从旧脚手架迁到 `examples/order-management`
+  （`forma init` 现在生成 DSL 工程）；新增 `tests/scaffold_mcp.rs`（脚手架开箱全绿 + MCP 工具面）
+  与 backend_contract 的多字段排序/cursor 报错断言；README badge 更新至 92 tests。
 - **gen-flutter 契约测试**（`app_mobile/test/live_api_test.dart`）：离线 fromJson/toJson 往返 +
   在线「创建→读取→更新→删除」全链路（后端未启动时自动跳过，不阻塞 CI）。
 - **gen-rust 运行时契约回归测试**（`crates/forma/tests/backend_contract.rs`）：把上述 8 类

@@ -1,29 +1,53 @@
 //! Forma MCP server（stdio，最小 JSON-RPC 实现）。
 //!
-//! 工具：forma_validate / forma_graph / forma_impact / forma_patch
-//! AI 工作流：graph → impact → patch → validate。AI 不直接改文件。
+//! 工具分两类：
+//! - **DSL 工程**（forma.yaml 带 `source`，v0.3 主线）：
+//!   forma_check / forma_build / forma_migrate / forma_graph（DSL 摘要）
+//! - **联邦工程**（specifications 导入，v0.2 原型）：
+//!   forma_validate / forma_graph（联邦图）/ forma_impact / forma_patch
+//!
+//! AI 工作流（DSL）：forma_graph（看模型）→ forma_check（改 .fm 后验证）→
+//! forma_build（重新生成产物）→ forma_migrate（看迁移链状态）。
 
+use crate::build::run_build;
+use crate::dsl::load_program;
 use crate::engine::load_project;
+use crate::manifest::load_manifest;
 use crate::validate::run_doctor;
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 const TOOLS_JSON: &str = r#"[
   {
-    "name": "forma_validate",
-    "description": "Run all cross-standard validations on the Forma project. Returns diagnostics list.",
+    "name": "forma_check",
+    "description": "DSL 工程：解析 .fm 源并返回语义诊断（error/warning/info），附实体/枚举/API/页面/规则摘要。改完 .fm 后先跑这个。",
+    "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+  },
+  {
+    "name": "forma_build",
+    "description": "DSL 工程：重新生成全部已配置 target 的产物（MySQL DDL 与迁移链、Rust 后端、React Web、Flutter、OpenAPI、图、确定性种子数据），返回每个 emitter 的产物清单。与 CLI `forma build` 完全同一条管线。",
+    "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+  },
+  {
+    "name": "forma_migrate",
+    "description": "DSL 工程：返回数据库迁移链状态——每个版本的编号/描述/applied/pending，以及 verify 结果（编号连续、升级回滚配对、哈希、前向重放）。",
     "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
   },
   {
     "name": "forma_graph",
-    "description": "Get the Unified Semantic Graph summary: entities, their per-standard artifacts (SQL table, JSON Schema type, OpenAPI operations, UI forms, workflows), and edges.",
+    "description": "语义图摘要。DSL 工程：实体（字段/类型/关系）、枚举、API、页面、规则的完整清单。联邦工程（specifications 导入）：实体及其跨标准产物与边。",
+    "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+  },
+  {
+    "name": "forma_validate",
+    "description": "联邦工程（specifications 导入）：跨标准校验并返回诊断列表。DSL 工程请改用 forma_check。",
     "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
   },
   {
     "name": "forma_impact",
-    "description": "Given an entity or entity-field URI (or plain name like \"Order\" / \"Order.status\"), return the affected-node closure — every node impacted by changing it.",
+    "description": "联邦工程（specifications 导入）：给定实体或字段名，返回受影响节点闭包。DSL 工程请改用 forma_graph。",
     "inputSchema": {
       "type": "object",
       "properties": { "target": { "type": "string" } },
@@ -33,7 +57,7 @@ const TOOLS_JSON: &str = r#"[
   },
   {
     "name": "forma_patch",
-    "description": "Apply a semantic patch: business-level operations (add-entity-field, rename-entity-field, set-entity-field-required) propagated across SQL DDL, JSON Schema, OpenAPI and JSON Forms, then re-validated and incrementally rebuilt. Transactional.",
+    "description": "联邦工程（specifications 导入）：应用语义补丁（add-entity-field 等）并增量重建。DSL 工程请直接编辑 .fm 后调 forma_build。",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -74,7 +98,6 @@ pub fn start_mcp_server(project_dir: PathBuf) -> Result<()> {
             .unwrap_or_default()
             .to_string();
         let id = req.get("id").cloned();
-
         let response = match method.as_str() {
             "initialize" => serde_json::json!({
                 "jsonrpc": "2.0",
@@ -82,68 +105,129 @@ pub fn start_mcp_server(project_dir: PathBuf) -> Result<()> {
                 "result": {
                     "protocolVersion": "2024-11-05",
                     "capabilities": { "tools": {} },
-                    "serverInfo": { "name": "forma", "version": "0.2.0" }
+                    "serverInfo": { "name": "forma", "version": env!("CARGO_PKG_VERSION") }
                 }
             }),
-            "notifications/initialized" => continue,
             "tools/list" => serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": id,
                 "result": { "tools": serde_json::from_str::<serde_json::Value>(TOOLS_JSON)? }
             }),
             "tools/call" => {
-                let name = req
-                    .pointer("/params/name")
-                    .and_then(|v| v.as_str())
+                let params = req.get("params").cloned().unwrap_or_default();
+                let name = params
+                    .get("name")
+                    .and_then(|n| n.as_str())
                     .unwrap_or_default()
                     .to_string();
-                let empty = serde_json::Map::new();
-                let args = req
-                    .pointer("/params/arguments")
-                    .and_then(|v| v.as_object())
+                let args = params
+                    .get("arguments")
+                    .and_then(|a| a.as_object())
                     .cloned()
-                    .unwrap_or(empty);
+                    .unwrap_or_default();
                 let result = call_tool(&dir, &name, &args);
                 match result {
                     Ok(value) => serde_json::json!({
                         "jsonrpc": "2.0",
                         "id": id,
-                        "result": { "content": [{ "type": "text", "text": serde_json::to_string_pretty(&value)? }] }
+                        "result": { "content": [ { "type": "text", "text": value.to_string() } ] }
                     }),
                     Err(err) => serde_json::json!({
                         "jsonrpc": "2.0",
                         "id": id,
-                        "result": {
-                            "content": [{ "type": "text", "text": format!("error: {err}") }],
-                            "isError": true
-                        }
+                        "error": { "code": -32000, "message": format!("{err:#}") }
                     }),
                 }
             }
-            other => {
-                if let Some(id) = id {
-                    serde_json::json!({
-                        "jsonrpc": "2.0",
-                        "id": id,
-                        "error": { "code": -32601, "message": format!("unknown method: {other}") }
-                    })
-                } else {
-                    continue;
-                }
-            }
+            other => serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "error": { "code": -32601, "message": format!("unknown method: {other}") }
+            }),
         };
-        writeln!(stdout, "{}", response)?;
+        writeln!(stdout, "{response}")?;
         stdout.flush()?;
     }
     Ok(())
 }
 
-fn call_tool(
+/// 工程是否为 v0.3 DSL 工程（manifest 带 `source`）。
+fn is_dsl_project(dir: &Path) -> bool {
+    load_manifest(dir)
+        .map(|m| m.manifest.source.is_some())
+        .unwrap_or(false)
+}
+
+/// 迁移台账（lenient：不存在/损坏时返回空台账，与 CLI 行为一致）。
+fn read_ledger_lenient(project_dir: &Path) -> crate::emit::MigrationLedger {
+    let path = project_dir.join(".forma/migrations.json");
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+/// 工具分发（pub 供集成测试直接调用）。
+pub fn call_tool(
     project_dir: &Path,
     name: &str,
     args: &serde_json::Map<String, serde_json::Value>,
 ) -> Result<serde_json::Value> {
     match name {
+        // ── DSL 工程 ─────────────────────────────────────
+        "forma_check" => dsl_check(project_dir),
+        "forma_build" => {
+            if !is_dsl_project(project_dir) {
+                bail!("forma_build 仅适用于 DSL 工程（forma.yaml 带 `source`）");
+            }
+            let report = run_build(project_dir)?;
+            let steps: Vec<serde_json::Value> = report
+                .steps
+                .iter()
+                .map(|s| {
+                    serde_json::json!({
+                        "emitter": s.name,
+                        "fileCount": s.files.len(),
+                        "files": s.files.iter().map(|f| f.path.clone()).collect::<Vec<_>>(),
+                    })
+                })
+                .collect();
+            Ok(serde_json::json!({
+                "project": report.project_name,
+                "totalFiles": report.total_files(),
+                "steps": steps,
+            }))
+        }
+        "forma_migrate" => {
+            if !is_dsl_project(project_dir) {
+                bail!("forma_migrate 仅适用于 DSL 工程（forma.yaml 带 `source`）");
+            }
+            let lines = crate::emit::migration_status(project_dir)?;
+            let ledger = read_ledger_lenient(project_dir);
+            let entries: Vec<serde_json::Value> = ledger
+                .entries
+                .iter()
+                .map(|e| {
+                    serde_json::json!({
+                        "version": e.version,
+                        "applied": e.applied,
+                    })
+                })
+                .collect();
+            Ok(serde_json::json!({
+                "migrations": lines,
+                "ledger": entries,
+            }))
+        }
+        "forma_graph" => {
+            if is_dsl_project(project_dir) {
+                dsl_graph(project_dir)
+            } else {
+                federated_graph(project_dir)
+            }
+        }
+
+        // ── 联邦工程 ─────────────────────────────────────
         "forma_validate" => {
             let outcome = load_project(project_dir)?;
             let all: Vec<serde_json::Value> = outcome
@@ -161,47 +245,15 @@ fn call_tool(
                 "nodeCount": outcome.graph.all_nodes().len(),
             }))
         }
-        "forma_graph" => {
-            let outcome = load_project(project_dir)?;
-            let summary = outcome.graph.to_summary();
-            let entities: Vec<serde_json::Value> = summary
-                .nodes
-                .iter()
-                .filter(|n| n.kind == "entity")
-                .map(|e| {
-                    let artifacts: Vec<serde_json::Value> = summary
-                        .edges
-                        .iter()
-                        .filter(|edge| edge.from == e.uri)
-                        .filter_map(|edge| {
-                            let target = summary.nodes.iter().find(|n| n.uri == edge.to)?;
-                            Some(serde_json::json!({
-                                "standard": target.standard,
-                                "kind": target.kind,
-                                "name": target.name,
-                                "file": target.source.file,
-                            }))
-                        })
-                        .collect();
-                    serde_json::json!({ "name": e.name, "uri": e.uri, "artifacts": artifacts })
-                })
-                .collect();
-            Ok(serde_json::json!({
-                "project": project_dir.file_name().map(|s| s.to_string_lossy()).unwrap_or_default(),
-                "entityCount": entities.len(),
-                "nodeCount": summary.nodes.len(),
-                "edgeCount": summary.edges.len(),
-                "entities": entities,
-            }))
-        }
         "forma_impact" => {
+            reject_dsl_only_tool(project_dir, "forma_impact")?;
             let outcome = load_project(project_dir)?;
             let target = args
                 .get("target")
                 .and_then(|v| v.as_str())
-                .ok_or_else(|| anyhow::anyhow!("missing target"))?;
+                .context("missing target")?;
             let uri = resolve_target(&outcome.graph, target)
-                .ok_or_else(|| anyhow::anyhow!("cannot resolve target: {target}"))?;
+                .context("cannot resolve target: {target}")?;
             let affected = outcome.graph.affected_by(&uri);
             let nodes: Vec<serde_json::Value> = affected
                 .iter()
@@ -221,13 +273,209 @@ fn call_tool(
             )
         }
         "forma_patch" => {
+            reject_dsl_only_tool(project_dir, "forma_patch")?;
             let patch: crate::patch::PatchDocument =
                 serde_json::from_value(serde_json::Value::Object(args.clone()))?;
             let report = crate::patch::apply_patch(project_dir, &patch)?;
             Ok(serde_json::to_value(&report)?)
         }
-        other => Err(anyhow::anyhow!("unknown tool: {other}")),
+        other => bail!("unknown tool: {other}"),
     }
+}
+
+/// DSL 工程禁用联邦工具时给出可操作的提示。
+fn reject_dsl_only_tool(project_dir: &Path, tool: &str) -> Result<()> {
+    if is_dsl_project(project_dir) {
+        bail!(
+            "{tool} 仅适用于联邦工程（specifications 导入）。\
+             当前是 DSL 工程：请用 forma_graph（模型摘要）/ forma_check（校验）/ forma_build（重建产物）。"
+        );
+    }
+    Ok(())
+}
+
+/// DSL 工程：解析诊断 + lint + 结构摘要。
+fn dsl_check(project_dir: &Path) -> Result<serde_json::Value> {
+    let loaded = load_manifest(project_dir)?;
+    let source = loaded
+        .manifest
+        .source
+        .clone()
+        .context("not a DSL project (forma.yaml has no `source`)")?;
+    let (program, diagnostics) = load_program(&loaded.dir, &source)?;
+    let lint_diags = crate::lint::run_lint(&program, None);
+
+    let parse: Vec<serde_json::Value> = diagnostics
+        .iter()
+        .map(|d| {
+            serde_json::json!({
+                "severity": d.severity,
+                "code": d.code,
+                "message": d.message,
+                "file": d.file,
+                "line": d.line,
+            })
+        })
+        .collect();
+    let lint: Vec<serde_json::Value> = lint_diags
+        .iter()
+        .map(|d| {
+            serde_json::json!({
+                "severity": d.severity,
+                "rule": d.rule,
+                "message": d.message,
+                "entity": d.entity,
+                "field": d.field,
+            })
+        })
+        .collect();
+
+    let version = program
+        .app
+        .as_ref()
+        .map(|a| a.version.clone())
+        .unwrap_or_else(|| loaded.manifest.project_version.clone());
+    Ok(serde_json::json!({
+        "project": loaded.manifest.project_name,
+        "version": version,
+        "errors": parse.iter().filter(|d| d["severity"] == "error").count(),
+        "diagnostics": parse,
+        "lint": lint,
+        "summary": dsl_summary(&program),
+    }))
+}
+
+/// DSL 工程：模型摘要（实体/枚举/API/页面/规则）。
+fn dsl_graph(project_dir: &Path) -> Result<serde_json::Value> {
+    let loaded = load_manifest(project_dir)?;
+    let source = loaded
+        .manifest
+        .source
+        .clone()
+        .context("not a DSL project (forma.yaml has no `source`)")?;
+    let (program, diagnostics) = load_program(&loaded.dir, &source)?;
+    let errors = diagnostics.iter().filter(|d| d.severity == "error").count();
+    if errors > 0 {
+        bail!("DSL has {errors} error(s) — run forma_check for details");
+    }
+    let version = program
+        .app
+        .as_ref()
+        .map(|a| a.version.clone())
+        .unwrap_or_else(|| loaded.manifest.project_version.clone());
+    Ok(serde_json::json!({
+        "project": loaded.manifest.project_name,
+        "version": version,
+        "summary": dsl_summary(&program),
+    }))
+}
+
+fn dsl_summary(program: &crate::dsl::Program) -> serde_json::Value {
+    let entities: Vec<serde_json::Value> = program
+        .entities
+        .iter()
+        .map(|e| {
+            let fields: Vec<serde_json::Value> = e
+                .fields
+                .iter()
+                .map(|f| {
+                    serde_json::json!({
+                        "name": f.name,
+                        "type": f.type_name,
+                        "optional": f.optional,
+                        "relation": crate::dsl::is_relation(program, &f.type_name),
+                        "enum": crate::dsl::is_enum(program, &f.type_name),
+                    })
+                })
+                .collect();
+            serde_json::json!({
+                "name": e.name,
+                "table": crate::identity::to_snake_case(&crate::dsl::pluralize(&e.name)),
+                "fields": fields,
+                "indexes": e.indexes,
+                "uniques": e.uniques,
+            })
+        })
+        .collect();
+    let enums: Vec<serde_json::Value> = program
+        .enums
+        .iter()
+        .map(|e| {
+            serde_json::json!({
+                "name": e.name,
+                "variants": e.variants.iter().map(|v| v.name.clone()).collect::<Vec<_>>(),
+            })
+        })
+        .collect();
+    let apis: Vec<serde_json::Value> = program
+        .apis
+        .iter()
+        .map(|a| {
+            serde_json::json!({
+                "name": a.name,
+                "entity": a.entity,
+                "operations": a.operations,
+            })
+        })
+        .collect();
+    let pages: Vec<serde_json::Value> = program
+        .pages
+        .iter()
+        .map(|p| {
+            serde_json::json!({
+                "name": p.name,
+                "route": p.route,
+                "kind": match p.body {
+                    crate::dsl::PageBody::Table(_) => "table",
+                    crate::dsl::PageBody::Form(_) => "form",
+                    crate::dsl::PageBody::Detail(_) => "detail",
+                },
+            })
+        })
+        .collect();
+    serde_json::json!({
+        "entityCount": entities.len(),
+        "entities": entities,
+        "enums": enums,
+        "apis": apis,
+        "pages": pages,
+        "ruleBlocks": program.rules.len(),
+    })
+}
+
+/// 联邦工程：原语义图摘要。
+fn federated_graph(project_dir: &Path) -> Result<serde_json::Value> {
+    let outcome = load_project(project_dir)?;
+    let summary = outcome.graph.to_summary();
+    let entities: Vec<serde_json::Value> = summary
+        .nodes
+        .iter()
+        .filter(|n| n.kind == "entity")
+        .map(|e| {
+            let artifacts: Vec<serde_json::Value> = summary
+                .edges
+                .iter()
+                .filter(|edge| edge.from == e.uri)
+                .filter_map(|edge| {
+                    let target = summary.nodes.iter().find(|n| n.uri == edge.to)?;
+                    Some(serde_json::json!({
+                        "standard": target.standard,
+                        "kind": target.kind,
+                        "name": target.name,
+                        "file": target.source.file,
+                    }))
+                })
+                .collect();
+            serde_json::json!({ "name": e.name, "uri": e.uri, "artifacts": artifacts })
+        })
+        .collect();
+    Ok(serde_json::json!({
+        "project": project_dir.file_name().map(|s| s.to_string_lossy()).unwrap_or_default(),
+        "entityCount": entities.len(),
+        "nodeCount": summary.nodes.len(),
+        "edgeCount": summary.edges.len(),
+        "entities": entities,
+    }))
 }
 
 fn resolve_target(graph: &crate::graph::UnifiedSemanticGraph, target: &str) -> Option<String> {

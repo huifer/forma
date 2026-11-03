@@ -979,11 +979,22 @@ impl ReplOncePrefix for str {
 }
 
 fn rename_in_required_arrays(src: &str, from: &str, to: &str) -> String {
+    // required 数组有两种排版：单行（"required": ["a", "b"]）与多行（项各占一行）。
+    // 旧实现只重写 `"required"` 起始行 → 多行数组里的项被漏掉（字段改名后遗留旧名）。
     let mut out = String::new();
+    let mut in_required = false;
     for line in src.lines() {
         let t = line.trim();
         if t.starts_with("\"required\"") || t.starts_with("required:") {
             out.push_str(&replace_word_loose(line, from, to));
+            in_required = !t.contains(']');
+        } else if in_required {
+            if t.starts_with(']') {
+                in_required = false;
+                out.push_str(line);
+            } else {
+                out.push_str(&replace_word_loose(line, from, to));
+            }
         } else {
             out.push_str(line);
         }

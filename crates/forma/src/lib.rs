@@ -3,6 +3,7 @@
 //! 一套 DSL 描述前端、后端、数据库与规则，适配层编译为各平台完整代码。
 
 pub mod adapters;
+pub mod build;
 pub mod dsl;
 pub mod emit;
 pub mod engine;

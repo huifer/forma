@@ -390,124 +390,30 @@ fn cmd_check(project_dir: PathBuf) -> i32 {
 }
 
 fn cmd_build_dsl(project_dir: PathBuf, _force: bool) -> i32 {
-    let manifest = match forma::manifest::load_manifest(&project_dir) {
-        Ok(m) => m,
-        Err(err) => {
-            eprintln!("✗ {err:#}");
-            return 1;
-        }
-    };
-    let source = manifest.manifest.source.clone().unwrap_or_default();
-    let (program, diagnostics) = match forma::dsl::load_program(&project_dir, &source) {
-        Ok(v) => v,
-        Err(err) => {
-            eprintln!("✗ {err:#}");
-            return 1;
-        }
-    };
-    let hard_errors: Vec<_> = diagnostics
-        .iter()
-        .filter(|d| d.severity == "error")
-        .collect();
-    if !hard_errors.is_empty() {
-        for d in &hard_errors {
-            eprintln!("{}", forma::validate::format_diagnostic(d));
-        }
-        eprintln!("✗ build failed: {} DSL error(s)", hard_errors.len());
-        return 1;
-    }
-    let app_name = manifest.manifest.project_name.clone();
-    let targets = &manifest.manifest.targets;
-    let db_out = targets
-        .database
-        .as_ref()
-        .and_then(|t| t.out.clone())
-        .unwrap_or_else(|| "generated/db".into());
-    let backend_out = targets
-        .backend
-        .as_ref()
-        .and_then(|t| t.out.clone())
-        .unwrap_or_else(|| "generated/backend".into());
-    let web_out = targets
-        .frontend
-        .as_ref()
-        .and_then(|t| t.out.clone())
-        .unwrap_or_else(|| "generated/web".into());
-    let seed_out = format!("{db_out}/seed");
-    let mobile_out = targets
-        .mobile
-        .as_ref()
-        .map(|m| m.out.clone().unwrap_or_else(|| "generated/mobile".into()))
-        .unwrap_or_default();
-    let api_out = "generated/api-docs";
-
-    let mut all: Vec<forma::generators::GeneratedFile> = Vec::new();
-    let mut steps: Vec<EmitStep> = vec![
-        (
-            "db-mysql",
-            Box::new(|| forma::emit::emit_mysql(&project_dir, &program, &db_out)),
-        ),
-        (
-            "backend-rust",
-            Box::new(|| {
-                forma::emit::emit_rust_backend(&project_dir, &program, &backend_out, &app_name)
-            }),
-        ),
-        (
-            "web-react",
-            Box::new(|| forma::emit::emit_web_react(&project_dir, &program, &web_out, &app_name)),
-        ),
-        (
-            "openapi",
-            Box::new(|| forma::emit::emit_openapi(&project_dir, &program, api_out)),
-        ),
-        (
-            "diagrams",
-            Box::new(|| forma::emit::emit_diagrams(&project_dir, &program, "generated/diagrams")),
-        ),
-        (
-            "migrate",
-            Box::new(|| {
-                Ok(
-                    forma::emit::emit_migration(&project_dir, &program, &db_out)?
-                        .map(|f| vec![f])
-                        .unwrap_or_default(),
-                )
-            }),
-        ),
-        (
-            "seed",
-            Box::new(|| forma::emit::emit_seed(&project_dir, &program, &seed_out)),
-        ),
-    ];
-    if targets.mobile.is_some() {
-        steps.push((
-            "mobile-flutter",
-            Box::new(|| forma::emit::emit_flutter(&project_dir, &program, &mobile_out, &app_name)),
-        ));
-    }
-    let mut report: Vec<String> = Vec::new();
-    for (name, step) in steps {
-        match step() {
-            Ok(files) => {
-                for f in &files {
+    match forma::build::run_build(&project_dir) {
+        Ok(report) => {
+            for step in &report.steps {
+                for f in &step.files {
                     println!("  + {} ({})", f.path, f.generator);
                 }
-                report.push(format!("{}: {} file(s)", name, files.len()));
-                all.extend(files);
             }
-            Err(err) => {
-                eprintln!("✗ emitter {name} failed: {err:#}");
-                return 1;
-            }
+            println!(
+                "✓ build ok — {} file(s) written ({})",
+                report.total_files(),
+                report
+                    .steps
+                    .iter()
+                    .map(|s| format!("{}: {}", s.name, s.files.len()))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            0
+        }
+        Err(err) => {
+            eprintln!("{err:#}");
+            1
         }
     }
-    println!(
-        "✓ build ok — {} file(s) written ({})",
-        all.len(),
-        report.join(", ")
-    );
-    0
 }
 
 fn cmd_migrate(
@@ -700,11 +606,6 @@ fn cmd_diff(
         }
     }
 }
-
-type EmitStep<'a> = (
-    &'a str,
-    Box<dyn Fn() -> anyhow::Result<Vec<forma::generators::GeneratedFile>> + 'a>,
-);
 
 fn render_graph_text(summary: &forma::graph::GraphSummary) -> String {
     let mut lines = vec![

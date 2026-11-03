@@ -188,3 +188,66 @@ fn routes_imports_and_guard_binding_are_conditional() {
     assert!(!routes.contains("use crate::validators::*;"));
     assert!(routes.contains("crate::validators::validate_create_school"));
 }
+
+#[test]
+fn order_by_supports_multiple_sort_fields() {
+    // spec：sort [createdAt desc, amount] —— 逐项生成，不静默截断到第一个
+    let dsl = r#"
+app demo { version = "0.1.0" }
+entity Item {
+  id        Uuid      @id @default(uuid)
+  amount    Decimal(12,2) @required
+  createdAt Timestamp @default(now) @readonly
+}
+api Items {
+  entity Item
+  operations [list]
+  list { sort [createdAt desc, amount] paginate offset }
+}
+"#;
+    let program = forma::dsl::parser::parse(&forma::dsl::lexer::lex(dsl)).program;
+    let dir = std::env::temp_dir().join(format!(
+        "forma-sort-{}-{:?}",
+        std::process::id(),
+        std::time::SystemTime::now()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let files = emit_rust_backend(&dir, &program, "generated/backend", "demo").unwrap();
+    let repo = files.iter().find(|f| f.path.ends_with("repo.rs")).unwrap();
+    assert!(
+        repo.content
+            .contains("ORDER BY s.created_at DESC, s.amount ASC"),
+        "{}",
+        repo.content
+    );
+}
+
+#[test]
+fn cursor_pagination_fails_loudly_not_silently() {
+    // 设计宪法 6.2：emitter 遇到未识别构造显式报错，不静默跳过
+    let dsl = r#"
+app demo { version = "0.1.0" }
+entity Item {
+  id Uuid @id @default(uuid)
+  amount Decimal(12,2) @required
+}
+api Items {
+  entity Item
+  operations [list]
+  list { paginate cursor }
+}
+"#;
+    let program = forma::dsl::parser::parse(&forma::dsl::lexer::lex(dsl)).program;
+    let dir = std::env::temp_dir().join(format!(
+        "forma-cursor-{}-{:?}",
+        std::process::id(),
+        std::time::SystemTime::now()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let err = emit_rust_backend(&dir, &program, "generated/backend", "demo").unwrap_err();
+    let msg = format!("{err:#}");
+    assert!(msg.contains("cursor"), "{msg}");
+    assert!(msg.contains("offset"), "错误信息应说明当前支持的范围");
+}
