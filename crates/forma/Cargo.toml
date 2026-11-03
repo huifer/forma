@@ -1,9 +1,13 @@
 [package]
 name = "forma"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
-description = "Forma — Universal Specification Compiler. Organizes existing standards (SQL DDL, OpenAPI, JSON Schema, JSON Forms, BPMN) into an AI-operable, visual, compilable software specification system."
+description = "A Rust specification compiler that turns one declarative DSL into database migrations, backend code, frontend code, APIs, validation, and diagrams."
 license = "MIT"
+repository = "https://github.com/huifer/forma"
+readme = "../../README.md"
+keywords = ["dsl", "compiler", "code-generation", "database-migrations", "ai-coding"]
+categories = ["command-line-utilities", "development-tools", "compilers"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

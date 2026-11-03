@@ -1,57 +1,107 @@
 <div align="center">
 
-```
- ███████╗ ██████╗ ██████╗ ███╗   ███╗ █████╗
- ██╔════╝██╔═══██╗██╔══██╗████╗ ████║██╔══██╗
- █████╗  ██║   ██║██████╔╝██╔████╔██║███████║
- ██╔══╝  ██║   ██║██╔══██╗██║╚██╔╝██║██╔══██║
- ██║     ╚██████╔╝██║  ██║██║ ╚═╝ ██║██║  ██║
- ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝╚═╝  ╚═╝
-```
+# Forma
 
-# One DSL. Every platform.
+### One DSL. Every platform.
 
-**Forma is a DSL middle layer: one DSL describes your frontend, backend, database and rules — adapter layers compile it into complete code for every platform.**
+A Rust-based specification compiler that turns one declarative DSL into database migrations,
+backend code, frontend code, APIs, validation, and diagrams.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://github.com/huifer/forma/actions/workflows/ci.yml/badge.svg)](https://github.com/huifer/forma/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org/)
 [![Tests](https://img.shields.io/badge/tests-60%20passing-brightgreen.svg)](#development)
-[![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet.svg)](#ai-integration-mcp)
-[![Status](https://img.shields.io/badge/status-v0.3%20design%20%2B%20M1-blue.svg)](docs/roadmap.zh-CN.md)
+[![MCP](https://img.shields.io/badge/MCP-compatible-purple.svg)](#ai-integration)
 
-**English** | [简体中文](README.zh-CN.md)
+[English](README.md) · [简体中文](README.zh-CN.md)
 
 </div>
 
-## The idea
+## Why Forma?
 
-A typical AI-coding session burns most tokens on **language tax**: semicolons, `public static void`, imports, HTML tag pairs — and worst of all, **repetition**: adding one field means re-writing the same fact six times across SQL, types, validators, routes, forms and tests.
+Application development repeats the same product decision across SQL schemas, backend models,
+API contracts, frontend forms, validation rules, and documentation. That repetition is expensive
+for humans and especially expensive for AI coding agents.
 
-Forma inserts a **middle layer** between AI and code:
+Forma introduces a semantic middle layer:
 
 ```text
-AI writes the DSL (semantics only, ~1% of the tokens)
+Declarative Forma DSL
         │
         ▼
-┌─────────────────────────────────────────────┐
-│           Forma Compiler (Rust)             │
-│  parse → semantic graph → check → emit      │
-└──────┬───────────────┬──────────────┬───────┘
-       ▼               ▼              ▼
-   MySQL DDL      Rust backend    React web app
-   (migrations)   (axum + sqlx)   (TanStack + shadcn/ui)
-                                          (+ iOS/Android later)
+Forma compiler (Rust)
+parse → semantic graph → validate → emit
+        │
+        ├── MySQL 8 schema + versioned migrations
+        ├── Rust backend (axum + sqlx)
+        ├── React web app (TanStack + shadcn/ui)
+        ├── OpenAPI documentation
+        └── ER, data-flow, and lifecycle diagrams
 ```
 
-One DSL is the **single source of truth** for data, rules, API and pages. Update the DSL, run the compiler, get new code — across every platform. Rules are first-class: written once in the DSL, compiled to **authoritative backend validation (Rust)** and **same-source frontend validation (zod)**.
+The DSL is the source of truth. You describe the domain once; deterministic emitters project it
+into the target technologies. Rules are emitted to both authoritative backend validation and
+same-source frontend validation.
 
-> Formally: **AI becomes the intent expresser. The adapter layer becomes the typewriter** — deterministic, incremental, free.
+> **AI expresses intent. Forma handles repetition.**
 
-Deep dive: [Design Philosophy](docs/philosophy.zh-CN.md)（中文）· [Architecture v0.3](docs/architecture.zh-CN.md)（中文）· [DSL Spec](docs/dsl-spec.zh-CN.md)（中文）
+## Current status
 
-## The DSL, in one file
+Forma is an **early open-source development release**. The end-to-end DSL pipeline is working,
+and the migration engine is covered by deterministic tests and a SQL replay simulator. The
+adapter matrix and Studio are still under active development; see the [roadmap](docs/roadmap.zh-CN.md).
+
+The current release focuses on:
+
+- a typed DSL for applications, enums, entities, rules, APIs, and pages;
+- deterministic MySQL, Rust backend, React frontend, OpenAPI, and diagram emitters;
+- multi-version database migrations with upgrade/rollback pairs;
+- migration-chain verification without requiring a live database;
+- semantic diffs, linting, validation, diagrams, and MCP integration.
+
+## Quick start
+
+### Requirements
+
+- Rust stable (the project is tested on Linux and macOS)
+- No database is required for compilation or migration-chain verification
+
+### Build and test Forma
+
+```bash
+git clone https://github.com/huifer/forma.git
+cd forma
+cargo test --locked
+cargo build --release
+```
+
+### Create and build a project
+
+```bash
+cargo run -- init examples/my-app
+cargo run -- validate examples/my-app
+cargo run -- build examples/my-app
+```
+
+The compiler writes generated artifacts according to `forma.yaml`. The repository includes a
+complete working example in [`examples/school`](examples/school).
+
+## The DSL
+
+A single `.fm` file can describe data, rules, APIs, and screens:
 
 ```fm
+app orders {
+  version = "0.1.0"
+  locale = ["en"]
+}
+
+enum OrderStatus {
+  pending
+  approved
+  cancelled
+}
+
 entity Order {
   id            Uuid          @id @default(uuid)
   customerEmail Email         @required
@@ -62,11 +112,12 @@ entity Order {
 
 rules OrderRules {
   field Order.amount {
-    min 0.01 { zh "金额必须大于 0" en "Amount must be positive" }
+    min 0.01 { en "Amount must be positive" }
   }
+
   guard Order.delete {
     deny status == "approved"
-      reason { zh "已审批订单不可删除" en "Approved orders cannot be deleted" }
+      reason { en "Approved orders cannot be deleted" }
   }
 }
 
@@ -75,96 +126,163 @@ api Orders {
   operations [list get create update delete]
   list { filters [status] search [customerEmail] sort [createdAt desc] }
 }
-
-page OrderList {
-  route "/orders"
-  title { zh "订单列表" en "Orders" }
-  table {
-    query   Orders.list
-    columns [createdAt: datetime, customerEmail, amount: money, status: badge]
-    actions { create → OrderEdit, row [edit, delete confirm] }
-  }
-}
 ```
 
-No axum, no React, no SQL in the DSL — pages are target-agnostic primitives (`table`/`form`/`detail`); component preferences are target config. Full grammar: [DSL Spec](docs/dsl-spec.zh-CN.md)（中文）.
+The DSL does not contain axum, React, or SQL. Pages and forms use target-independent primitives;
+target configuration selects the concrete output stack.
 
-## Targets
+- [DSL specification](docs/dsl-spec.zh-CN.md)
+- [Architecture](docs/architecture.zh-CN.md)
+- [Design philosophy](docs/philosophy.zh-CN.md)
+- [Roadmap](docs/roadmap.zh-CN.md)
 
-| Target | Stack (now) | Generated output |
-|---|---|---|
-| Database | **MySQL 8** (InnoDB, utf8mb4) | immutable baseline + versioned upgrade/rollback migrations |
-| Backend | **Rust** (axum + sqlx) | models, validators, routes, repositories |
-| Web | **React + TanStack Router/Query + shadcn/ui** | typed routes, query hooks, forms, zod schemas |
-| Mobile | iOS / Android | planned (same page primitives → native or Expo) |
+## Generated targets
 
-## Versioned migrations (multi-version)
+| Target | Current output |
+| --- | --- |
+| MySQL 8 | Immutable baseline DDL, upgrade migrations, rollback migrations |
+| Rust | axum + sqlx models, repositories, routes, and validators |
+| React | TanStack Router/Query, forms, types, and validation |
+| OpenAPI | OpenAPI JSON and a local Swagger UI page |
+| Diagrams | ER, data-flow, and enum lifecycle diagrams |
 
-Schema evolution works like a real project: the DSL is the single source of truth, and every
-change compiles into a numbered **upgrade + rollback pair**, appended to a version ledger.
+The target paths are configured in `forma.yaml`:
+
+```yaml
+targets:
+  db:
+    engine: mysql
+    out: db
+  backend:
+    language: rust
+    framework: axum
+    database: sqlx
+    out: generated/backend
+  web:
+    framework: react
+    router: tanstack
+    data: tanstack-query
+    ui: shadcn
+    out: generated/web
+```
+
+`db` and `web` are accepted aliases for `database` and `frontend`.
+
+## Versioned migrations
+
+Forma treats schema evolution as a first-class development workflow. The initial schema is an
+immutable baseline; every later DSL change produces a numbered upgrade and rollback pair.
+Migration SQL is committed to the repository, while applied state remains machine-local.
 
 ```text
-forma build  (v0.1.0)   →  0001_init.sql                    # immutable baseline (created once)
-forma build  (v0.2.0)   →  0002_upgrade.sql + 0002_rollback.sql   # upgrade + rollback pair
-forma build  (v0.3.0)   →  0003_upgrade.sql + 0003_rollback.sql
-                        →  MIGRATIONS.md                    # visible SQL trail per version
+v0.1.0  →  db/migrations/0001_init.sql
+v0.2.0  →  db/migrations/0002_upgrade.sql
+          db/migrations/0002_rollback.sql
+v0.3.0  →  db/migrations/0003_upgrade.sql
+          db/migrations/0003_rollback.sql
+          db/migrations/MIGRATIONS.md
 ```
 
-Every migration pair is **MySQL-order-safe** (drop constraints → add/modify columns → add
-constraints → drop columns) and uses **content-derived index names** (`idx_{table}_{cols}`),
-so replaying a long chain never hits duplicate-key or missing-column errors.
+The migration engine provides:
 
-The replay simulator (`emit/replay.rs`) executes the generated SQL subset with real MySQL
-semantics — no database needed — to prove the guarantees below.
-
-The CLI manages the chain end-to-end:
+- structured schema diffs for tables, columns, indexes, unique keys, and foreign keys;
+- inverse rollback SQL for every supported schema operation;
+- MySQL-safe operation ordering;
+- content-derived index names that remain collision-free across versions;
+- a version ledger with hashes and applied/pending state;
+- `MIGRATIONS.md` with the complete human-readable SQL trail;
+- a replay simulator that validates the generated SQL subset without a database;
+- CI-friendly drift and tamper detection.
 
 ```bash
-forma migrate [dir] status            # applied vs pending per version
-forma migrate [dir] history           # the full version trail
-forma migrate [dir] up [--to v]       # step forward (to a target version); --apply to mark
-forma migrate [dir] down [--steps N] [--to v]   # roll back N steps / to a version
-forma migrate [dir] verify            # chain integrity + forward-replay consistency (CI-ready)
+# Inspect the chain
+cargo run -- migrate examples/school status
+cargo run -- migrate examples/school history
+
+# Move forward
+cargo run -- migrate examples/school up --to 0.2.0
+cargo run -- migrate examples/school up --apply
+
+# Roll back
+cargo run -- migrate examples/school down --steps 1
+cargo run -- migrate examples/school down --to 0.1.0 --apply
+
+# Verify numbering, pairing, hashes, replay, and schema consistency
+cargo run -- migrate examples/school verify
 ```
 
-`verify` checks: continuous numbering · every upgrade paired with a rollback · ledger hashes
-match file contents (tamper detection) · replaying `0001…000N` equals the current DSL schema
-(baseline-drift detection). Exit code 1 on any drift.
+The three-version chain in [`examples/school/db/migrations`](examples/school/db/migrations)
+shows a realistic evolution:
 
-Live example: [`examples/school/db/migrations/`](examples/school/db/migrations/) — a real
-three-version chain: v0.1.0 (CRUD baseline) → v0.2.0 (election feature: 3 new tables + FKs)
-→ v0.3.0 (add `phone`/`remark`, widen `title`, add voter index), with `MIGRATIONS.md`
-showing every version's SQL. Versioned DSL snapshots live in
-`examples/school/v1/` and `v2/`. Applied-state lives in `.forma/migrations.json`
-(git-ignored, per-machine) while the migration SQL itself is committed.
+- `v0.1.0`: school, student, course, and enrollment CRUD baseline;
+- `v0.2.0`: election, candidate, and vote-record features with foreign keys;
+- `v0.3.0`: phone and remark fields, a widened course title, and a voter index.
 
-## Status & roadmap
+## CLI reference
 
-**v0.3 (current)** — DSL middle-layer architecture finalized; DSL spec v0.1 published. The full **adapter matrix** — databases (MySQL → PostgreSQL/SQLite), backends (Rust → NestJS/Hono/FastAPI → Spring/Go/.NET), web (React → Vue/Next.js), mobile (Expo → Flutter/native/mini-programs), API styles (REST → OpenAPI/GraphQL/gRPC), and capability modules (auth, uploads, i18n, search, jobs, realtime, audit, multi-tenant) — is mapped in waves:
+```text
+forma init [dir]                          Scaffold a project
+forma validate [dir]                      Validate the project
+forma check [dir]                         Check DSL semantics
+forma build [dir] [--force]              Generate all configured targets
+forma diff <dir-a> <dir-b>                Compare two projects
+forma diagrams [dir]                      Generate diagrams and HTML preview
+forma lint [dir]                          Run built-in lint rules
+forma migrate [dir] status               Show migration state
+forma migrate [dir] history              Show migration history
+forma migrate [dir] verify               Verify the migration chain
+forma migrate [dir] up [--to v]          Plan/apply forward migrations
+forma migrate [dir] down [--steps N]     Plan/apply rollback migrations
+forma mcp [dir]                          Start the MCP stdio server
+```
 
-- **Wave 1 (M1–M4)** end-to-end loop: DSL kernel → MySQL → Rust backend → React web
-- **Wave 2 (M5–M8)** auth module · **Studio v1 visualization** · **ecosystem interop** (OpenAPI/SQL/Postman both ways) · AI semantic-patch closed loop
-- **Wave 3 (M9–M10)** engineering (Docker/uploads/exports/audit) + Studio two-way editing · breadth: PostgreSQL/SQLite, Node/Python backends, Vue/Next.js, Expo, GraphQL, multi-tenant, realtime
-- **Wave 4 (M11+)** enterprise: Spring/Go/.NET, native mobile, mini-programs, workflow runtime, payments
+Run `cargo run -- --help` for the complete command help.
 
-The repository currently contains a working **standards-federation prototype** (v0.2, Rust: adapters + doctor + incremental build + transactional patches + MCP, 17 tests green). Its semantic-graph, patch and build engines are reused by the DSL compiler; the standard adapters become export views (M7). History: [docs/history/](docs/history/README.md).
+## AI integration
 
-Full roadmap with acceptance criteria per milestone: [docs/roadmap.zh-CN.md](docs/roadmap.zh-CN.md)（中文）.
-
-## Development (current prototype)
+Forma includes an MCP stdio server for AI coding environments such as Codex, Claude Code, and
+Pi. It exposes project inspection and build-oriented capabilities while keeping generated output
+deterministic and reviewable.
 
 ```bash
-cargo test            # 60 integration tests
-cargo build --release
-cargo run -- migrate examples/school status      # database version chain
-cargo run -- migrate examples/school verify      # chain integrity + replay check
-cargo run -- doctor examples/order-management    # federation-era demo commands
+cargo run -- mcp examples/school
+```
+
+## Development
+
+```bash
+cargo test --locked                         # 60 tests across 12 suites
+cargo build --locked --all-targets
+cargo fmt --all -- --check
+cargo clippy --all-targets -- -D warnings
+cargo run -- migrate examples/school verify
+```
+
+The same checks run in [GitHub Actions](.github/workflows/ci.yml). Test fixtures use isolated
+temporary projects so the suite remains safe under Cargo's parallel test execution.
+
+## Project layout
+
+```text
+crates/forma/src/dsl/       DSL lexer and parser
+crates/forma/src/emit/      target emitters and migration engine
+crates/forma/src/engine.rs  project loading and build orchestration
+crates/forma/tests/         integration and regression tests
+examples/school/            three-version end-to-end example
+docs/                       architecture, DSL, philosophy, and roadmap
 ```
 
 ## Contributing
 
-PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) (design constitution included). Please follow the [Code of Conduct](CODE_OF_CONDUCT.md). Security: [SECURITY.md](SECURITY.md). Changelog: [CHANGELOG.md](CHANGELOG.md).
+Pull requests are welcome. Please read:
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) for design rules and commit conventions;
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations;
+- [SECURITY.md](SECURITY.md) for vulnerability reports.
+
+For a new feature, include deterministic tests and update the relevant documentation. Generated
+migration SQL should be reviewed like application code: it is part of the public project history.
 
 ## License
 
-[MIT](LICENSE) © Forma Contributors
+Forma is released under the [MIT License](LICENSE).

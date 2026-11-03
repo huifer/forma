@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Planned
+- DMN adapter (decision tables → rule execution)
+- AsyncAPI adapter (event contracts → subscriptions)
+- `forma patch --dry-run` (edit-plan preview without writing)
+- Forma Studio (per-standard visual editors)
+
+## [0.3.0] - 2026-11-03
+
+First public release of the Forma DSL compiler. This release establishes the end-to-end
+workflow: write one declarative DSL, compile every target deterministically, evolve the schema
+across versions, and verify the migration chain before deployment — with the full SQL trail
+visible in the repository.
+
 ### Added
 - **Versioned migration engine（多版本迁移）** — schema evolution like a real project:
   - Structured diff → paired `{index:04}_upgrade.sql` + `{index:04}_rollback.sql` per change;
@@ -29,6 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `examples/school/db/migrations/` — v0.1.0 (CRUD baseline) → v0.2.0 (election feature)
     → v0.3.0 (phone/remark/title-widen/voter-index). Versioned DSL snapshots in `v1/`, `v2/`.
   - manifest: `targets.db` / `targets.web` accepted as aliases of `database` / `frontend`.
+- English-first public README: positioning, current status, quick start, DSL overview,
+  generated targets, versioned-migration guide, CLI reference, and contribution guide.
+- Release metadata: package `repository`/`keywords`/`categories`, `v0.3.0` release tag.
 
 ### Fixed
 - `ADD COLUMN` on a `@unique` field dropped the unique constraint (new columns skipped the
@@ -40,6 +56,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `DROP COLUMN` was emitted before its dependent `DROP INDEX` — MySQL auto-drops the index,
   making the explicit drop fail; constraints now drop first.
 
+### Fixed (infra)
+- Flaky parallel-test failure: build-test tmp projects were named with pid + a truncated
+  `SystemTime` debug string; two threads could mint the same directory in one window
+  ("forma.yaml already exists"). Directories now use an in-process atomic sequence plus true
+  nanoseconds.
+- Debug leftovers removed (`examples/dbg10.rs`, debug `eprintln!` in a migration test).
+
 ### Changed (design)
 - **Architecture v0.3 — DSL middle layer.** Forma is repositioned: one DSL is the single
   source of truth for data, rules, API and pages; adapter layers compile it to MySQL,
@@ -48,12 +71,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   adapters become generated export views (M6).
 - DSL spec v0.1 published (`docs/dsl-spec.zh-CN.md`): app/enum/entity/rules/api/page,
   closed rule-expression language compiled to both backend (Rust) and frontend (zod).
-
-### Planned
-- DMN adapter (decision tables → rule execution)
-- AsyncAPI adapter (event contracts → subscriptions)
-- `forma patch --dry-run` (edit-plan preview without writing)
-- Forma Studio (per-standard visual editors)
 
 ## [0.2.0] - 2026-11-02
 
@@ -78,5 +95,6 @@ Specification Federation: Forma organizes existing standards instead of inventin
 ### Changed
 - Project language: TypeScript prototype → **Rust** (single binary serves CLI and MCP).
 
-[Unreleased]: https://github.com/YOUR_GH_USER/forma/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/YOUR_GH_USER/forma/releases/tag/v0.2.0
+[Unreleased]: https://github.com/huifer/forma/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/huifer/forma/releases/tag/v0.3.0
+[0.2.0]: https://github.com/huifer/forma/releases/tag/v0.2.0
