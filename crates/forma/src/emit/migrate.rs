@@ -7,7 +7,7 @@
 //!   并生成 `MIGRATIONS.md` 让 SQL 更新与版本链可见。
 //! - CLI `forma migrate {status|history|up|down}` 模拟应用/回滚并维护 applied 状态。
 
-use super::mysql::{plan_tables, render_create_table, ColumnPlan, TablePlan};
+use super::mysql::{plan_tables_with_internal, render_create_table, ColumnPlan, TablePlan};
 use super::replay::{replay_sql, schema_diff, schema_from_plans, SimSchema};
 use super::Program;
 use crate::util::{read_text, write_text};
@@ -271,7 +271,7 @@ pub fn migration_risk_lines(ops: &[MigrationOp]) -> Vec<String> {
 /// 首次构建（无快照）视为全量建表，均为 Low。
 /// 供 `forma migrate risk` 在 apply 之前评估破坏性。
 pub fn pending_migration_ops(project_dir: &Path, program: &Program) -> Result<Vec<MigrationOp>> {
-    let new_plans = plan_tables(program);
+    let new_plans = plan_tables_with_internal(program);
     match read_snapshot(project_dir) {
         Some(snap) => Ok(diff_ops(&snap.tables, &new_plans)),
         None => Ok(diff_ops(&[], &new_plans)),
@@ -727,7 +727,7 @@ pub fn emit_migration(
     program: &Program,
     out_dir: &str,
 ) -> Result<Option<crate::generators::GeneratedFile>> {
-    let new_plans = plan_tables(program);
+    let new_plans = plan_tables_with_internal(program);
     let app_version = app_version_of(program);
     let migrations_dir = project_dir.join(out_dir).join("migrations");
     let mut ledger = read_ledger(project_dir);
@@ -1031,7 +1031,7 @@ pub fn migration_verify(
     if let Err(err) = replay_sql(&mut schema, &replay_sql_all) {
         issues.push(format!("迁移链重放失败（真实 MySQL 也会在此报错）: {err}"));
     } else {
-        let expected = schema_from_plans(&plan_tables(program));
+        let expected = schema_from_plans(&plan_tables_with_internal(program));
         let diffs = schema_diff(&schema, &expected);
         if diffs.is_empty() {
             // 一致 ✓

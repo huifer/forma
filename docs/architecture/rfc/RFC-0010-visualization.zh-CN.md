@@ -1,8 +1,25 @@
-# RFC-0001：Forma 可视化规格与渲染系统
+---
+id: RFC-0010
+title: Visualization Specification and Rendering System
+status: Accepted            # 实现分期 V0.1 已落地（见 §13 与 crates/forma/src/visualization/）
+version: 1.0
+authors: [forma-maintainers]
+created: 2026-11-05
+updated: 2026-11-04
+domain: capability
+supersedes: []
+superseded_by: []
+depends_on: [RFC-0001, RFC-0004]
+related_adrs: [ADR-0001]
+related_specs: [spec:ir]
+breaking_change: false
+---
 
-> 状态：**已接受（Accepted）· 实现分期 V0.1 落地中**
+# RFC-0010：Forma 可视化规格与渲染系统
+
+> 状态：**已接受（Accepted）· 实现分期 V0.1 落地中**（本 RFC 由 docs/rfc/0001-visualization.zh-CN.md 迁入治理体系统一编号）
 > 日期：2026-11-05
-> 关联：docs/architecture.zh-CN.md §1/§3、docs/dsl-spec.zh-CN.md §11、docs/roadmap.zh-CN.md
+> 关联：RFC-0001（架构总览）、RFC-0004（能力系统）、[dsl-spec.zh-CN.md](../dsl-spec.zh-CN.md) §11、[roadmap.zh-CN.md](../roadmap.zh-CN.md)
 > 决策人：Forma 维护者
 > 影响范围：DSL 语法（新增 `chart` / `dashboard` 顶层构造）、Unified IR、web-react 适配层、MCP 工具面、Verify
 
@@ -139,14 +156,14 @@ chart EnrollmentTrend {
 
   encoding {
     x      { field enrolledAt type temporal format datetime }
-    y      { field age        type quantitative format integer }
+    y      { field value      type quantitative format integer }
     series { field status     type nominal }
   }
 
   transform {
     filter    { field status eq "active" }
     bucket    { field enrolledAt by day }
-    aggregate { op count groupBy [enrolledAt] }
+    aggregate { op count groupBy [enrolledAt, status] }   // 输出字段名固定为 value
     sort      { by enrolledAt desc }
     limit     30
   }
@@ -157,11 +174,13 @@ chart EnrollmentTrend {
   }
 
   tooltip     { enabled true }
-  legend      { enabled false }
+  legend      { enabled true }
   interaction { zoom true }
   appearance  { smooth true showSymbol false }
 }
 ```
+
+> `y` 引用的 `value` 是聚合输出字段（见 §4.4），不需要实体上存在同名字段。
 
 **语法细则**
 
@@ -170,7 +189,7 @@ chart EnrollmentTrend {
 | `type` | `line \| bar \| area \| pie \| scatter \| funnel \| gauge \| radar \| heatmap \| treemap` | 语义图表类型 |
 | `title` | `{ zh "…" en "…" }` | i18n 标题（复用 `Message`） |
 | `source` | `<ApiName>.<operation>` | 数据绑定；指向已声明的 `api` 块的操作 |
-| `encoding.x/y/series` | `{ field <path> type <t> [format <f>] }` | 视觉通道映射 |
+| `encoding.x/y/series/color` | `{ field <path> [type <t>] [format <f>] }` | 视觉通道映射；`color` 仅 heatmap 使用（单元格值） |
 | `transform.*` | 见 §4.4 | 数据变换 |
 | `axis.x/y` | `{ label "…" [type <t>] [format <f>] }` | 轴语义 |
 | `tooltip` / `legend` | `{ enabled <bool> }` | 提示 / 图例开关 |
@@ -328,6 +347,8 @@ pub struct Encoding {
     pub x: Option<Channel>,
     pub y: Option<Channel>,
     pub series: Option<Channel>,
+    /// 数值色通道：heatmap 的单元格值（未来可扩展散点 size）
+    pub color: Option<Channel>,
 }
 
 pub struct Channel {
@@ -357,7 +378,7 @@ pub struct Channel {
 | pie / funnel / treemap | PartToWhole | x（分类）, y（数值） | — |
 | gauge | Gauge | y | — |
 | radar | Radial | x（指标名）, y（数值） | — |
-| heatmap | Heatmap | x, y, color | — |
+| heatmap | Heatmap | x（分类）, y（分类）, color（数值） | — |
 
 违反 → 诊断 `viz-shape-mismatch`（error）。
 
@@ -390,6 +411,21 @@ pub struct TransformPlan { pub ops: Vec<TransformOp> }
 **为什么变换在 Runtime 而不是 Adapter**：聚合、时间分桶、Top-N 不是 ECharts 的原生语义（ECharts 没有 dataset 聚合），若塞进 Adapter，AntV/D3 适配器就要重写一遍语义。变换属于 IR 层语义，Runtime 用统一执行器实现一次，所有 Adapter 复用。
 
 **聚合字段冲突规则**：`aggregate.op = count` 时 `field` 必须缺省；其余聚合必须给出 `field`。违规 → `viz-aggregate-conflict`。
+
+**聚合输出字段**：聚合产生名为 `value` 的数值字段，编码/轴通道可直接引用 `field value`——Check 阶段识别为聚合输出（ quantitative），不要求它是实体字段。这让「按天计数」「按区域求和」这类规格无需伪造实体字段：
+
+```fm
+encoding {
+  x { field enrolledAt type temporal }        // 分桶后的时间
+  y { field value      type quantitative }    // 聚合输出
+}
+transform {
+  bucket    { field enrolledAt by day }
+  aggregate { op count groupBy [enrolledAt] }
+}
+```
+
+**分组键的运行时键**：`groupBy` 输出行使用数据键（snake_case），与 `channel.dataKey` 对齐——变换输出直接对接编码通道，不做第二套命名。
 
 ### 4.5 轴 / 系列 / 提示 / 图例 / 交互 / 主题 / 响应式 / 无障碍
 
@@ -466,12 +502,15 @@ pub struct InteractionSpec2 {
 | `viz-unknown-type` | error | `type` 不在词表内 |
 | `viz-unknown-api` | error | `source` 引用的 api 块不存在 |
 | `viz-unknown-operation` | error | `source` 的操作不在该 api 的 `operations` 中 |
-| `viz-unknown-field` | error | `encoding` / `transform` 引用的字段不在实体上 |
-| `viz-type-mismatch` | error | 字段实际类型与声明的 `type` 不符（如 Timestamp 声明为 quantitative） |
+| `viz-unknown-field` | error | `encoding` / `transform` 引用的字段不在实体上（聚合输出 `value` 除外） |
+| `viz-unknown-format` | error | `format` 不在词表内 |
+| `viz-type-mismatch` | error | 字段实际类型与声明的 `type` 不符（如 Timestamp 声明为 quantitative）；bucket/aggregate 的字段类型不符同理 |
 | `viz-shape-mismatch` | error | 图表类型要求的 encoding 不完整/多余 |
 | `viz-aggregate-conflict` | error | `count` 聚合带 field，或非 count 聚合缺 field |
 | `viz-duplicate` | error | 同一 Program 内 chart id 重复 |
-| `viz-unknown-transform` | error | transform 里出现未知 op |
+| `viz-unknown-transform` | error | transform 里出现未知 op / bucket 单位 / 聚合算子 |
+
+**这些错误在 `forma build` 里硬失败**：语义检查（`check_program`）是编译管线第 3 阶段（architecture §4），Emit 之前执行——可视化错误不能只靠 `forma validate` 事后发现。
 
 **关系字段的维度语义**：关系字段在 ListRow 里是 `{rel}_id`（UUID）+ `{rel}_name`（显示名）。维度通道默认取 `{rel}_name`；若该关系可空则可能为 `null`，Check 阶段给出 warning（不阻断）。
 
@@ -565,10 +604,12 @@ chart Weird {
 
 | 手段 | 位置 |
 |---|---|
+| 按需注册 | Runtime 只 `echarts.use()` 本工程实际用到的图表与组件（由编译器按 chart 类型清单生成），避免把整个 ECharts 打进产物（实测 bundle 1.34 MB → 842 KB） |
 | `progressive` | Adapter 输出（大数据量渐进渲染） |
 | `sampling` | Adapter 输出（`series.sampling = 'lttb'`） |
 | `renderer: 'canvas' \| 'svg'` | 由 `responsive.aspect` 与数据量决定，Runtime 选择 |
 | 数据量上限 | `transform.limit` + warning |
+| 整数刻度 | y 通道 `format integer` 时输出 `yAxis.minInterval: 1`，计数轴不出现 0.2/0.6 小数刻度 |
 
 ---
 
@@ -746,12 +787,20 @@ V0.1 已落地的断言见 `crates/forma/tests/visualization.rs`。
 
 | 版本 | 交付内容 | 状态 |
 |---|---|---|
-| V0.1 | Chart IR、Line/Bar/Pie/Area/Scatter/Funnel/Gauge/Radar/Heatmap/Treemap 类型词表、ECharts Adapter、React Runtime 基础、页面挂载 | **本 RFC 落地** |
+| V0.1 | Chart IR、十种图表类型词表、ECharts Adapter（确定性投影 + 按需注册）、React Runtime、页面挂载、MCP 三工具、23 条验收测试 | **已落地** |
 | V0.2 | Data Binding 完整化（分页/服务端聚合）、Metric Card、Table widget | 规划 |
 | V0.3 | Dashboard IR、Grid/Flex 布局、响应式断点 | 规划 |
 | V0.4 | Tooltip/Legend/Filter/Drill-down/联动事件模型 | 规划 |
 | V0.5 | Theme、Preview、Runtime Verification（浏览器渲染门） | 规划 |
-| V0.6 | AntV Adapter、领域图表扩展（GIS / 金融 / 工业监控） | 规划 |
+| V0.6 | AntV Adapter、领域图表扩展（GIS / 金融 / 工业监控）、移动端图表 | 规划 |
+
+### V0.1 落地记录（实现与 RFC 的偏差均已回写正文）
+
+- 编码通道增加 `color`（heatmap 必需）；§4.2/§4.3 已同步。
+- 聚合输出字段 `value` 可直接作为数值通道；§4.4 已同步。
+- ECharts 适配层运行时按工程实际用到的图表类型生成 `echarts.use([...])`（tree-shaking）；§7.7 已同步。
+- `forma build` 现在在 Emit 前执行 `check_program`（编译管线第 3 阶段补齐）——语义错误（含 viz-*）硬失败；§6 已同步。
+- 验收：`crates/forma/tests/visualization.rs` 23 条测试全绿；school 示例两个图表页在真实浏览器渲染验证通过（`tsc && vite build` 无错误，无 console error，ECharts 实例数据绑定断言通过）。
 
 ---
 

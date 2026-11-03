@@ -74,6 +74,19 @@ M11 Spring/Go/.NET、原生移动、小程序、工作流运行时、支付
 | 👁 P2 | SvelteKit / Angular | M11 | |
 | 👁 P2 | 桌面：Tauri / Electron | M11 | |
 
+### 2.4a 可视化（RFC-0001）
+
+| 优先级 | 技术 | 里程碑 | 说明 |
+|---|---|---|---|
+| ✅ 首批 | **Chart IR + ECharts Adapter + React Runtime** | V0.1（已落地） | `chart` 块 → 确定性 option + 按需注册运行时；十种图表类型词表 |
+| 🔨 P1 | Data Binding 完整化（分页/服务端聚合）+ Metric/Table widget | V0.2 | 大数据量走服务端聚合 |
+| 🔨 P1 | **Dashboard IR**（Grid/Flex 布局 + 筛选器 + 联动事件模型） | V0.3 | `page { dashboard ... }` |
+| 🔨 P1 | Theme / Preview / 浏览器渲染验证门 | V0.5 | 与 Studio v1 同一渲染源 |
+| 👁 P2 | AntV 适配层（图分析/关系可视化）、GIS、金融/工业领域图表 | V0.6 | 同一 Chart IR 换 Adapter |
+| 👁 P2 | 移动端图表投影 | V0.6+ | Flutter 自绘/内嵌图 |
+
+设计全文：[docs/architecture/rfc/RFC-0010-visualization.zh-CN.md](docs/architecture/rfc/RFC-0010-visualization.zh-CN.md)。
+
 ### 2.5 移动端
 
 | 优先级 | 技术 | 里程碑 | 说明 |

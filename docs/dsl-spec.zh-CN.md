@@ -24,10 +24,10 @@
 ## 3. 顶层构造
 
 ```ebnf
-file        = { app | enum | entity | rules | api | page | config } ;
+file        = { app | enum | entity | rules | api | page | chart | config } ;
 ```
 
-七个构造一节一个；全部可跨文件引用（按标识符全局解析）。
+八个构造一节一个；全部可跨文件引用（按标识符全局解析）。
 
 ## 4. app
 
@@ -208,7 +208,62 @@ api OrderApprove {
 
 产物映射（backend-rust）：`api` → axum `Router` + handler + repository 方法 + 请求校验；`POST` 命令 → 专用 endpoint。产物映射（web-react）：每个操作 → TanStack Query hook + 类型化 fetch client。
 
-## 11. page（UI 层，目标无关原语）
+产物映射（backend-rust）：`api` → axum `Router` + handler + repository 方法 + 请求校验；`POST` 命令 → 专用 endpoint。产物映射（web-react）：每个操作 → TanStack Query hook + 类型化 fetch client。
+
+## 11a. chart（可视化层，RFC-0001）
+
+顶层 `chart` 块描述一个可视化组件的**语义规格**——DSL 里没有 ECharts、没有 xAxis。规格编译为 Chart IR，再由适配层投影为目标图表库（当前 ECharts）：同一 IR 两次编译产物 byte 级一致。
+
+```fm
+chart EnrollmentTrend {
+  type  line                                     // line|bar|area|pie|scatter|funnel|gauge|radar|heatmap|treemap
+  title { zh "每日报名趋势" en "Daily enrollments" }
+
+  source Enrollments.list                        // 数据绑定：已声明的 api 块.操作
+
+  encoding {
+    x      { field enrolledAt type temporal format datetime }   // temporal|quantitative|nominal|ordinal
+    y      { field value       type quantitative format integer }
+    series { field status     type nominal }       // 可选：多系列分组
+  }
+
+  transform {
+    filter    { field status eq "active" }        // eq|ne|gt|gte|lt|lte|in
+    bucket    { field enrolledAt by day }         // hour|day|week|month|year
+    aggregate { op count groupBy [enrolledAt, status] }   // sum|avg|count|min|max
+    sort      { by enrolledAt desc }
+    limit     30
+  }
+
+  axis {
+    x { label "报名时间" type datetime }
+    y { label "报名数"   format integer }
+  }
+
+  tooltip     { enabled true }
+  legend      { enabled true }
+  interaction { zoom true }
+  appearance  { smooth true showSymbol false }
+}
+
+page EnrollmentDashboard {
+  route "/enrollments/dashboard"
+  title { zh "报名分析" en "Enrollment analytics" }
+  chart EnrollmentTrend                          // 页面挂载图表
+}
+```
+
+要点：
+
+- **聚合输出字段**：`transform.aggregate` 产生名为 `value` 的数值字段，编码通道可直接引用（`y { field value ... }`）；`op count` 不带 `field`，其余聚合必须带。
+- **数据键**：编码字段在运行时的键是 snake_case 列名；关系字段取显示名列 `{rel}_name`（与后端 ListRow 契约一致）。
+- **语义校验**：`viz-unknown-type/api/operation/field`、`viz-type-mismatch`、`viz-shape-mismatch`、`viz-aggregate-conflict`、`viz-duplicate`——全部在 Check 阶段硬失败（`forma build` 直接报错）。
+- **产物**（web-react）：`src/viz/spec.ts` + `transform.ts`（适配器无关的类型与变换执行器）、`echarts.ts`（按需注册本工程用到的图表/组件）、`runtime.tsx`（`<FormaChart>`）、`src/viz/charts/<Name>.ts`（Spec/Option/Source 三件套）。无 `chart` 块的工程不产出任何 viz 文件、不引入 echarts 依赖。
+- **MCP**：`forma_viz_catalog`（能力词表）、`forma_viz_describe`（单类型规格）、`forma_viz_validate`（校验 + 图表语义摘要）。
+
+设计全文与 Dashboard IR（V0.3）见 [RFC-0001：可视化规格与渲染系统](docs/architecture/rfc/RFC-0010-visualization.zh-CN.md)。
+
+## 11b. page（UI 层，目标无关原语）
 
 四种**抽象原语**：`table`（列表）、`form`（编辑/创建）、`detail`（详情）、`dashboard`（P2）。适配层把原语映射为 shadcn/ui 组合；移动适配层把同一原语映射为原生列表/表单。
 

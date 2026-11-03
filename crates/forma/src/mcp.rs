@@ -41,6 +41,26 @@ const TOOLS_JSON: &str = r#"[
     "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
   },
   {
+    "name": "forma_viz_catalog",
+    "description": "列出 Forma 支持的图表类型、形状家族、编码通道、变换算子与格式词表。AI 生成 chart 前先查这个，不读图表库文档。",
+    "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+  },
+  {
+    "name": "forma_viz_describe",
+    "description": "返回某个图表类型的规格说明：形状家族、必需/可选编码通道、默认格式。",
+    "inputSchema": {
+      "type": "object",
+      "properties": { "chartType": { "type": "string" } },
+      "required": ["chartType"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "forma_viz_validate",
+    "description": "DSL 工程：校验全部 chart 规格并返回 viz-* 诊断，附每张图表的语义摘要（数据源、编码、变换计划）。改完 chart 块后先跑这个再 build。",
+    "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+  },
+  {
     "name": "forma_validate",
     "description": "联邦工程（specifications 导入）：跨标准校验并返回诊断列表。DSL 工程请改用 forma_check。",
     "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
@@ -228,6 +248,18 @@ pub fn call_tool(
         }
 
         // ── 联邦工程 ─────────────────────────────────────
+        // ── DSL 工程：可视化（RFC-0001）──────────────────
+        "forma_viz_catalog" => Ok(crate::visualization::validate::catalog()),
+        "forma_viz_describe" => {
+            let chart_type = args
+                .get("chartType")
+                .and_then(|v| v.as_str())
+                .context("missing argument: chartType")?;
+            crate::visualization::validate::describe(chart_type)
+                .context(format!("unknown chart type '{chart_type}'"))
+        }
+        "forma_viz_validate" => dsl_viz_validate(project_dir),
+
         "forma_validate" => {
             let outcome = load_project(project_dir)?;
             let all: Vec<serde_json::Value> = outcome
@@ -346,6 +378,53 @@ fn dsl_check(project_dir: &Path) -> Result<serde_json::Value> {
 }
 
 /// DSL 工程：模型摘要（实体/枚举/API/页面/规则）。
+/// `forma_viz_validate`：全部 chart 规格的校验 + 语义摘要。
+fn dsl_viz_validate(project_dir: &Path) -> Result<serde_json::Value> {
+    if !is_dsl_project(project_dir) {
+        bail!("forma_viz_validate 仅适用于 DSL 工程（forma.yaml 带 `source`）");
+    }
+    let loaded = load_manifest(project_dir)?;
+    let source = loaded
+        .manifest
+        .source
+        .clone()
+        .context("not a DSL project (forma.yaml has no `source`)")?;
+    let (program, mut diagnostics) = load_program(&loaded.dir, &source)?;
+    diagnostics.extend(crate::dsl::check_program(&program));
+
+    let viz: Vec<serde_json::Value> = diagnostics
+        .iter()
+        .filter(|d| d.code.starts_with("viz-"))
+        .map(|d| {
+            serde_json::json!({
+                "severity": d.severity,
+                "code": d.code,
+                "message": d.message,
+                "file": d.file,
+                "line": d.line,
+            })
+        })
+        .collect();
+    let error_count = viz
+        .iter()
+        .filter(|d| d.get("severity").and_then(|s| s.as_str()) == Some("error"))
+        .count();
+
+    let charts: Vec<serde_json::Value> = program
+        .charts
+        .iter()
+        .filter_map(|decl| crate::visualization::lower_chart(&program, decl).ok())
+        .map(|spec| crate::visualization::spec_json(&spec))
+        .collect();
+
+    Ok(serde_json::json!({
+        "chartCount": program.charts.len(),
+        "errors": error_count,
+        "diagnostics": viz,
+        "charts": charts,
+    }))
+}
+
 fn dsl_graph(project_dir: &Path) -> Result<serde_json::Value> {
     let loaded = load_manifest(project_dir)?;
     let source = loaded
@@ -441,6 +520,18 @@ fn dsl_summary(program: &crate::dsl::Program) -> serde_json::Value {
         "apis": apis,
         "pages": pages,
         "ruleBlocks": program.rules.len(),
+        "chartCount": program.charts.len(),
+        "charts": program
+            .charts
+            .iter()
+            .map(|c| {
+                serde_json::json!({
+                    "name": c.name,
+                    "type": c.chart_type,
+                    "source": c.source.as_ref().map(|(a, op)| format!("{a}.{op}")),
+                })
+            })
+            .collect::<Vec<_>>(),
     })
 }
 

@@ -8,6 +8,7 @@
 | 1 | 0.1.0 | 0001_init.sql | — | ⏳ pending | 基线建表 schools/students/courses/enrollments |
 | 2 | 0.2.0 | 0002_upgrade.sql | 0002_rollback.sql | ⏳ pending | 新增表 elections（5 列）；新增表 candidates（4 列）；新增表 vote_records（4 列）；enrollments: 新增列 note TEXT（可空，便于存量回填）；enrollments: 新增索引 idx_enrollments_status (status) |
 | 3 | 0.3.0 | 0003_upgrade.sql | 0003_rollback.sql | ⏳ pending | students: 新增列 phone VARCHAR(20)（可空，便于存量回填）；courses: 列 title 类型 VARCHAR(120) NOT NULL → VARCHAR(200) NOT NULL；elections: 新增列 remark TEXT（可空，便于存量回填）；vote_records: 新增索引 idx_vote_records_voter_id (voter_id) |
+| 4 | 0.3.0 | 0004_upgrade.sql | 0004_rollback.sql | ⏳ pending | 新增表 audit_logs（7 列） |
 
 ---
 
@@ -138,5 +139,30 @@ ALTER TABLE vote_records DROP INDEX idx_vote_records_voter_id;
 ALTER TABLE elections DROP COLUMN remark;
 ALTER TABLE courses MODIFY COLUMN title VARCHAR(120) NOT NULL;
 ALTER TABLE students DROP COLUMN phone;
+```
+
+## #4 — upgrade to v0.3.0
+
+变更：
+- 新增表 audit_logs（7 列）
+
+```sql
+-- UP
+CREATE TABLE audit_logs (
+  id CHAR(36) NOT NULL,
+  action VARCHAR(191) NOT NULL,
+  entity VARCHAR(191) NOT NULL,
+  entity_id CHAR(36) NOT NULL,
+  actor VARCHAR(191) NULL,
+  payload JSON NULL,
+  created_at DATETIME(3) NOT NULL,
+  PRIMARY KEY (id),
+  KEY idx_audit_logs_created_at (created_at),
+  KEY idx_audit_logs_entity_entity_id (entity, entity_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+```sql
+-- DOWN（回滚）
+DROP TABLE IF EXISTS audit_logs;
 ```
 

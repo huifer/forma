@@ -142,7 +142,7 @@ fn mcp_migrate_reports_version_chain() {
         .iter()
         .map(|e| e["version"].as_str().unwrap())
         .collect();
-    assert_eq!(versions, vec!["0.1.0", "0.2.0", "0.3.0"]);
+    assert_eq!(versions, vec!["0.1.0", "0.2.0", "0.3.0", "0.3.0"]); // +audit_logs 迁移
 }
 
 // ── MCP：联邦工程向后兼容 ─────────────────────────────────

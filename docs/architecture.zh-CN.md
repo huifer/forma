@@ -3,6 +3,8 @@
 > Forma = One DSL. Every platform.
 > 一套 DSL 作为软件的中间层与唯一事实来源，适配层（编译器）生成不同语言与平台的目标代码。
 > 核心目标与理念见 [philosophy.zh-CN.md](philosophy.zh-CN.md)；完整语法见 [dsl-spec.zh-CN.md](dsl-spec.zh-CN.md)；路线图见 [roadmap.zh-CN.md](roadmap.zh-CN.md)。历史决策见 [history/](history/README.md)。
+>
+> **治理契约**：本文件是「详细蓝图伴侣」，定义 crate 级实现细节；系统边界、依赖红线、稳定性分层与 RFC 生命周期由 [架构治理体系](architecture/README.md)（RFC-0001 / RFC-0004 / ADR-0001）统一约束。
 
 ---
 
@@ -216,6 +218,25 @@ AI 对 Forma 系统的每次会话遵循同一协议，**不从零开始**：
 | 影响分析图 | 语义补丁的可视化评审 | IR diff |
 
 阶段：v1 只读实时预览（M6）→ v2 双向编辑写回 `.fm`（M9）→ v3 协作（M11）。详见 roadmap §3。
+
+### 7a. 可视化规格与渲染系统（RFC-0001，V0.1 已落地）
+
+Studio 是「用 IR 渲染给人看」；本节是「把图表/看板作为软件能力编译出来」——两者同源但方向不同。
+
+```text
+DSL chart/dashboard 块 → Chart IR / Dashboard IR → Adapter（ECharts…）→ Runtime（React）
+```
+
+| 层 | 位置 | 职责 |
+|---|---|---|
+| Specification | `dsl/parser.rs`（`chart` 块） | 语义图表类型 + 编码 + 变换，无任何图表库词汇 |
+| Chart IR | `visualization/` | 形状家族推导、变换计划、形状级校验 |
+| Adapter | `visualization/echarts.rs` | 纯函数 IR → option 骨架（确定性投影） |
+| Runtime | `emit/visualization.rs` + 模板 | 取数 → 变换 → 整形 → 渲染 → 事件 → 响应式 |
+| Check | `dsl/mod.rs` + `visualization/validate.rs` | `viz-*` 诊断码，`forma build` 硬失败 |
+
+设计原则：DSL 不泄漏 ECharts 概念；变换语义属于 IR（AntV/D3 适配器复用同一执行器）；
+`nativeExtension` 提供受控逃逸口。全文见 [docs/architecture/rfc/RFC-0010-visualization.zh-CN.md](docs/architecture/rfc/RFC-0010-visualization.zh-CN.md)。
 
 ## 8. 生态互通层
 

@@ -54,7 +54,7 @@ AI 只写 DSL（纯语义，约占传统方式 1% 的 Token）
 > 而是「安全地改变一个真实的软件系统」——见 [验证体系](docs/verification.zh-CN.md) 与
 > [Agent 工作流](docs/agent-workflow.zh-CN.md)。
 
-深入阅读：[设计理念](docs/philosophy.zh-CN.md) · [架构蓝图 v0.3](docs/architecture.zh-CN.md) · [DSL 语言规范](docs/dsl-spec.zh-CN.md) · [验证体系（L1–L5）](docs/verification.zh-CN.md) · [迁移安全](docs/migration-safety.zh-CN.md) · [Agent 工作流](docs/agent-workflow.zh-CN.md) · [近期里程碑](docs/next-milestone.zh-CN.md)
+深入阅读：[设计理念](docs/philosophy.zh-CN.md) · [架构蓝图 v0.3](docs/architecture.zh-CN.md) · [架构治理体系](docs/architecture/README.md) · [DSL 语言规范](docs/dsl-spec.zh-CN.md) · [验证体系（L1–L5）](docs/verification.zh-CN.md) · [迁移安全](docs/migration-safety.zh-CN.md) · [Agent 工作流](docs/agent-workflow.zh-CN.md) · [近期里程碑](docs/next-milestone.zh-CN.md)
 
 ## 一个文件看懂 DSL
 
@@ -104,6 +104,7 @@ DSL 里没有 axum、没有 React、没有 SQL——页面是目标无关的抽�
 | 案例数据 | **gen-seed**（确定性，非 AI 数据） | 版本化 `db/seed/seed_{version}.sql` + 与 API 契约对齐的 JSON fixtures |
 | 后端 | **Rust**（axum + sqlx） | models、validators、routes、repositories |
 | Web | **React + TanStack Router/Query + shadcn/ui** | 类型化路由、Query hooks、表单、zod schema |
+| 可视化 | **Chart IR → ECharts Adapter → React Runtime** | `chart` 块 → ECharts option + 按需加载运行时（确定性投影、可换适配层），见 [RFC-0010](docs/architecture/rfc/RFC-0010-visualization.zh-CN.md) |
 | 移动端 | **Flutter**（Android / iOS 同源） | models、REST 客户端、与后端/Web 同源的校验规则、Material 页面 |
 
 ## 版本化迁移（多版本）

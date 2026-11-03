@@ -37,6 +37,7 @@ parse → semantic graph → validate → emit
         ├── MySQL 8 schema + versioned migrations
         ├── Rust backend (axum + sqlx)
         ├── React web app (TanStack + shadcn/ui)
+        ├── ECharts dashboards (Chart IR → option + React runtime)
         ├── OpenAPI documentation
         └── ER, data-flow, and lifecycle diagrams
 ```
@@ -158,6 +159,7 @@ target configuration selects the concrete output stack.
 
 - [DSL specification](docs/dsl-spec.zh-CN.md)
 - [Architecture](docs/architecture.zh-CN.md)
+- [Architecture governance (RFC system)](docs/architecture/README.md)
 - [Design philosophy](docs/philosophy.zh-CN.md)
 - [Verification (L1–L5)](docs/verification.zh-CN.md)
 - [Migration safety & risk](docs/migration-safety.zh-CN.md)
@@ -173,6 +175,7 @@ target configuration selects the concrete output stack.
 | Seed data | Deterministic case data (non-AI): versioned `db/seed/seed_{version}.sql` + JSON fixtures aligned with the API contract |
 | Rust | axum + sqlx models, repositories, routes, and validators |
 | React | TanStack Router/Query, forms, types, and validation |
+| Visualization | `chart` blocks → Chart IR → ECharts option + React runtime (deterministic, adapter-swappable) — see [RFC-0010](docs/architecture/rfc/RFC-0010-visualization.zh-CN.md) |
 | Flutter | Android/iOS client: models, REST client, same-source validation, Material pages |
 | OpenAPI | OpenAPI JSON and a local Swagger UI page |
 | Diagrams | ER, data-flow, and enum lifecycle diagrams |

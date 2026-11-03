@@ -48,6 +48,7 @@ examples/school/
 | V15 | 移动端契约 | `cd app_mobile && flutter test` | 离线往返 + 在线全链路全绿（后端未启动时在线用例自动跳过） |
 | V16 | Web 编译 | `cd generated/web && npm i && npm run build` | tsc 0 error + vite build 成功 |
 | V17 | 数据确定性 | `forma seed --verify` | 磁盘种子与 DSL 推导 byte 级一致（SHA-256 发布前/CI 必跑） |
+| V18 | 可视化 | `forma build` 后检查 `generated/web/src/viz/` + 浏览器打开图表页 | chart 三件套（Spec/Option/Source）齐全；V16 的 tsc 覆盖 viz 运行时；浏览器渲染无 console error，ECharts 实例数据绑定正确（RFC-0001 V0.1） |
 
 ## 三轮迭代剧本
 
@@ -76,7 +77,7 @@ forma migrate examples/school verify
 forma build examples/school                   # 全目标 + seed_0_3_0 + app_mobile/
 forma migrate examples/school verify
 cd app_mobile && flutter analyze && flutter build web
-# 验收：V1–V12 全量。此轮验证列级演进迁移 + 新适配层接入。
+# 验收：V1–V18 全量。此轮验证列级演进迁移 + 新适配层接入。
 ```
 
 ## 运行完整案例（端到端）
@@ -184,7 +185,7 @@ forma mcp examples/school
 2. `emit/flutter.rs`：实现 emitter（确定性输出、`@generated` 头、产物内不回读业务语义）；
 3. `main.rs`：build steps 注册（seed 跟随 db out，flutter 跟随 mobile out）；
 4. 测试：`tests/seed_flutter.rs`（独立 tmp 目录——并行 cargo test 不共享路径）；
-5. 案例验收：`forma.yaml` 加 target → R3 全量跑 V1–V12。
+5. 案例验收：`forma.yaml` 加 target → R3 全量跑 V1–V18。
 
 ## 确定性数据生成规则（gen-seed 内核）
 

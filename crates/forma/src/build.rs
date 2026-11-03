@@ -39,7 +39,10 @@ pub fn load_dsl_program(project_dir: &Path) -> Result<(PathBuf, Program)> {
         .source
         .clone()
         .context("not a DSL project (forma.yaml has no `source`)")?;
-    let (program, diagnostics) = load_program(&loaded.dir, &source)?;
+    let (program, mut diagnostics) = load_program(&loaded.dir, &source)?;
+    // 语义检查是编译管线第 3 阶段（architecture §4）：类型/引用/规则/可视化
+    // 的硬错误必须在 Emit 之前阻断，不能只靠 `forma validate` 事后发现。
+    diagnostics.extend(crate::dsl::check_program(&program));
     let hard_errors: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.severity == "error")

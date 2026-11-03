@@ -8,6 +8,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **可视化子系统（RFC-0001：Visualization Specification & Rendering System，V0.1）** — DSL 新增顶层
+  `chart` 块与页面挂载 `page { chart <Name> }`，可视化成为与 Data/API/Business/UI 并列的一等能力：
+  - **Chart IR**（`crates/forma/src/visualization/`）：与语法、目标图表库双重解耦的统一语义——
+    图表类型（line/bar/area/pie/scatter/funnel/gauge/radar/heatmap/treemap）、形状家族
+    （cartesian/xy/part-to-whole/radial/gauge/heatmap）、编码通道（x/y/series/color）、
+    变换计划（filter/bucket/aggregate/sort/limit）、轴/系列/提示/图例/交互/主题/响应式/无障碍。
+    同一 IR 两次投影 byte 级一致（确定性铁律）。
+  - **语义校验硬失败**：`viz-unknown-type/api/operation/field/format`、`viz-type-mismatch`、
+    `viz-shape-mismatch`、`viz-aggregate-conflict`、`viz-duplicate`、`viz-unknown-transform`。
+    `forma build` 现在在 Emit 前执行语义检查（编译管线第 3 阶段补齐）——可视化错误在编译期阻断，
+    不留给运行时。
+  - **ECharts Adapter**（纯函数 `chart_option(spec)`）：Chart IR → option 骨架（数据位置留空），
+    temporal x → time 轴、zoom → dataZoom、integer 格式 → minInterval、heatmap → visualMap。
+    运行时按工程实际用到的图表类型生成 `echarts.use([...])` 按需注册（实测 bundle 1.34 MB → 842 KB）。
+  - **React Runtime**（viz-web emitter）：`src/viz/spec.ts`/`transform.ts`（适配器无关的类型与变换
+    执行器）、`echarts.ts`（option 绑定/格式化/统一事件模型翻译）、`runtime.tsx`（`<FormaChart>`：
+    取数→变换→整形→渲染→ResizeObserver→dispose）、`src/viz/charts/<Name>.ts`（Spec/Option/Source）。
+    无 chart 的工程零产物、零 echarts 依赖。
+  - **MCP 工具面**：`forma_viz_catalog`（能力词表）/ `forma_viz_describe`（单类型规格）/ 
+    `forma_viz_validate`（校验 + 图表语义摘要）；`forma_graph` 摘要含图表清单。AI 生成图表规格
+    不再读图表库文档。
+  - **验收测试** `crates/forma/tests/visualization.rs`（23 条）：10 种图表类型投影、viz-* 诊断、
+    关系字段 `{rel}_name` 维度、聚合输出通道、确定性、产物结构、增量更新（改 A 不动 B）、
+    MCP 工具面。school 示例新增两个图表页（bar + 分桶计数多系列 line），浏览器端到端渲染验证通过
+    （tsc && vite build 无错误、无 console error、实例数据绑定断言通过）。
+  - 设计全文：[docs/architecture/rfc/RFC-0010-visualization.zh-CN.md](docs/architecture/rfc/RFC-0010-visualization.zh-CN.md)；
+    DSL 语法：[docs/dsl-spec.zh-CN.md §11a](docs/dsl-spec.zh-CN.md)。
+- **`forma migrate risk` — 迁移风险分级（L5 变更安全）**：每条迁移操作按破坏性分级
+  （`Low` / `Medium` / `High` / `Extreme`，未知操作 fail-safe 归 `High`）。删列、删表、改类型等
+  高风险变更在执行 `up --apply` 前需人工审批。`forma migrate risk` 在落库前评估「自上次构建
+  以来」的待执行操作（旧快照 → 当前 DSL schema diff）。分级依据、回滚语义与 Expand-Contract
+  模式见 [docs/migration-safety.zh-CN.md](docs/migration-safety.zh-CN.md)；分层验证模型见
+  [docs/verification.zh-CN.md](docs/verification.zh-CN.md)。
 - **gen-seed（确定性案例数据，非 AI 数据）** — `forma seed [dir]` / 自动随 `forma build` 产出：
   - 全部取值由 DSL 纯函数推导（类型/约束/枚举/关系），不经过任何模型；同一 DSL 生成结果
     byte 级一致，可 hash 校验、可跨机器重放。

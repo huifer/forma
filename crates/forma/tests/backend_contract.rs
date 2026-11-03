@@ -288,7 +288,7 @@ fn commands_generate_full_business_flow() {
     // pre 失败 → 409 + 业务文案
     assert!(routes.contains("只有待确认的报名可以批准"));
     // 审计钩子
-    assert!(routes.contains("crate::audit::log_action(\"enrollment.approve\""));
+    assert!(routes.contains("crate::audit::log_action(&db, \"enrollment.approve\""));
     // effect SQL：approve 只改 status；reject 改 status + note（input 引用）
     assert!(repo.contains("UPDATE enrollments SET status = ? WHERE id = ?"));
     assert!(repo.contains("UPDATE enrollments SET status = ?, note = ? WHERE id = ?"));
@@ -309,7 +309,8 @@ fn commands_require_audit_module_and_tracing() {
         .expect("audit.rs 应随带 audit 的命令生成");
     assert!(audit
         .content
-        .contains("tracing::info!(action, entity, id, \"forma.audit\")"));
+        .contains("tracing::info!(action, entity, id = entity_id"));
+    assert!(audit.content.contains("INSERT INTO audit_logs"));
     let main = file_ending(&files, "main.rs");
     assert!(main.contains("mod audit;"));
     assert!(main.contains("tracing_subscriber::fmt::init();"));

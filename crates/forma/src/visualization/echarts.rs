@@ -85,6 +85,17 @@ fn cartesian(spec: &ChartSpec, option: &mut Value) {
         y_axis["name"] = json!(name);
     }
     option["xAxis"] = json!([x_axis]);
+    let mut y_axis = json!({ "type": "value" });
+    if let Some(name) = axis_name(spec, false) {
+        y_axis["name"] = json!(name);
+    }
+    // 计数类整数刻度不出现小数（如 0.2 / 0.6）
+    if matches!(
+        spec.encoding.y.as_ref().map(|c| c.format),
+        Some(super::DataFormat::Integer)
+    ) {
+        y_axis["minInterval"] = json!(1);
+    }
     option["yAxis"] = json!([y_axis]);
     option["grid"] =
         json!({ "left": 56, "right": 24, "top": 48, "bottom": 48, "containLabel": true });
