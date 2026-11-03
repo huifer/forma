@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8"/>
+<title>school · 可视化</title>
+<script src="https://unpkg.com/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<style>
+body { font-family: ui-sans-serif, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif; margin: 24px; color: #0f172a; background: #f8fafc; }
+h1 { font-size: 22px; } h2 { font-size: 16px; margin: 28px 0 8px; }
+.card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+.muted { color: #64748b; font-size: 13px; }
+pre.mermaid { background: #fff; }
+pre.src { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; font-size: 12px; overflow: auto; }
+</style>
+</head>
+<body>
+<h1>school · 系统可视化</h1>
+<p class="muted">由 Forma (gen-diagrams) 从 DSL 生成 · mermaid 渲染 · e47386ec7ab4</p>
+
+<h2>① 实体关系图（数据模型）</h2>
+<div class="card"><pre class="mermaid">
+erDiagram
+    School {
+        UUID id PK
+        STRING name
+        STRING city
+        TIMESTAMP created_at
+    }
+    Student {
+        UUID id PK
+        SCHOOL school FK
+        STRING name
+        EMAIL email UK
+        INT age
+        TIMESTAMP created_at
+    }
+    Course {
+        UUID id PK
+        SCHOOL school FK
+        STRING title
+        INT capacity
+        TIMESTAMP created_at
+    }
+    Enrollment {
+        UUID id PK
+        STUDENT student FK
+        COURSE course FK
+        ENROLLMENTSTATUS status
+        TIMESTAMP enrolled_at
+        TIMESTAMP created_at
+        TEXT note
+    }
+
+    Student }o--|| School : school
+    Course }o--|| School : school
+    Enrollment }o--|| Student : student
+    Enrollment }o--|| Course : course
+
+</pre></div>
+
+<h2>② 数据流图（页面 → API → 实体 → 数据库）</h2>
+<div class="card"><pre class="mermaid">
+flowchart LR
+    USER(["用户 / 浏览器"])
+    R_SchoolRules["规则 SchoolRules"]
+    P_SchoolList["页面 SchoolList · 学校管理"]
+    USER --&gt; P_SchoolList
+    Q_Schools["API Schools · list"]
+    P_SchoolList --&gt; Q_Schools
+    E_School["实体 School"]
+    E_School --&gt; Q_Schools
+    P_SchoolEdit["页面 SchoolEdit · 编辑学校"]
+    USER --&gt; P_SchoolEdit
+    F_SchoolEdit["表单 SchoolEdit"]
+    P_SchoolEdit --&gt; F_SchoolEdit
+    E_School["实体 School"]
+    Q_Schools_update["API Schools · update"]
+    F_SchoolEdit --&gt; Q_Schools_update
+    Q_Schools_update --&gt; E_School
+    Q_Schools_create["API Schools · create"]
+    F_SchoolEdit --&gt; Q_Schools_create
+    Q_Schools_create --&gt; E_School
+    P_StudentList["页面 StudentList · 学生管理"]
+    USER --&gt; P_StudentList
+    Q_Students["API Students · list"]
+    P_StudentList --&gt; Q_Students
+    E_Student["实体 Student"]
+    E_Student --&gt; Q_Students
+    P_StudentEdit["页面 StudentEdit · 编辑学生"]
+    USER --&gt; P_StudentEdit
+    F_StudentEdit["表单 StudentEdit"]
+    P_StudentEdit --&gt; F_StudentEdit
+    E_Student["实体 Student"]
+    Q_Students_update["API Students · update"]
+    F_StudentEdit --&gt; Q_Students_update
+    Q_Students_update --&gt; E_Student
+    Q_Students_create["API Students · create"]
+    F_StudentEdit --&gt; Q_Students_create
+    Q_Students_create --&gt; E_Student
+    R_SchoolRules -. 校验 .-&gt; F_StudentEdit
+    P_CourseList["页面 CourseList · 课程管理"]
+    USER --&gt; P_CourseList
+    Q_Courses["API Courses · list"]
+    P_CourseList --&gt; Q_Courses
+    E_Course["实体 Course"]
+    E_Course --&gt; Q_Courses
+    P_CourseEdit["页面 CourseEdit · 编辑课程"]
+    USER --&gt; P_CourseEdit
+    F_CourseEdit["表单 CourseEdit"]
+    P_CourseEdit --&gt; F_CourseEdit
+    E_Course["实体 Course"]
+    Q_Courses_update["API Courses · update"]
+    F_CourseEdit --&gt; Q_Courses_update
+    Q_Courses_update --&gt; E_Course
+    Q_Courses_create["API Courses · create"]
+    F_CourseEdit --&gt; Q_Courses_create
+    Q_Courses_create --&gt; E_Course
+    R_SchoolRules -. 校验 .-&gt; F_CourseEdit
+    P_EnrollmentList["页面 EnrollmentList · 报名管理"]
+    USER --&gt; P_EnrollmentList
+    Q_Enrollments["API Enrollments · list"]
+    P_EnrollmentList --&gt; Q_Enrollments
+    E_Enrollment["实体 Enrollment"]
+    E_Enrollment --&gt; Q_Enrollments
+    P_EnrollmentEdit["页面 EnrollmentEdit · 编辑报名"]
+    USER --&gt; P_EnrollmentEdit
+    F_EnrollmentEdit["表单 EnrollmentEdit"]
+    P_EnrollmentEdit --&gt; F_EnrollmentEdit
+    E_Enrollment["实体 Enrollment"]
+    Q_Enrollments_update["API Enrollments · update"]
+    F_EnrollmentEdit --&gt; Q_Enrollments_update
+    Q_Enrollments_update --&gt; E_Enrollment
+    Q_Enrollments_create["API Enrollments · create"]
+    F_EnrollmentEdit --&gt; Q_Enrollments_create
+    Q_Enrollments_create --&gt; E_Enrollment
+    R_SchoolRules -. 校验 .-&gt; F_EnrollmentEdit
+    T_schools[("MySQL schools")]
+    E_School --&gt; T_schools
+    T_students[("MySQL students")]
+    E_Student --&gt; T_students
+    T_courses[("MySQL courses")]
+    E_Course --&gt; T_courses
+    T_enrollments[("MySQL enrollments")]
+    E_Enrollment --&gt; T_enrollments
+    R_SchoolRules -. 校验 .-&gt; E_Student
+    R_SchoolRules -. 校验 .-&gt; E_Course
+
+</pre></div>
+
+<h2>③ 业务流程图（状态生命周期 + 守卫）</h2>
+<div class="card"><pre class="mermaid">
+stateDiagram-v2
+    state "EnrollmentStatus 状态生命周期" as EnrollmentStatus_title
+    [*] --&gt; pending
+    pending --&gt; active
+    active --&gt; completed
+    completed --&gt; cancelled
+    note right of completed : completed 时不可 删除
+
+</pre></div>
+
+<h2>图表源码</h2>
+<pre class="src">ER:
+erDiagram
+    School {
+        UUID id PK
+        STRING name
+        STRING city
+        TIMESTAMP created_at
+    }
+    Student {
+        UUID id PK
+        SCHOOL school FK
+        STRING name
+        EMAIL email UK
+        INT age
+        TIMESTAMP created_at
+    }
+    Course {
+        UUID id PK
+        SCHOOL school FK
+        STRING title
+        INT capacity
+        TIMESTAMP created_at
+    }
+    Enrollment {
+        UUID id PK
+        STUDENT student FK
+        COURSE course FK
+        ENROLLMENTSTATUS status
+        TIMESTAMP enrolled_at
+        TIMESTAMP created_at
+        TEXT note
+    }
+
+    Student }o--|| School : school
+    Course }o--|| School : school
+    Enrollment }o--|| Student : student
+    Enrollment }o--|| Course : course
+
+
+DATAFLOW:
+flowchart LR
+    USER(["用户 / 浏览器"])
+    R_SchoolRules["规则 SchoolRules"]
+    P_SchoolList["页面 SchoolList · 学校管理"]
+    USER --&gt; P_SchoolList
+    Q_Schools["API Schools · list"]
+    P_SchoolList --&gt; Q_Schools
+    E_School["实体 School"]
+    E_School --&gt; Q_Schools
+    P_SchoolEdit["页面 SchoolEdit · 编辑学校"]
+    USER --&gt; P_SchoolEdit
+    F_SchoolEdit["表单 SchoolEdit"]
+    P_SchoolEdit --&gt; F_SchoolEdit
+    E_School["实体 School"]
+    Q_Schools_update["API Schools · update"]
+    F_SchoolEdit --&gt; Q_Schools_update
+    Q_Schools_update --&gt; E_School
+    Q_Schools_create["API Schools · create"]
+    F_SchoolEdit --&gt; Q_Schools_create
+    Q_Schools_create --&gt; E_School
+    P_StudentList["页面 StudentList · 学生管理"]
+    USER --&gt; P_StudentList
+    Q_Students["API Students · list"]
+    P_StudentList --&gt; Q_Students
+    E_Student["实体 Student"]
+    E_Student --&gt; Q_Students
+    P_StudentEdit["页面 StudentEdit · 编辑学生"]
+    USER --&gt; P_StudentEdit
+    F_StudentEdit["表单 StudentEdit"]
+    P_StudentEdit --&gt; F_StudentEdit
+    E_Student["实体 Student"]
+    Q_Students_update["API Students · update"]
+    F_StudentEdit --&gt; Q_Students_update
+    Q_Students_update --&gt; E_Student
+    Q_Students_create["API Students · create"]
+    F_StudentEdit --&gt; Q_Students_create
+    Q_Students_create --&gt; E_Student
+    R_SchoolRules -. 校验 .-&gt; F_StudentEdit
+    P_CourseList["页面 CourseList · 课程管理"]
+    USER --&gt; P_CourseList
+    Q_Courses["API Courses · list"]
+    P_CourseList --&gt; Q_Courses
+    E_Course["实体 Course"]
+    E_Course --&gt; Q_Courses
+    P_CourseEdit["页面 CourseEdit · 编辑课程"]
+    USER --&gt; P_CourseEdit
+    F_CourseEdit["表单 CourseEdit"]
+    P_CourseEdit --&gt; F_CourseEdit
+    E_Course["实体 Course"]
+    Q_Courses_update["API Courses · update"]
+    F_CourseEdit --&gt; Q_Courses_update
+    Q_Courses_update --&gt; E_Course
+    Q_Courses_create["API Courses · create"]
+    F_CourseEdit --&gt; Q_Courses_create
+    Q_Courses_create --&gt; E_Course
+    R_SchoolRules -. 校验 .-&gt; F_CourseEdit
+    P_EnrollmentList["页面 EnrollmentList · 报名管理"]
+    USER --&gt; P_EnrollmentList
+    Q_Enrollments["API Enrollments · list"]
+    P_EnrollmentList --&gt; Q_Enrollments
+    E_Enrollment["实体 Enrollment"]
+    E_Enrollment --&gt; Q_Enrollments
+    P_EnrollmentEdit["页面 EnrollmentEdit · 编辑报名"]
+    USER --&gt; P_EnrollmentEdit
+    F_EnrollmentEdit["表单 EnrollmentEdit"]
+    P_EnrollmentEdit --&gt; F_EnrollmentEdit
+    E_Enrollment["实体 Enrollment"]
+    Q_Enrollments_update["API Enrollments · update"]
+    F_EnrollmentEdit --&gt; Q_Enrollments_update
+    Q_Enrollments_update --&gt; E_Enrollment
+    Q_Enrollments_create["API Enrollments · create"]
+    F_EnrollmentEdit --&gt; Q_Enrollments_create
+    Q_Enrollments_create --&gt; E_Enrollment
+    R_SchoolRules -. 校验 .-&gt; F_EnrollmentEdit
+    T_schools[("MySQL schools")]
+    E_School --&gt; T_schools
+    T_students[("MySQL students")]
+    E_Student --&gt; T_students
+    T_courses[("MySQL courses")]
+    E_Course --&gt; T_courses
+    T_enrollments[("MySQL enrollments")]
+    E_Enrollment --&gt; T_enrollments
+    R_SchoolRules -. 校验 .-&gt; E_Student
+    R_SchoolRules -. 校验 .-&gt; E_Course
+
+
+STATUS:
+stateDiagram-v2
+    state "EnrollmentStatus 状态生命周期" as EnrollmentStatus_title
+    [*] --&gt; pending
+    pending --&gt; active
+    active --&gt; completed
+    completed --&gt; cancelled
+    note right of completed : completed 时不可 删除
+
+</pre>
+<script>mermaid.initialize({ startOnLoad: true, theme: "neutral" });</script>
+</body>
+</html>

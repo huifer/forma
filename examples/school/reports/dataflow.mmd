@@ -1,0 +1,84 @@
+flowchart LR
+    USER(["用户 / 浏览器"])
+    R_SchoolRules["规则 SchoolRules"]
+    P_SchoolList["页面 SchoolList · 学校管理"]
+    USER --> P_SchoolList
+    Q_Schools["API Schools · list"]
+    P_SchoolList --> Q_Schools
+    E_School["实体 School"]
+    E_School --> Q_Schools
+    P_SchoolEdit["页面 SchoolEdit · 编辑学校"]
+    USER --> P_SchoolEdit
+    F_SchoolEdit["表单 SchoolEdit"]
+    P_SchoolEdit --> F_SchoolEdit
+    E_School["实体 School"]
+    Q_Schools_update["API Schools · update"]
+    F_SchoolEdit --> Q_Schools_update
+    Q_Schools_update --> E_School
+    Q_Schools_create["API Schools · create"]
+    F_SchoolEdit --> Q_Schools_create
+    Q_Schools_create --> E_School
+    P_StudentList["页面 StudentList · 学生管理"]
+    USER --> P_StudentList
+    Q_Students["API Students · list"]
+    P_StudentList --> Q_Students
+    E_Student["实体 Student"]
+    E_Student --> Q_Students
+    P_StudentEdit["页面 StudentEdit · 编辑学生"]
+    USER --> P_StudentEdit
+    F_StudentEdit["表单 StudentEdit"]
+    P_StudentEdit --> F_StudentEdit
+    E_Student["实体 Student"]
+    Q_Students_update["API Students · update"]
+    F_StudentEdit --> Q_Students_update
+    Q_Students_update --> E_Student
+    Q_Students_create["API Students · create"]
+    F_StudentEdit --> Q_Students_create
+    Q_Students_create --> E_Student
+    R_SchoolRules -. 校验 .-> F_StudentEdit
+    P_CourseList["页面 CourseList · 课程管理"]
+    USER --> P_CourseList
+    Q_Courses["API Courses · list"]
+    P_CourseList --> Q_Courses
+    E_Course["实体 Course"]
+    E_Course --> Q_Courses
+    P_CourseEdit["页面 CourseEdit · 编辑课程"]
+    USER --> P_CourseEdit
+    F_CourseEdit["表单 CourseEdit"]
+    P_CourseEdit --> F_CourseEdit
+    E_Course["实体 Course"]
+    Q_Courses_update["API Courses · update"]
+    F_CourseEdit --> Q_Courses_update
+    Q_Courses_update --> E_Course
+    Q_Courses_create["API Courses · create"]
+    F_CourseEdit --> Q_Courses_create
+    Q_Courses_create --> E_Course
+    R_SchoolRules -. 校验 .-> F_CourseEdit
+    P_EnrollmentList["页面 EnrollmentList · 报名管理"]
+    USER --> P_EnrollmentList
+    Q_Enrollments["API Enrollments · list"]
+    P_EnrollmentList --> Q_Enrollments
+    E_Enrollment["实体 Enrollment"]
+    E_Enrollment --> Q_Enrollments
+    P_EnrollmentEdit["页面 EnrollmentEdit · 编辑报名"]
+    USER --> P_EnrollmentEdit
+    F_EnrollmentEdit["表单 EnrollmentEdit"]
+    P_EnrollmentEdit --> F_EnrollmentEdit
+    E_Enrollment["实体 Enrollment"]
+    Q_Enrollments_update["API Enrollments · update"]
+    F_EnrollmentEdit --> Q_Enrollments_update
+    Q_Enrollments_update --> E_Enrollment
+    Q_Enrollments_create["API Enrollments · create"]
+    F_EnrollmentEdit --> Q_Enrollments_create
+    Q_Enrollments_create --> E_Enrollment
+    R_SchoolRules -. 校验 .-> F_EnrollmentEdit
+    T_schools[("MySQL schools")]
+    E_School --> T_schools
+    T_students[("MySQL students")]
+    E_Student --> T_students
+    T_courses[("MySQL courses")]
+    E_Course --> T_courses
+    T_enrollments[("MySQL enrollments")]
+    E_Enrollment --> T_enrollments
+    R_SchoolRules -. 校验 .-> E_Student
+    R_SchoolRules -. 校验 .-> E_Course

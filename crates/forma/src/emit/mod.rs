@@ -1,12 +1,16 @@
 //! 适配层（Emitter）集合：消费 DSL Program，生成各目标产物。
 
+pub mod diagram;
 pub mod diff;
+pub mod migrate;
 pub mod mysql;
 pub mod openapi;
 pub mod rust_backend;
 pub mod web_react;
 
+pub use diagram::emit_diagrams;
 pub use diff::{diff_programs, emit_diff, DiffReport};
+pub use migrate::emit_migration;
 pub use mysql::emit_mysql;
 pub use openapi::emit_openapi;
 pub use rust_backend::emit_rust_backend;

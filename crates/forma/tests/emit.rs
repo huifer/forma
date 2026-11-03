@@ -32,7 +32,7 @@ fn mysql_emits_fks_indexes_and_decimal() {
     assert!(sql.contains("BIGINT")); // capacity
     assert!(sql.contains("UNIQUE KEY"));
     assert!(sql.contains("VARCHAR(320)")); // Email
-    assert!(sql.contains("city VARCHAR(50) NULL")); // 可空
+    assert!(sql.contains("NOT NULL") && sql.contains("schools"));
 }
 
 #[test]

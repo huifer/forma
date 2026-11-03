@@ -56,6 +56,27 @@ fn run(argv: &[String]) -> Result<i32> {
 
     match command {
         "check" => Ok(cmd_check(project_dir(0))),
+        "diagrams" => {
+            let dir = project_dir(0);
+            let manifest = forma::manifest::load_manifest(&dir)?;
+            let source = manifest.manifest.source.clone().unwrap_or_default();
+            let (program, diagnostics) = forma::dsl::load_program(&dir, &source)?;
+            let errors = diagnostics.iter().filter(|d| d.severity == "error").count();
+            if errors > 0 {
+                for d in diagnostics.iter().filter(|d| d.severity == "error") {
+                    eprintln!("{}", forma::validate::format_diagnostic(d));
+                }
+                return Ok(1);
+            }
+            let files = forma::emit::emit_diagrams(&dir, &program, "generated/diagrams")?;
+            for f in &files {
+                println!("  + {} ({})", f.path, f.generator);
+            }
+            println!(
+                "✓ diagrams ok — 打开 generated/diagrams/diagrams.html 查看 ER/数据流/业务流程图"
+            );
+            Ok(0)
+        }
         "diff" => {
             if positional.len() < 2 {
                 eprintln!("usage: forma diff <dirA> <dirB> [--out report.html] [--json d.json]");
@@ -336,6 +357,20 @@ fn cmd_build_dsl(project_dir: PathBuf, _force: bool) -> i32 {
         (
             "openapi",
             Box::new(|| forma::emit::emit_openapi(&project_dir, &program, api_out)),
+        ),
+        (
+            "diagrams",
+            Box::new(|| forma::emit::emit_diagrams(&project_dir, &program, "generated/diagrams")),
+        ),
+        (
+            "migrate",
+            Box::new(|| {
+                Ok(
+                    forma::emit::emit_migration(&project_dir, &program, &db_out)?
+                        .map(|f| vec![f])
+                        .unwrap_or_default(),
+                )
+            }),
         ),
     ];
     let mut report: Vec<String> = Vec::new();

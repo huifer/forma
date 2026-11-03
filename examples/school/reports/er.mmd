@@ -1,0 +1,36 @@
+erDiagram
+    School {
+        UUID id PK
+        STRING name
+        STRING city
+        TIMESTAMP created_at
+    }
+    Student {
+        UUID id PK
+        SCHOOL school FK
+        STRING name
+        EMAIL email UK
+        INT age
+        TIMESTAMP created_at
+    }
+    Course {
+        UUID id PK
+        SCHOOL school FK
+        STRING title
+        INT capacity
+        TIMESTAMP created_at
+    }
+    Enrollment {
+        UUID id PK
+        STUDENT student FK
+        COURSE course FK
+        ENROLLMENTSTATUS status
+        TIMESTAMP enrolled_at
+        TIMESTAMP created_at
+        TEXT note
+    }
+
+    Student }o--|| School : school
+    Course }o--|| School : school
+    Enrollment }o--|| Student : student
+    Enrollment }o--|| Course : course

@@ -1,7 +1,6 @@
-//! Forma — Universal Specification Compiler (Specification Federation)。
+//! Forma — Universal Specification Compiler (DSL 中间层)。
 //!
-//! 不发明新 DSL：把 SQL DDL / JSON Schema / OpenAPI / JSON Forms / BPMN
-//! 组织成统一语义图，提供跨标准校验、语义补丁与确定性编译。
+//! 一套 DSL 描述前端、后端、数据库与规则，适配层编译为各平台完整代码。
 
 pub mod adapters;
 pub mod dsl;

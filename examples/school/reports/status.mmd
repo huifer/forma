@@ -1,0 +1,7 @@
+stateDiagram-v2
+    state "EnrollmentStatus 状态生命周期" as EnrollmentStatus_title
+    [*] --> pending
+    pending --> active
+    active --> completed
+    completed --> cancelled
+    note right of completed : completed 时不可 删除
