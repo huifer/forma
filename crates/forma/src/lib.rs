@@ -4,6 +4,8 @@
 
 pub mod adapters;
 pub mod build;
+pub mod capability;
+pub mod docs;
 pub mod dsl;
 pub mod emit;
 pub mod engine;

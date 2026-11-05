@@ -1,0 +1,52 @@
+// Cursor pagination reference application (RFC-0005 / spec:protocols §3.4.1).
+// Demonstrates stable keyset pagination with a mixed-direction multi-key sort.
+
+app cursorPagination {
+  version = "0.1.0"
+  locale = ["en"]
+}
+
+entity Activity {
+  id        Uuid        @id @default(uuid)
+  title     String(200) @required
+  category  String(80)  @required
+  createdAt Timestamp   @default(now)
+}
+
+api Activities {
+  entity Activity
+  operations [list get create]
+  list {
+    filters [category]
+    search [title]
+    sort [createdAt desc, title asc]
+    paginate cursor
+  }
+}
+
+page ActivityList {
+  route "/events"
+  title { en "Events" }
+  table {
+    query Activities.list
+    columns [title, category, createdAt: datetime]
+    filter category as input
+    search [title]
+    actions {
+      create → ActivityEdit
+      row [edit → ActivityEdit]
+    }
+  }
+}
+
+page ActivityEdit {
+  route "/events/{id}"
+  title { en "Create event" }
+  form Activity {
+    layout stack {
+      title Input @required
+      category Input @required
+    }
+    submit → Activities.create
+  }
+}

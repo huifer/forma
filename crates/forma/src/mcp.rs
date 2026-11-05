@@ -173,9 +173,7 @@ pub fn start_mcp_server(project_dir: PathBuf) -> Result<()> {
 
 /// 工程是否为 v0.3 DSL 工程（manifest 带 `source`）。
 fn is_dsl_project(dir: &Path) -> bool {
-    load_manifest(dir)
-        .map(|m| m.manifest.source.is_some())
-        .unwrap_or(false)
+    crate::engine::is_dsl_project(dir)
 }
 
 /// 迁移台账（lenient：不存在/损坏时返回空台账，与 CLI 行为一致）。
@@ -328,16 +326,10 @@ fn reject_dsl_only_tool(project_dir: &Path, tool: &str) -> Result<()> {
 
 /// DSL 工程：解析诊断 + lint + 结构摘要。
 fn dsl_check(project_dir: &Path) -> Result<serde_json::Value> {
-    let loaded = load_manifest(project_dir)?;
-    let source = loaded
-        .manifest
-        .source
-        .clone()
-        .context("not a DSL project (forma.yaml has no `source`)")?;
-    let (program, diagnostics) = load_program(&loaded.dir, &source)?;
-    let lint_diags = crate::lint::run_lint(&program, None);
+    let check = crate::engine::dsl_check(project_dir)?;
 
-    let parse: Vec<serde_json::Value> = diagnostics
+    let parse: Vec<serde_json::Value> = check
+        .diagnostics
         .iter()
         .map(|d| {
             serde_json::json!({
@@ -349,7 +341,8 @@ fn dsl_check(project_dir: &Path) -> Result<serde_json::Value> {
             })
         })
         .collect();
-    let lint: Vec<serde_json::Value> = lint_diags
+    let lint: Vec<serde_json::Value> = check
+        .lint
         .iter()
         .map(|d| {
             serde_json::json!({
@@ -362,18 +355,13 @@ fn dsl_check(project_dir: &Path) -> Result<serde_json::Value> {
         })
         .collect();
 
-    let version = program
-        .app
-        .as_ref()
-        .map(|a| a.version.clone())
-        .unwrap_or_else(|| loaded.manifest.project_version.clone());
     Ok(serde_json::json!({
-        "project": loaded.manifest.project_name,
-        "version": version,
-        "errors": parse.iter().filter(|d| d["severity"] == "error").count(),
+        "project": check.project_name,
+        "version": check.version,
+        "errors": check.error_count(),
         "diagnostics": parse,
         "lint": lint,
-        "summary": dsl_summary(&program),
+        "summary": crate::engine::dsl_model_summary(&check.program),
     }))
 }
 
@@ -426,113 +414,18 @@ fn dsl_viz_validate(project_dir: &Path) -> Result<serde_json::Value> {
 }
 
 fn dsl_graph(project_dir: &Path) -> Result<serde_json::Value> {
-    let loaded = load_manifest(project_dir)?;
-    let source = loaded
-        .manifest
-        .source
-        .clone()
-        .context("not a DSL project (forma.yaml has no `source`)")?;
-    let (program, diagnostics) = load_program(&loaded.dir, &source)?;
-    let errors = diagnostics.iter().filter(|d| d.severity == "error").count();
-    if errors > 0 {
-        bail!("DSL has {errors} error(s) — run forma_check for details");
+    let check = crate::engine::dsl_check(project_dir)?;
+    if check.error_count() > 0 {
+        bail!(
+            "DSL has {} error(s) — run forma_check for details",
+            check.error_count()
+        );
     }
-    let version = program
-        .app
-        .as_ref()
-        .map(|a| a.version.clone())
-        .unwrap_or_else(|| loaded.manifest.project_version.clone());
     Ok(serde_json::json!({
-        "project": loaded.manifest.project_name,
-        "version": version,
-        "summary": dsl_summary(&program),
+        "project": check.project_name,
+        "version": check.version,
+        "summary": crate::engine::dsl_model_summary(&check.program),
     }))
-}
-
-fn dsl_summary(program: &crate::dsl::Program) -> serde_json::Value {
-    let entities: Vec<serde_json::Value> = program
-        .entities
-        .iter()
-        .map(|e| {
-            let fields: Vec<serde_json::Value> = e
-                .fields
-                .iter()
-                .map(|f| {
-                    serde_json::json!({
-                        "name": f.name,
-                        "type": f.type_name,
-                        "optional": f.optional,
-                        "relation": crate::dsl::is_relation(program, &f.type_name),
-                        "enum": crate::dsl::is_enum(program, &f.type_name),
-                    })
-                })
-                .collect();
-            serde_json::json!({
-                "name": e.name,
-                "table": crate::identity::to_snake_case(&crate::dsl::pluralize(&e.name)),
-                "fields": fields,
-                "indexes": e.indexes,
-                "uniques": e.uniques,
-            })
-        })
-        .collect();
-    let enums: Vec<serde_json::Value> = program
-        .enums
-        .iter()
-        .map(|e| {
-            serde_json::json!({
-                "name": e.name,
-                "variants": e.variants.iter().map(|v| v.name.clone()).collect::<Vec<_>>(),
-            })
-        })
-        .collect();
-    let apis: Vec<serde_json::Value> = program
-        .apis
-        .iter()
-        .map(|a| {
-            serde_json::json!({
-                "name": a.name,
-                "entity": a.entity,
-                "operations": a.operations,
-            })
-        })
-        .collect();
-    let pages: Vec<serde_json::Value> = program
-        .pages
-        .iter()
-        .map(|p| {
-            serde_json::json!({
-                "name": p.name,
-                "route": p.route,
-                "kind": match p.body {
-                    crate::dsl::PageBody::Table(_) => "table",
-                    crate::dsl::PageBody::Form(_) => "form",
-                    crate::dsl::PageBody::Detail(_) => "detail",
-                    crate::dsl::PageBody::Chart(_) => "chart",
-                },
-            })
-        })
-        .collect();
-    serde_json::json!({
-        "entityCount": entities.len(),
-        "entities": entities,
-        "enums": enums,
-        "apis": apis,
-        "pages": pages,
-        "ruleBlocks": program.rules.len(),
-        "chartCount": program.charts.len(),
-        "charts": program
-            .charts
-            .iter()
-            .map(|c| {
-                serde_json::json!({
-                    "name": c.name,
-                    "type": c.chart_type,
-                    "source": c.source.as_ref().map(|(a, op)| format!("{a}.{op}")),
-                })
-            })
-            .collect::<Vec<_>>(),
-    })
 }
 
 /// 联邦工程：原语义图摘要。

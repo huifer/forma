@@ -1,79 +1,83 @@
 # Capability 注册表（Capability Registry）
 
-> 本文件是 Forma 所有受管能力的索引。每个能力须有 Manifest（见 [RFC-0004](../rfc/RFC-0004-capability-system.zh-CN.md)），
+> 本文件是 Forma 所有受管能力的**索引与实现状态**。
+> 每个能力须有 Manifest（模式见 [spec:manifests](../specifications/manifests/capability-manifest.zh-CN.md)），
 > 并满足 Discovery / Registration / Versioning / Dependency / Permissions / Validation / Adapter / Runtime / Conformance / Deprecation 十项契约。
-> 新增能力请在本表登记，并确保**不修改 Semantic Core**（Tier 1 红线）。
+>
+> **实现**：`crates/forma/src/capability.rs` · **CLI**：`forma capability list | check | show <id>`
+> **新增能力不必修改 Semantic Core**——放一个 YAML 到项目的 `capabilities/` 目录即可接入。
 
 ---
 
-## 数据能力（Data Capabilities）
+## 内置能力（编译器自带）
 
-| ID | 类别 | 状态 | Manifest | Conformance |
-|---|---|---|---|---|
-| `data.mysql` | 数据库 | ✅ 已实现 | 待补 | 待补 |
-| `data.postgresql` | 数据库 | 🔨 规划 | — | — |
-| `data.sqlite` | 数据库 | 🔨 规划 | — | — |
+| ID | 类别 | 版本 | 提供 | 适配器 | 依赖 |
+|---|---|---|---|---|---|
+| `data.binding` | data | 1.0.0 | `data.binding` | `binding-adapter` | — |
+| `data.mysql` | data | 1.0.0 | `db.ddl` `db.migration` `db.seed` | `mysql-adapter` | — |
+| `visualization.echarts` | visualization | 1.0.0 | `chart.bar` … `chart.treemap`（10 种） | `echarts-adapter` | `data.binding` |
+| `ui.form` | ui | 1.0.0 | `ui.form` | `web-react-adapter` | — |
+| `ui.table` | ui | 1.0.0 | `ui.table` | `web-react-adapter` | — |
+| `ui.dialog` | ui | 1.0.0 | `ui.dialog` | `web-react-adapter` | — |
+| `ui.navigation` | ui | 1.0.0 | `ui.navigation` | `web-react-adapter` | — |
+| `integration.openapi` | integrations | 1.0.0 | `integration.openapi` | `openapi-adapter` | — |
+| `integration.jsonschema` | integrations | 1.0.0 | `integration.jsonschema` | `jsonschema-adapter` | — |
+| `integration.sql` | integrations | 1.0.0 | `integration.sql` | `sql-adapter` | — |
 
-## 可视化能力（Visualization Capabilities）
+> Manifest 权威副本在 `crates/forma/src/capability.rs::builtin_manifests()`；本表是它的人类可读镜像。
 
-| ID | 类别 | 状态 | Manifest | Conformance |
-|---|---|---|---|---|
-| `visualization.echarts` | 图表渲染 | ✅ 已实现（RFC-0010） | 待补 | 待补 |
-| `visualization.vega-lite` | 图表渲染 | 🔨 规划 | — | — |
-| `visualization.maplibre` | 地图 | 🔨 规划 | — | — |
-| `visualization.react-flow` | 流程图 | 🔨 规划 | — | — |
+## 项目自备能力
 
-## UI 能力（UI Capabilities）
+放在工程目录的 `capabilities/*.yaml`，由 `forma capability list` / `forma build` 自动发现。
 
-| ID | 类别 | 状态 | Manifest | Conformance |
-|---|---|---|---|---|
-| `ui.form` | 表单 | ✅ 已实现 | 待补 | 待补 |
-| `ui.table` | 表格 | ✅ 已实现 | 待补 | 待补 |
-| `ui.dialog` | 对话框 | ✅ 已实现 | 待补 | 待补 |
-| `ui.navigation` | 导航 | ✅ 已实现 | 待补 | 待补 |
+| ID | 状态 | Manifest |
+|---|---|---|
+| `visualization.echarts` | ✅ 内置 | [capability/visualization/echarts.zh-CN.md](visualization/echarts.zh-CN.md) |
 
-## 工作流能力（Workflow Capabilities）
+## 规划中（尚未实现）
 
-| ID | 类别 | 状态 | Manifest | Conformance |
-|---|---|---|---|---|
-| `workflow.approval` | 审批 | 🔨 规划 | — | — |
-| `workflow.event` | 事件 | 🔨 规划 | — | — |
-| `workflow.scheduler` | 调度 | 🔨 规划 | — | — |
-
-## 集成能力（Integrations）
-
-| ID | 类别 | 状态 | Manifest | Conformance |
-|---|---|---|---|---|
-| `integration.openapi` | 导入/导出 | ✅ 已实现 | 待补 | 待补 |
-| `integration.jsonschema` | 导入/导出 | ✅ 已实现 | 待补 | 待补 |
-| `integration.sql` | 导入/导出 | ✅ 已实现 | 待补 | 待补 |
+| ID | 类别 | 说明 |
+|---|---|---|
+| `data.postgresql` | 数据 | PostgreSQL 适配层 |
+| `data.sqlite` | 数据 | SQLite 适配层 |
+| `visualization.vega-lite` | 可视化 | Vega-Lite 渲染器（已有 Manifest 范例语义） |
+| `visualization.maplibre` | 可视化 | 地图 |
+| `visualization.react-flow` | 可视化 | 流程图 |
+| `workflow.approval` | 工作流 | 审批流执行器 |
+| `workflow.event` | 工作流 | 事件驱动 |
+| `workflow.scheduler` | 工作流 | 定时调度 |
 
 ---
 
-## 图例
+## 在工程中启用能力
 
-- ✅ 已实现：已有生成器产出，待补 Manifest / Conformance 登记。
-- 🔨 规划：路线图中的后续波次，尚未实现。
+`forma.yaml`：
+
+```yaml
+capabilities:
+  data.mysql: ">=1.0.0 <2.0.0"        # 映射形式：id → 版本约束（pin）
+  visualization.echarts: ">=1.0.0 <2.0.0"
+```
+
+或列表形式（不带 pin）：
+
+```yaml
+capabilities:
+  - data.mysql
+  - visualization.echarts
+```
+
+启用后：
+
+- 注册表解析**依赖闭包**（`visualization.echarts` → `data.binding`）；
+- 校验版本 pin 与 IR / Runtime 兼容范围；
+- 汇总权限声明（`data.read` / `data.write`）；
+- **能力错误阻断构建**（未知能力、依赖缺失、版本不兼容、pin 不匹配）。
 
 ## 登记规则
 
 1. 在对应类别表新增一行。
-2. 在 `capability/<category>/` 下创建能力文档（含 Manifest 草案）。
+2. 在 `capability/<category>/` 下写能力文档（含 Manifest）。
 3. 在 `conformance/` 下提供或规划对应测试套件。
-4. 引用相关 RFC / ADR。
-
-## 能力与契约的对应关系
-
-每类能力消费哪些语义契约、产出哪些产物，由对应 RFC 规定：
-
-| 能力类别 | 消费的 IR 契约 | 治理 RFC |
-|---|---|---|
-| 数据 | `spec:ir` 数据领域（Entity / Field / Enum / Relation） | [RFC-0003](../rfc/RFC-0003-semantic-core.zh-CN.md) |
-| 可视化 | Chart IR（[RFC-0010](../rfc/RFC-0010-visualization.zh-CN.md)） | RFC-0010 |
-| UI | `spec:ir` UI 领域（Page / Table / Form / Detail） | [RFC-0003](../rfc/RFC-0003-semantic-core.zh-CN.md) |
-| 工作流 | 规划中（命令类操作为其当前子集） | [RFC-0002](../rfc/RFC-0002-specification-system.zh-CN.md) |
-| 集成 | 规划中 | [RFC-0002](../rfc/RFC-0002-specification-system.zh-CN.md) |
-
-**红线**：新增或修改能力**不得修改** `spec:ir` 的 Tier 1 契约，除非发现新的通用语义概念、现有 IR 无法合理表达
-（见 [RFC-0004 §7.3](../rfc/RFC-0004-capability-system.zh-CN.md) 与
-[ADR-0002](../adr/accepted/ADR-0002-canonical-ir-program-over-federation-graph.zh-CN.md)）。
+4. 引用相关 RFC / ADR / spec。
+5. **不得修改 Semantic Core**，除非发现新的通用语义概念、现有 IR 无法合理表达（见 RFC-0004 §7.3 红线）。

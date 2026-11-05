@@ -1,11 +1,11 @@
 ---
 id: RFC-0004
 title: Capability System and Extension Architecture
-status: Proposed
+status: Accepted
 version: 1.0
 authors: [forma-maintainers]
 created: 2026-11-04
-updated: 2026-11-04
+updated: 2026-11-05
 domain: capability
 supersedes: []
 superseded_by: []
@@ -213,9 +213,9 @@ extensions:
 
 ## 15. Implementation Plan
 
-- 阶段 1：本 RFC + `capability/registry.md` 索引 + 可视化 Capability 范例。
-- 阶段 2：`spec:manifests` 字段定稿 + `forma docs` 校验。
-- 阶段 3：数据库 / UI Capability 登记。
+- 阶段 1（已完成）：本 RFC 采纳（`Accepted`）；`capability/registry.md` 索引；可视化 Capability 范例（`capability/visualization/echarts.zh-CN.md`）。
+- 阶段 2（进行中）：`spec:manifests`（Manifest 字段）+ `spec:ir`（IR 契约）草案已落地，待字段定稿。
+- 阶段 3（规划）：数据库 / UI Capability 正式登记 Manifest；`forma docs` 校验接入。
 
 ## 16. Conformance Requirements
 
@@ -245,3 +245,4 @@ extensions:
 | 版本 | 日期 | 摘要 |
 |---|---|---|
 | 1.0 | 2026-11-04 | 初版提案，定义 Capability Manifest / 三层 IR / 扩展策略 |
+| 1.0 | 2026-11-05 | 状态提升为 Accepted；关联 `spec:manifests` / `spec:ir` 与可视化 Manifest 草案 |

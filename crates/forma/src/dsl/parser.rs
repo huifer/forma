@@ -74,6 +74,28 @@ pub struct RulesDecl {
     pub field_rules: Vec<FieldRule>,
     pub checks: Vec<CheckRule>,
     pub guards: Vec<GuardDecl>,
+    /// 实体级访问规则：`access Order { read → any; update → role in [...] }`
+    pub access: Vec<AccessDecl>,
+}
+
+/// 实体级访问规则（RBAC + 行级条件）。
+///
+/// 语义：该规则决定**哪些角色**可以执行该实体的某个操作。
+/// `role` 是绑定到当前用户角色的变量；`any` 表示不限制。
+/// 服务端权威执行——前端显隐只是体验层（ADR-0004）。
+#[derive(Debug, Clone)]
+pub struct AccessDecl {
+    pub entity: String,
+    pub rules: Vec<AccessRule>,
+}
+
+/// 单条访问规则：`<操作> → <条件表达式>`。
+#[derive(Debug, Clone)]
+pub struct AccessRule {
+    /// 操作名：read | list | get | create | update | delete
+    pub op: String,
+    /// 条件表达式；`any` 表示放行。
+    pub expr: Expr,
 }
 
 #[derive(Debug, Clone)]
@@ -247,6 +269,20 @@ pub struct ApiDecl {
     pub entity: String,
     pub operations: Vec<String>,
     pub list: Option<ListCfg>,
+    /// 操作级授权规则（服务端权威执行）。
+    pub auth: Vec<ApiAuthRule>,
+}
+
+/// api 块内的操作级授权：`auth { update delete → role in ["admin", "ops"] }`。
+///
+/// 语义：该 api 的 `update` / `delete` 操作**必须**由持有所列角色的调用方发起，
+/// 否则服务端返回 403。前端显隐只是体验层，**不构成**安全边界（ADR-0004）。
+#[derive(Debug, Clone)]
+pub struct ApiAuthRule {
+    /// 受限的操作名——必须是该 api `operations` 中声明过的操作。
+    pub operations: Vec<String>,
+    /// 允许的角色（与 `auth module` 的 roles 交叉校验）。
+    pub roles: Vec<String>,
 }
 
 /// 命令类操作（spec §10）：状态机审批流等真实业务动作。
@@ -873,6 +909,7 @@ impl<'a> Parser<'a> {
             field_rules: Vec::new(),
             checks: Vec::new(),
             guards: Vec::new(),
+            access: Vec::new(),
         };
         if !self.expect_punct("{") {
             return Some(decl);
@@ -987,6 +1024,33 @@ impl<'a> Parser<'a> {
                     self.expect_punct("}");
                 }
                 decl.guards.push(GuardDecl { entity, op, denies });
+            } else if self.is_kw("access") {
+                // access <Entity> { <op> → <expr> ... }
+                self.next();
+                let Some(entity) = self.expect_ident() else {
+                    break;
+                };
+                let mut rules = Vec::new();
+                if self.eat_punct("{") {
+                    while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+                        if self.eat_punct(";") {
+                            continue;
+                        }
+                        let Some(op) = self.expect_ident() else {
+                            break;
+                        };
+                        if self.peek().kind == TokKind::Arrow {
+                            self.next();
+                        } else {
+                            let t = self.peek().clone();
+                            self.error_at(&t, "access rule expects '→' after operation name");
+                        }
+                        let expr = self.parse_expr();
+                        rules.push(AccessRule { op, expr });
+                    }
+                    self.expect_punct("}");
+                }
+                decl.access.push(AccessDecl { entity, rules });
             } else {
                 let t = self.peek().clone();
                 self.error_at(&t, format!("unexpected '{}' in rules", t.value));
@@ -1049,6 +1113,7 @@ impl<'a> Parser<'a> {
                 "delete".into(),
             ],
             list: None,
+            auth: vec![],
         };
         if !self.expect_punct("{") {
             return Some(decl);
@@ -1067,6 +1132,7 @@ impl<'a> Parser<'a> {
                 entity: String::new(),
                 operations: vec![],
                 list: None,
+                auth: vec![],
             });
         }
         while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
@@ -1089,6 +1155,10 @@ impl<'a> Parser<'a> {
                     self.next();
                     decl.list = self.parse_list_cfg();
                 }
+                "auth" if tok.kind == TokKind::Ident => {
+                    self.next();
+                    decl.auth = self.parse_api_auth();
+                }
                 other => {
                     self.error_at(
                         &tok,
@@ -1104,6 +1174,68 @@ impl<'a> Parser<'a> {
         }
         self.expect_punct("}");
         Some(decl)
+    }
+
+    /// api 块内的操作级授权：
+    /// ```fm
+    /// auth {
+    ///   update delete → role in ["admin", "ops"]
+    /// }
+    /// ```
+    ///
+    /// 语法：`auth {` (<操作名>+) `→` `role` `in` [<角色字符串>, ...] `}`
+    fn parse_api_auth(&mut self) -> Vec<ApiAuthRule> {
+        let mut rules = Vec::new();
+        if !self.expect_punct("{") {
+            return rules;
+        }
+        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+            if self.eat_punct(";") {
+                continue;
+            }
+            // 操作名：裸标识符列表（遇 → 停止）
+            let mut operations = Vec::new();
+            while self.peek().kind == TokKind::Ident {
+                operations.push(self.next().value);
+            }
+            if operations.is_empty() {
+                let tok = self.peek().clone();
+                self.error_at(&tok, "auth rule expects operation names before '→'");
+                self.next();
+                if self.is_punct("{") {
+                    self.next();
+                    self.skip_to_block_end();
+                }
+                continue;
+            }
+            // → role in [...]
+            if self.peek().kind == TokKind::Arrow {
+                self.next();
+            } else {
+                let tok = self.peek().clone();
+                self.error_at(&tok, "auth rule expects '→' after operation names");
+            }
+            if self.peek().value == "role" {
+                self.next();
+            } else {
+                let tok = self.peek().clone();
+                self.error_at(&tok, "auth rule expects 'role' after '→'");
+            }
+            if self.peek().value == "in" {
+                self.next();
+            } else {
+                let tok = self.peek().clone();
+                self.error_at(&tok, "auth rule expects 'in' after 'role'");
+            }
+            let roles = self.parse_string_list();
+            if roles.is_empty() {
+                let tok = self.peek().clone();
+                self.error_at(&tok, "auth rule must list at least one role");
+            }
+            rules.push(ApiAuthRule { operations, roles });
+        }
+        self.expect_punct("}");
+        rules
     }
 
     /// 认证模块（M5）：

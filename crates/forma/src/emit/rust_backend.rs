@@ -1,6 +1,6 @@
 //! backend-rust 适配层：Program → 可编译的 axum + sqlx 后端工程。
 
-use super::{pick_message, EntityDecl, FieldDecl, Program};
+use super::{pick_message, snake, EntityDecl, FieldDecl, Program};
 use crate::dsl::{pluralize, BinOp, Expr, FieldConstraint};
 use crate::util::{sha256_hex, write_text};
 use anyhow::Result;
@@ -15,17 +15,70 @@ pub fn emit_rust_backend(
     if program.entities.is_empty() {
         return Ok(vec![]);
     }
-    // 设计宪法 6.2：不支持的构造显式报错，不做静默降级（cursor 分页尚无 emitter 实现）
+    // 设计宪法 6.2：未知分页模式显式报错，不做静默降级。
+    // `cursor` 已实现（P1-6），语义约束由 check_program 在任何 emitter 写盘前执行。
     for api in &program.apis {
         if let Some(list) = &api.list {
-            if let Some(p) = &list.paginate {
-                if p != "offset" {
-                    anyhow::bail!(
-                        "api {}.list: paginate `{p}` 尚无 emitter 实现（当前仅支持 offset）。\
-                         如需 cursor 分页请先在 emitter 落地。",
-                        api.entity
-                    );
+            match list.paginate.as_deref() {
+                Some("offset") | None => {}
+                Some("cursor") => {
+                    let Some(entity) = super::find_entity(program, &api.entity) else {
+                        anyhow::bail!("api {}.list cursor references unknown entity", api.name);
+                    };
+                    if list.sort.is_empty() {
+                        anyhow::bail!(
+                            "api {}.list: paginate cursor requires at least one non-null, comparable sort field; use `paginate offset` or add `sort [...]`",
+                            api.entity
+                        );
+                    }
+                    let mut seen = std::collections::HashSet::new();
+                    for (field_name, _) in &list.sort {
+                        if !seen.insert(field_name) {
+                            anyhow::bail!(
+                                "api {}.list: cursor sort field `{field_name}` is duplicated",
+                                api.entity
+                            );
+                        }
+                        let field = entity
+                            .fields
+                            .iter()
+                            .find(|f| f.name == *field_name)
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "api {}.list: unknown cursor sort field `{field_name}`",
+                                    api.entity
+                                )
+                            })?;
+                        if field.optional {
+                            anyhow::bail!(
+                                "api {}.list: cursor sort field `{field_name}` is nullable",
+                                api.entity
+                            );
+                        }
+                        let supported = matches!(
+                            field.type_name.as_str(),
+                            "Uuid"
+                                | "String"
+                                | "Text"
+                                | "Email"
+                                | "Int"
+                                | "Float"
+                                | "Decimal"
+                                | "Timestamp"
+                                | "Date"
+                        ) || super::is_enum(program, &field.type_name);
+                        if !supported {
+                            anyhow::bail!(
+                                "api {}.list: cursor sort field `{field_name}` has unsupported type `{}`",
+                                api.entity, field.type_name
+                            );
+                        }
+                    }
                 }
+                Some(mode) => anyhow::bail!(
+                    "api {}.list: unsupported paginate mode `{mode}` (supported: offset | cursor)",
+                    api.entity
+                ),
             }
         }
     }
@@ -42,7 +95,16 @@ pub fn emit_rust_backend(
         cargo_toml(&pkg, has_commands, program.auth.is_some()),
         "gen-rust",
     ));
-    files.push(file(out_dir, "src/error.rs", error_rs(), "gen-rust"));
+    files.push(file(
+        out_dir,
+        "src/error.rs",
+        error_rs(
+            has_any_auth_rules(program),
+            program.auth.is_some(),
+            has_conflict_errors(program),
+        ),
+        "gen-rust",
+    ));
     files.push(file(
         out_dir,
         "src/models.rs",
@@ -134,10 +196,11 @@ fn file(
 }
 
 fn cargo_toml(pkg: &str, has_commands: bool, has_auth: bool) -> String {
+    // error.rs uses tracing::error! for internal failures (Runtime Contract E5), so tracing is always present.
     let tracing_deps = if has_commands {
         "\ntracing = \"0.1\"\ntracing-subscriber = \"0.3\""
     } else {
-        ""
+        "\ntracing = \"0.1\""
     };
     let auth_deps = if has_auth {
         "\nargon2 = \"0.5\"\njsonwebtoken = \"9\""
@@ -167,8 +230,105 @@ tower-http = {{ version = "0.5", features = ["cors"] }}
     )
 }
 
-fn error_rs() -> String {
-    r#"// @generated by Forma (gen-rust) — do not edit manually.
+fn has_conflict_errors(program: &Program) -> bool {
+    program.auth.is_some()
+        || program.commands.iter().any(|c| c.pre.is_some())
+        || program
+            .rules
+            .iter()
+            .flat_map(|r| &r.guards)
+            .any(|g| !g.denies.is_empty())
+}
+
+fn compile_access_guard(
+    program: &Program,
+    entity: &EntityDecl,
+    cond: &Expr,
+    relations: &[(&str, String)],
+) -> String {
+    let mut bindings = String::new();
+    let mut idx = 0usize;
+    let vars: &[(&str, &str)] = &[("role", "role")];
+    let expr = expr_to_rust_access(
+        cond,
+        program,
+        entity,
+        "row",
+        relations,
+        vars,
+        &mut bindings,
+        &mut idx,
+    );
+    format!(
+        "{bindings}    let role = user.role.clone();\n    if !({expr}) {{ return Err(AppError::Forbidden(\"operation not permitted for this role\".to_string())); }}\n"
+    )
+}
+
+struct OpGuard {
+    ext_mid: String,
+    ext_last: String,
+    pre: String,
+    after_row: String,
+}
+
+impl OpGuard {
+    fn empty() -> Self {
+        OpGuard {
+            ext_mid: String::new(),
+            ext_last: String::new(),
+            pre: String::new(),
+            after_row: String::new(),
+        }
+    }
+}
+
+fn op_guard_bundle(
+    program: &Program,
+    entity: &EntityDecl,
+    api_roles: &std::collections::HashMap<String, Vec<String>>,
+    access: &std::collections::HashMap<String, Expr>,
+    op: &str,
+    relations: &[(&str, String)],
+) -> OpGuard {
+    let mut pre = String::new();
+    let mut after_row = String::new();
+    if let Some(roles) = api_roles.get(op) {
+        if !roles.is_empty() {
+            let list = roles
+                .iter()
+                .map(|r| format!("\"{}\"", escape_rust(r)))
+                .collect::<Vec<_>>()
+                .join(", ");
+            pre.push_str(&format!(
+                "    crate::auth::require_role(&[{list}], &user)?;\n"
+            ));
+        }
+    }
+    if let Some(cond) = access.get(op) {
+        let is_any = matches!(cond, Expr::Ref { path, .. } if path.len() == 1 && path[0] == "any");
+        if !is_any {
+            let code = compile_access_guard(program, entity, cond, relations);
+            if access_needs_row(cond) {
+                after_row.push_str(&code);
+            } else {
+                pre.push_str(&code);
+            }
+        }
+    }
+    let needs_ext = !pre.is_empty() || !after_row.is_empty();
+    if !needs_ext {
+        return OpGuard::empty();
+    }
+    OpGuard {
+        ext_mid: "Extension(user): Extension<CurrentUser>, ".to_string(),
+        ext_last: ", Extension(user): Extension<CurrentUser>".to_string(),
+        pre,
+        after_row,
+    }
+}
+
+fn error_rs(has_forbidden: bool, has_auth: bool, has_conflict: bool) -> String {
+    let base = r#"// @generated by Forma (gen-rust) — do not edit manually.
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
@@ -187,42 +347,87 @@ impl FieldError {
 
 #[derive(Debug, Serialize)]
 struct ErrorBody {
+    /// 面向用户的文案（Runtime Contract E2：来自规格 message / i18n）
     error: String,
+    /// 稳定错误码（Runtime Contract E1：Agent 可据此分支处理）
+    code: String,
+    /// 字段级错误（仅校验失败）
     #[serde(skip_serializing_if = "Option::is_none")]
     fields: Option<Vec<FieldError>>,
+    /// 请求追踪 id（Runtime Contract 预留，当前不生成）
+    #[serde(skip_serializing_if = "Option::is_none", rename = "requestId")]
+    request_id: Option<String>,
+}
+
+/// 稳定错误码（Runtime Contract · RFC-0005 E1）。
+///
+/// 这些字符串是**公开 API**——Agent 与前端可据此分支处理，改动视为破坏性变更。
+pub mod error_code {
+    pub const VALIDATION_FAILED: &str = "FORMA_VALIDATION_FAILED";
+    pub const NOT_FOUND: &str = "FORMA_NOT_FOUND";
+    pub const CONFLICT: &str = "FORMA_CONFLICT";
+    pub const UNAUTHORIZED: &str = "FORMA_UNAUTHORIZED";
+    pub const FORBIDDEN: &str = "FORMA_FORBIDDEN";
+    pub const INTERNAL: &str = "FORMA_INTERNAL";
+}
+
+/// 错误码 → HTTP 状态码（Runtime Contract · RFC-0005 E3：映射只在此处声明）。
+pub fn status_for(code: &str) -> StatusCode {
+    match code {
+        error_code::VALIDATION_FAILED => StatusCode::BAD_REQUEST,
+        error_code::UNAUTHORIZED => StatusCode::UNAUTHORIZED,
+        error_code::FORBIDDEN => StatusCode::FORBIDDEN,
+        error_code::NOT_FOUND => StatusCode::NOT_FOUND,
+        error_code::CONFLICT => StatusCode::CONFLICT,
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
+    }
 }
 
 pub enum AppError {
     Validation(Vec<FieldError>),
     NotFound,
-    Conflict(String),
-    /// 认证失败（401）：缺失/无效 token 或错误凭据
-    Auth(String),
+    //CONFLICT_VARIANT
+    //AUTH_VARIANT
+    //FORBIDDEN_VARIANT
     Db(sqlx::Error),
 }
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        let (status, error, fields) = match self {
-            AppError::Validation(fields) => (StatusCode::BAD_REQUEST, "validation failed".to_string(), Some(fields)),
-            AppError::NotFound => (StatusCode::NOT_FOUND, "not found".to_string(), None),
-            AppError::Conflict(msg) => (StatusCode::CONFLICT, msg, None),
-            AppError::Auth(msg) => (StatusCode::UNAUTHORIZED, msg, None),
+        let (code, error, fields) = match self {
+            AppError::Validation(fields) => (
+                error_code::VALIDATION_FAILED,
+                "validation failed".to_string(),
+                Some(fields),
+            ),
+            AppError::NotFound => (error_code::NOT_FOUND, "not found".to_string(), None),
+            //CONFLICT_MATCH
+            //AUTH_MATCH
+            //FORBIDDEN_MATCH
             AppError::Db(e) => {
                 if matches!(e, sqlx::Error::RowNotFound) {
-                    (StatusCode::NOT_FOUND, "not found".to_string(), None)
+                    (error_code::NOT_FOUND, "not found".to_string(), None)
                 } else if let sqlx::Error::Database(db) = &e {
                     if db.message().contains("Duplicate entry") {
-                        (StatusCode::CONFLICT, "duplicate entry".to_string(), None)
+                        (error_code::CONFLICT, "duplicate entry".to_string(), None)
                     } else {
-                        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string(), None)
+                        // E5：不把内部细节（SQL / 内部路径）回显给调用方，只写日志
+                        tracing::error!(error = %e, "internal error");
+                        (error_code::INTERNAL, "internal server error".to_string(), None)
                     }
                 } else {
-                    (StatusCode::INTERNAL_SERVER_ERROR, e.to_string(), None)
+                    tracing::error!(error = %e, "internal error");
+                    (error_code::INTERNAL, "internal server error".to_string(), None)
                 }
             }
         };
-        let body = ErrorBody { error, fields };
+        let status = status_for(code);
+        let body = ErrorBody {
+            error,
+            code: code.to_string(),
+            fields,
+            request_id: None,
+        };
         (status, axum::Json(body)).into_response()
     }
 }
@@ -235,560 +440,204 @@ impl From<sqlx::Error> for AppError {
 
 pub type AppResult<T> = Result<T, AppError>;
 "#
-    .to_string()
-}
-
-// ── 类型映射 ────────────────────────────────────────────
-
-fn rust_type(_program: &Program, field: &FieldDecl) -> String {
-    let base = match field.type_name.as_str() {
-        // Uuid 列在 MySQL 侧是 CHAR(36)（gen-mysql）→ sqlx 的 Uuid 解码仅支持 16 字节二进制，
-        // 故 Rust 侧统一用 String 承载文本 UUID（API JSON 不变：仍是带连字符的字符串）
-        "Uuid" => "String".to_string(),
-        "String" | "Email" | "Text" => "String".to_string(),
-        "Int" => "i64".to_string(),
-        "Float" => "f64".to_string(),
-        "Decimal" => "Decimal".to_string(),
-        "Bool" => "bool".to_string(),
-        "Timestamp" => "DateTime<Utc>".to_string(),
-        "Date" => "NaiveDate".to_string(),
-        "Json" => "serde_json::Value".to_string(),
-        // 枚举与关系字段在 Rust 侧都是文本（枚举存变体名，关系存 CHAR(36) 文本 UUID）
-        _ => "String".to_string(),
-    };
-    if field.optional {
-        format!("Option<{base}>")
-    } else {
-        base
-    }
-}
-
-fn uses_header(program: &Program) -> String {
-    let mut needs_decimal = false;
-    let mut needs_date = false;
-    let mut needs_naive = false;
-    for e in &program.entities {
-        for f in &e.fields {
-            match f.type_name.as_str() {
-                "Decimal" => needs_decimal = true,
-                "Timestamp" => needs_date = true,
-                "Date" => needs_naive = true,
-                _ => {}
-            }
-        }
-    }
-    let mut out = String::new();
-    if needs_decimal {
-        out.push_str("use rust_decimal::Decimal;\n");
-    }
-    if needs_date {
-        out.push_str("use chrono::{DateTime, Utc};\n");
-    }
-    if needs_naive {
-        out.push_str("use chrono::NaiveDate;\n");
-    }
-    out
-}
-
-// ── models.rs ───────────────────────────────────────────
-
-fn models_rs(program: &Program) -> String {
-    let mut out = String::from("// @generated by Forma (gen-rust) — do not edit manually.\n");
-    out.push_str(&uses_header(program));
-    // 模型层只承载文本 UUID（CHAR(36)）→ 不需要 uuid crate
-    out.push_str("use serde::{Deserialize, Serialize};\nuse sqlx::FromRow;\n\n");
-
-    for entity in &program.entities {
-        let struct_name = &entity.name;
-        out.push_str(&format!(
-            "#[derive(Debug, Serialize, FromRow)]\npub struct {struct_name} {{\n"
-        ));
-        for field in &entity.fields {
-            let (name, col_type) = if super::is_relation(program, &field.type_name) {
-                (
-                    format!("{}_id", snake(&field.name)),
-                    if field.optional {
-                        "Option<String>".to_string()
-                    } else {
-                        "String".to_string()
-                    },
-                )
-            } else {
-                (snake(&field.name), rust_type(program, field))
-            };
-            out.push_str(&format!("    pub {name}: {col_type},\n"));
-        }
-        out.push_str("}\n\n");
-
-        // 列表行：关系字段带显示名列
-        let mut row_fields = String::new();
-        for field in &entity.fields {
-            let (name, col_type) = if super::is_relation(program, &field.type_name) {
-                (
-                    format!("{}_id", snake(&field.name)),
-                    if field.optional {
-                        "Option<String>".to_string()
-                    } else {
-                        "String".to_string()
-                    },
-                )
-            } else {
-                (snake(&field.name), rust_type(program, field))
-            };
-            row_fields.push_str(&format!("    pub {name}: {col_type},\n"));
-            if super::is_relation(program, &field.type_name) {
-                row_fields.push_str(&format!(
-                    "    pub {}_name: Option<String>,\n",
-                    snake(&field.name)
-                ));
-            }
-        }
-        out.push_str(&format!(
-            "#[derive(Debug, Serialize, FromRow)]\npub struct {struct_name}ListRow {{\n{row_fields}}}\n\n"
-        ));
-
-        // Create / Update 输入
-        out.push_str(&format!(
-            "#[derive(Debug, Deserialize)]\n#[allow(dead_code)] // readonly/契约字段可能只参与 JSON 与规则引用\npub struct Create{struct_name} {{\n{}\n}}\n\n",
-            input_fields(program, entity, true)
-        ));
-        out.push_str(&format!(
-            "#[derive(Debug, Deserialize)]\n#[allow(dead_code)] // readonly/契约字段可能只参与 JSON 与规则引用\npub struct Update{struct_name} {{\n{}\n}}\n\n",
-            input_fields(program, entity, false)
-        ));
-    }
-    out
-}
-
-fn input_fields(program: &Program, entity: &EntityDecl, is_create: bool) -> String {
-    let mut out = String::new();
-    for field in &entity.fields {
-        if super::has_attr(field, "id") {
-            continue; // id 由服务端生成（update 走路径参数）
-        }
-        let readonly = super::has_attr(field, "readonly");
-        if readonly && !is_create {
-            // update 仍带 readonly 字段（Option，供规则校验引用），repo 忽略
-        }
-        let is_relation = super::is_relation(program, &field.type_name);
-        let base = if is_relation {
-            "String".to_string()
-        } else {
-            let rt = rust_type(program, field);
-            // 只剥一层 Option<T>（DateTime<Utc> 等内部泛型的 `>` 不能被误剥）
-            match rt
-                .strip_prefix("Option<")
-                .and_then(|inner| inner.strip_suffix('>'))
-            {
-                Some(inner) => inner.to_string(),
-                None => rt,
-            }
-        };
-        let has_default = super::has_attr(field, "default");
-        let required = super::has_attr(field, "required");
-        let is_option = field.optional || has_default || readonly;
-        if is_relation {
-            let t = if field.optional || (has_default && !required) {
-                format!("Option<{base}>")
-            } else {
-                base
-            };
-            out.push_str(&format!("    pub {}: {},\n", snake(&field.name), t));
-            continue;
-        }
-        let t = match base.as_str() {
-            "Option<T>" => unreachable!(),
-            "DateTime<Utc>" | "NaiveDate" => {
-                if is_option || (is_create && has_default) || readonly {
-                    format!("Option<{base}>")
-                } else {
-                    base.clone()
-                }
-            }
-            _ => {
-                if is_option {
-                    format!("Option<{base}>")
-                } else {
-                    base.clone()
-                }
-            }
-        };
-        out.push_str(&format!("    pub {}: {},\n", snake(&field.name), t));
-    }
-    out
-}
-
-/// 目标实体的展示列：第一个 required 的 String/Email 字段，否则 id。
-fn display_column(program: &Program, entity_name: &str) -> String {
-    let Some(entity) = super::find_entity(program, entity_name) else {
-        return "id".into();
-    };
-    for f in &entity.fields {
-        if matches!(f.type_name.as_str(), "String" | "Email") && super::has_attr(f, "required") {
-            return crate::identity::to_snake_case(&f.name);
-        }
-    }
-    "id".into()
-}
-
-pub fn snake(name: &str) -> String {
-    crate::identity::to_snake_case(name)
-}
-
-// ── validators.rs ───────────────────────────────────────
-
-fn validators_rs(program: &Program) -> String {
-    let mut out = String::from("// @generated by Forma (gen-rust) — do not edit manually.\n");
-    out.push_str("use crate::error::FieldError;\n");
-    // validators 只用 fully-qualified 的 chrono 路径 → 不导入 DateTime/Utc/Uuid
-    let needs_decimal = program
-        .entities
-        .iter()
-        .any(|e| e.fields.iter().any(|f| f.type_name == "Decimal"));
-    if needs_decimal {
-        out.push_str("use rust_decimal::Decimal;\n");
-    }
-    out.push_str("use crate::models::*;\n\n");
-
-    for entity in &program.entities {
-        let name = &entity.name;
-        let snake_name = snake(&entity.name);
-        let api = program.apis.iter().find(|a| a.entity == *name);
-        let ops = api.map(|a| a.operations.clone()).unwrap_or_default();
-        for (kind, struct_name, is_create) in
-            [("create", "Create", true), ("update", "Update", false)]
-        {
-            if !ops.iter().any(|o| o == kind) {
-                continue; // 未声明该 op → 不生成对应校验器（避免 dead_code）
-            }
-            let mut body = String::new();
-            body.push_str(&field_constraint_checks(
-                program, entity, "input", is_create,
-            ));
-            body.push_str(&enum_membership_checks(program, entity, "input", is_create));
-            body.push_str(&check_rule_code(program, name, "input", is_create));
-            // 无校验项时 input 不被读取 → 改名 _input 消除 unused variable 警告
-            let arg = if body.contains("input.") {
-                "input"
-            } else {
-                "_input"
-            };
-            let mut_kw = if body.contains("errs.push") {
-                "mut "
-            } else {
-                ""
-            };
-            out.push_str(&format!(
-                "pub fn validate_{kind}_{snake_name}({arg}: &{struct_name}{name}) -> Vec<FieldError> {{\n    let {mut_kw}errs: Vec<FieldError> = Vec::new();\n"
-            ));
-            out.push_str(&body);
-            out.push_str("    errs\n}\n\n");
-        }
-    }
-    out
-}
-
-/// 字段级约束（rules.field + DSL 属性 @min/@max）→ Rust 校验。
-fn field_constraint_checks(
-    program: &Program,
-    entity: &EntityDecl,
-    input: &str,
-    is_create: bool,
-) -> String {
-    let mut out = String::new();
-    // 收集该实体的字段规则
-    let mut rules_by_field: std::collections::HashMap<String, Vec<&FieldConstraint>> =
-        Default::default();
-    for rules in &program.rules {
-        for fr in &rules.field_rules {
-            if fr.entity == entity.name {
-                rules_by_field
-                    .entry(fr.field.clone())
-                    .or_default()
-                    .extend(fr.constraints.iter());
-            }
-        }
-    }
-
-    for field in &entity.fields {
-        if super::has_attr(field, "id") {
-            continue;
-        }
-        let col = snake(&field.name);
-        let is_relation = super::is_relation(program, &field.type_name);
-        // @required（关系字段 NOT NULL 在 repo 层保证；字符串/数值必填校验在这里）
-        if !is_relation
-            && !field.optional
-            && matches!(field.type_name.as_str(), "String" | "Email" | "Text")
-        {
-            out.push_str(&format!(
-                "    if {input}.{col}.trim().is_empty() {{ errs.push(FieldError::new(\"{col}\", \"必填 / required\")); }}\n"
-            ));
-        }
-        // @min/@max 属性
-        for attr in &field.attrs {
-            if matches!(attr.name.as_str(), "min" | "max") {
-                if let Some(v) = attr.args.first().and_then(|a| a.parse::<f64>().ok()) {
-                    let cmp = if attr.name == "min" { "<" } else { ">" };
-                    out.push_str(&numeric_check(
-                        &col,
-                        &rust_type(program, field),
-                        v,
-                        cmp,
-                        &format!(
-                            "{} must be {} {}",
-                            col,
-                            if attr.name == "min" { ">=" } else { "<=" },
-                            v
-                        ),
-                    ));
-                }
-            }
-        }
-        // rules.field 约束
-        if let Some(constraints) = rules_by_field.get(&field.name) {
-            for c in constraints {
-                match c {
-                    FieldConstraint::Required(msg) => {
-                        if matches!(field.type_name.as_str(), "String" | "Email" | "Text") {
-                            out.push_str(&format!(
-                                "    if {input}.{col}.trim().is_empty() {{ errs.push(FieldError::new(\"{col}\", \"{}\")); }}\n",
-                                escape_rust(&pick_message(msg, "required"))
-                            ));
-                        }
-                    }
-                    FieldConstraint::Min(v, msg) => {
-                        out.push_str(&numeric_check(
-                            &col,
-                            &rust_type(program, field),
-                            *v,
-                            "<",
-                            &pick_message(msg, "value too small"),
-                        ));
-                    }
-                    FieldConstraint::Max(v, msg) => {
-                        out.push_str(&numeric_check(
-                            &col,
-                            &rust_type(program, field),
-                            *v,
-                            ">",
-                            &pick_message(msg, "value too large"),
-                        ));
-                    }
-                    FieldConstraint::Length(min, max, msg) => {
-                        if matches!(field.type_name.as_str(), "String" | "Email" | "Text") {
-                            let mut cond = String::new();
-                            if let Some(mn) = min {
-                                cond.push_str(&format!(
-                                    "{input}.{col}.trim().chars().count() < {mn}"
-                                ));
-                            }
-                            if let Some(mx) = max {
-                                if !cond.is_empty() {
-                                    cond.push_str(" || ");
-                                }
-                                cond.push_str(&format!(
-                                    "{input}.{col}.trim().chars().count() > {mx}"
-                                ));
-                            }
-                            if !cond.is_empty() {
-                                out.push_str(&format!(
-                                    "    if {cond} {{ errs.push(FieldError::new(\"{col}\", \"{}\")); }}\n",
-                                    escape_rust(&pick_message(msg, "invalid length"))
-                                ));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        let _ = is_create;
-    }
-    out
-}
-
-fn numeric_check(col: &str, ty: &str, v: f64, cmp: &str, message: &str) -> String {
-    let access = format!("input.{col}");
-    if ty.starts_with("Option<") {
-        let inner = ty
-            .trim_start_matches("Option<")
-            .trim_end_matches('>')
-            .to_string();
-        let literal = literal_for(&inner, v);
-        format!(
-            "    if let Some(v) = {access} {{ if v {cmp} {literal} {{ errs.push(FieldError::new(\"{col}\", \"{}\")); }} }}\n",
-            escape_rust(message)
+    .to_string();
+    const VARIANT_MARK: &str = "    //FORBIDDEN_VARIANT\n";
+    const MATCH_MARK: &str = "            //FORBIDDEN_MATCH\n";
+    const CONFLICT_VARIANT: &str = "    //CONFLICT_VARIANT\n";
+    const CONFLICT_MATCH: &str = "            //CONFLICT_MATCH\n";
+    const AUTH_VARIANT: &str = "    //AUTH_VARIANT\n";
+    const AUTH_MATCH: &str = "            //AUTH_MATCH\n";
+    let base = if has_forbidden {
+        base.replace(
+            VARIANT_MARK,
+            "    /// 授权失败（403）：身份有效但角色无权执行该操作\n    Forbidden(String),\n",
+        )
+        .replace(
+            MATCH_MARK,
+            "            AppError::Forbidden(msg) => (error_code::FORBIDDEN, msg, None),\n",
         )
     } else {
-        let literal = literal_for(ty, v);
-        format!(
-            "    if {access} {cmp} {literal} {{ errs.push(FieldError::new(\"{col}\", \"{}\")); }}\n",
-            escape_rust(message)
-        )
-    }
-}
-
-fn literal_for(ty: &str, v: f64) -> String {
-    match ty {
-        "Decimal" => format!("Decimal::try_from({v}).unwrap_or_default()"),
-        "f64" => format!("{v}"),
-        "i64" => format!("{}", v as i64),
-        _ => format!("{v}"),
-    }
-}
-
-/// 枚举字段：值必须 ∈ variants。
-fn enum_membership_checks(
-    program: &Program,
-    entity: &EntityDecl,
-    input: &str,
-    _is_create: bool,
-) -> String {
-    let mut out = String::new();
-    for field in &entity.fields {
-        if super::is_enum(program, &field.type_name) {
-            let Some(e) = program.enums.iter().find(|x| x.name == field.type_name) else {
-                continue;
-            };
-            let variants: Vec<String> = e
-                .variants
-                .iter()
-                .map(|v| format!("\"{}\".to_string()", v.name))
-                .collect();
-            let col = snake(&field.name);
-            out.push_str(&format!(
-                "    let allowed_{col} = [{}];\n",
-                variants.join(", ")
-            ));
-            if field.optional || super::has_attr(field, "default") {
-                out.push_str(&format!(
-                    "    if let Some(v) = &{input}.{col} {{ if !allowed_{col}.contains(v) {{ errs.push(FieldError::new(\"{col}\", \"must be one of {}\")); }} }}\n",
-                    e.variants.iter().map(|v| v.name.as_str()).collect::<Vec<_>>().join("|")
-                ));
-            } else {
-                out.push_str(&format!(
-                    "    if !allowed_{col}.contains(&{input}.{col}) {{ errs.push(FieldError::new(\"{col}\", \"must be one of {}\")); }}\n",
-                    e.variants.iter().map(|v| v.name.as_str()).collect::<Vec<_>>().join("|")
-                ));
-            }
-        }
-    }
-    out
-}
-
-/// check 规则 → 表达式代码。引用 readonly 字段时以其 @default 表达式兜底。
-fn check_rule_code(program: &Program, entity_name: &str, input: &str, is_create: bool) -> String {
-    let mut out = String::new();
-    let Some(entity) = super::find_entity(program, entity_name) else {
-        return out;
+        base.replace(VARIANT_MARK, "").replace(MATCH_MARK, "")
     };
-    let mut idx = 0usize;
-    for rules in &program.rules {
-        for check in &rules.checks {
-            if check.entity != *entity_name {
-                continue;
-            }
-            // Create 输入包含所有非 @id 字段；Update 同。readonly 字段取 default 兜底。
-            let fields = expr_fields(&check.expr);
-            let mut bindings = String::new();
-            let expr_code = expr_to_rust(
-                &check.expr,
-                program,
-                entity,
-                input,
-                &mut bindings,
-                &mut idx,
-                is_create,
-            );
-            let _ = fields;
-            out.push_str(&bindings);
-            let msg = pick_message(&check.message, "check failed");
-            out.push_str(&format!(
-                "    if !({expr_code}) {{ errs.push(FieldError::new(\"__check\", \"{}\")); }}\n",
-                escape_rust(&msg)
-            ));
-        }
+    let base = if has_conflict {
+        base.replace(CONFLICT_VARIANT, "    Conflict(String),\n")
+            .replace(
+                CONFLICT_MATCH,
+                "            AppError::Conflict(msg) => (error_code::CONFLICT, msg, None),\n",
+            )
+    } else {
+        base.replace(CONFLICT_VARIANT, "")
+            .replace(CONFLICT_MATCH, "")
+    };
+    if has_auth {
+        base.replace(
+            AUTH_VARIANT,
+            "    /// 认证失败（401）：缺失/无效 token 或错误凭据\n    Auth(String),\n",
+        )
+        .replace(
+            AUTH_MATCH,
+            "            AppError::Auth(msg) => (error_code::UNAUTHORIZED, msg, None),\n",
+        )
+    } else {
+        base.replace(AUTH_VARIANT, "").replace(AUTH_MATCH, "")
     }
-    let _ = entity;
-    out
 }
 
-/// 去掉表达式最外层的成对括号（Rust `unused_parens` 警告）。
-fn strip_outer_parens(s: &str) -> String {
-    let t = s.trim();
-    if !t.starts_with('(') || !t.ends_with(')') {
-        return t.to_string();
-    }
-    let inner = &t[1..t.len() - 1];
-    let mut depth = 0i32;
-    for (i, c) in inner.char_indices() {
-        match c {
-            '(' => depth += 1,
-            ')' => {
-                depth -= 1;
-                if depth == 0 && i + 1 != inner.len() {
-                    return t.to_string(); // 括号未包住整个表达式
+/// 是否有 api 声明了操作级授权（决定是否生成 `Forbidden` 错误与 `require_role` 守卫）。
+/// 没有授权规则时**不生成**——否则生成工程会出现「never used」警告。
+fn has_api_auth_rules(program: &Program) -> bool {
+    program.apis.iter().any(|a| !a.auth.is_empty())
+}
+
+/// 是否有实体声明了访问规则（`rules { access ... }`）。
+fn has_access_rules(program: &Program) -> bool {
+    program.rules.iter().any(|r| {
+        r.access.iter().any(|a| {
+            a.rules.iter().any(|rule| {
+                !matches!(&rule.expr, Expr::Ref { path, .. } if path.len() == 1 && path[0] == "any")
+            })
+        })
+    })
+}
+
+/// 任一授权规则存在（api 级或实体级）→ 需要 `Forbidden` 错误变体。
+fn has_any_auth_rules(program: &Program) -> bool {
+    has_api_auth_rules(program) || has_access_rules(program)
+}
+
+/// 实体级访问规则：`op → 条件表达式`（`read` 同时覆盖 list / get）。
+fn access_conditions(
+    program: &Program,
+    entity_name: &str,
+) -> std::collections::HashMap<String, Expr> {
+    let mut map: std::collections::HashMap<String, Expr> = std::collections::HashMap::new();
+    for rules in &program.rules {
+        for access in &rules.access {
+            if access.entity != entity_name {
+                continue;
+            }
+            for rule in &access.rules {
+                match rule.op.as_str() {
+                    "read" => {
+                        map.entry("list".to_string())
+                            .or_insert_with(|| rule.expr.clone());
+                        map.entry("get".to_string())
+                            .or_insert_with(|| rule.expr.clone());
+                    }
+                    op => {
+                        map.insert(op.to_string(), rule.expr.clone());
+                    }
                 }
             }
-            _ => {}
         }
     }
-    inner.to_string()
+    map
 }
 
-fn expr_fields(expr: &Expr) -> Vec<Vec<String>> {
+/// Decimal 字面量——必须显式类型，否则 `Decimal > 5` 的整数字面量类型不明确。
+fn decimal_literal(v: f64) -> String {
+    if v.fract() == 0.0 {
+        format!(
+            "rust_decimal::Decimal::try_from({}i64).unwrap_or_default()",
+            v as i64
+        )
+    } else {
+        format!("rust_decimal::Decimal::try_from({v}f64).unwrap_or_default()")
+    }
+}
+
+/// 访问条件中操作数的类型（用于数字字面量类型化）。
+fn access_operand_type(program: &Program, entity: &EntityDecl, expr: &Expr) -> Option<String> {
     match expr {
-        Expr::Ref { path, .. } => vec![path.clone()],
-        Expr::Bin(_, a, b) => {
-            let mut v = expr_fields(a);
-            v.extend(expr_fields(b));
-            v
-        }
-        Expr::Not(a) => expr_fields(a),
-        Expr::Call(_, args) => {
-            let mut v = Vec::new();
-            for a in args {
-                v.extend(expr_fields(a));
+        Expr::Ref { path, .. } if path.len() == 1 => {
+            let field = entity.fields.iter().find(|f| f.name == path[0])?;
+            if super::is_enum(program, &field.type_name) {
+                // 枚举在模型侧落为 String
+                Some("String".to_string())
+            } else {
+                Some(field.type_name.clone())
             }
-            v
         }
-        Expr::List(items) => {
-            let mut v = Vec::new();
-            for a in items {
-                v.extend(expr_fields(a));
-            }
-            v
-        }
-        _ => vec![],
+        Expr::Bin(_, a, _) => access_operand_type(program, entity, a),
+        _ => None,
     }
 }
 
-fn expr_to_rust(
-    expr: &Expr,
-    program: &Program,
-    entity: &EntityDecl,
-    input: &str,
-    bindings: &mut String,
-    idx: &mut usize,
-    is_create: bool,
-) -> String {
-    expr_to_rust_mode(
-        expr, program, entity, input, bindings, idx, is_create, false,
-    )
-}
-
+/// 访问条件 → Rust 表达式（**字段类型感知 + Option 安全**）。
+///
+/// 与通用表达式编译器的差异：
+/// - `role` 绑定为当前用户角色（String）；
+/// - Option 字段**克隆后**取兜底值——既不移动出 `row`（否则 `Ok(Json(row))` 报部分移动），
+///   也不移动出引用；
+/// - 数值字面量按对侧字段类型渲染（Decimal 必须显式类型）。
 #[allow(clippy::too_many_arguments)]
-fn expr_to_rust_mode(
+fn expr_to_rust_access(
     expr: &Expr,
     program: &Program,
     entity: &EntityDecl,
-    input: &str,
+    row: &str,
+    relations: &[(&str, String)],
+    vars: &[(&str, &str)],
     bindings: &mut String,
     idx: &mut usize,
-    is_create: bool,
-    plain: bool,
 ) -> String {
     match expr {
+        Expr::Ref { path, .. } => {
+            // 绑定变量（role 等）优先
+            if path.len() == 1 {
+                if let Some((_, code)) = vars.iter().find(|(n, _)| *n == path[0]) {
+                    return code.to_string();
+                }
+            }
+            // 跨关系：仅支持一层 `relation.field`，字段声明时已校验存在与类型
+            if path.len() == 2 {
+                if let Some((alias, _)) = relations.iter().find(|(name, _)| *name == path[0]) {
+                    let target_field = {
+                        let relation_field = entity.fields.iter().find(|f| f.name == path[0]);
+                        let relation_field = match relation_field {
+                            Some(f) => f,
+                            None => return "Default::default()".to_string(),
+                        };
+                        let Some(target) = program
+                            .entities
+                            .iter()
+                            .find(|e| e.name == relation_field.type_name)
+                        else {
+                            return "Default::default()".to_string();
+                        };
+                        target.fields.iter().find(|f| f.name == path[1])
+                    };
+                    let Some(target_field) = target_field else {
+                        return "Default::default()".to_string();
+                    };
+                    let col = snake(&target_field.name);
+                    let accessor = format!("{alias}.{col}");
+                    *idx += 1;
+                    let var = format!("__rel{idx}");
+                    let fallback = typed_fallback(program, &target_field.type_name);
+                    // 关系行可能缺失（LEFT JOIN）→ clone 后兜底，不移动出别名
+                    bindings.push_str(&format!(
+                        "    let {var} = {accessor}.clone().unwrap_or({fallback});\n"
+                    ));
+                    return var;
+                }
+            }
+            let Some(field) = entity.fields.iter().find(|f| f.name == path[0]) else {
+                return "Default::default()".to_string();
+            };
+            let col = snake(&field.name);
+            let accessor = format!("{row}.{col}");
+            if !field.optional {
+                return accessor;
+            }
+            *idx += 1;
+            let var = format!("__a{idx}");
+            let fallback = typed_fallback(program, &field.type_name);
+            bindings.push_str(&format!(
+                "    let {var} = {accessor}.clone().unwrap_or({fallback});\n"
+            ));
+            var
+        }
         Expr::Num(v) => {
             if v.fract() == 0.0 {
                 format!("{}", *v as i64)
@@ -797,104 +646,51 @@ fn expr_to_rust_mode(
             }
         }
         Expr::Str(s) => format!("\"{}\".to_string()", escape_rust(s)),
-        Expr::Bool(b) => b.to_string(),
-        Expr::Null => "Default::default()".to_string(),
-        Expr::Ref { path, old: _ } => {
-            let field = entity.fields.iter().find(|f| f.name == path[0]);
-            let Some(field) = field else {
-                return "Default::default()".to_string();
-            };
-            let col = snake(&field.name);
-            let readonly = super::has_attr(field, "readonly");
-            // 多级路径（跨关系）v1 不在输入校验中支持 JOIN 值；编译为输入自身
-            let _ = path.len() > 1;
-            let accessor = format!("{input}.{col}");
-            let is_option =
-                !plain && (field.optional || super::has_attr(field, "default") || readonly);
-            if !is_option {
-                return accessor;
-            }
-            // Option 字段：绑定临时变量并给出兜底
-            *idx += 1;
-            let var = format!("__r{idx}");
-            let _base_ty_known = true;
-            let ty = String::new();
-            let base_ty = match field.type_name.as_str() {
-                "Decimal" => "Decimal".to_string(),
-                "Int" => "i64".to_string(),
-                "Timestamp" => "chrono::DateTime<chrono::Utc>".to_string(),
-                _ => "String".to_string(),
-            };
-            let fallback = if readonly {
-                let attr = super::field_attr(field, "default").unwrap();
-                match attr.args.first().map(|s| s.as_str()) {
-                    Some("now") => "chrono::Utc::now()".to_string(),
-                    Some("uuid") => "Uuid::new_v4()".to_string(),
-                    Some(lit) => literal_for(&base_ty, lit.parse().unwrap_or(0.0)),
-                    _ => typed_fallback(program, &field.type_name),
-                }
-            } else {
-                typed_fallback(program, &field.type_name)
-            };
-            let _ = (ty, is_create);
-            bindings.push_str(&format!(
-                "    let {var} = {accessor}.unwrap_or({fallback});\n"
-            ));
-            var
-        }
+        Expr::Bool(b) => format!("{b}"),
         Expr::List(items) => {
             let parts: Vec<String> = items
                 .iter()
                 .map(|i| {
-                    expr_to_rust_mode(i, program, entity, input, bindings, idx, is_create, plain)
+                    expr_to_rust_access(i, program, entity, row, relations, vars, bindings, idx)
                 })
                 .collect();
             format!("vec![{}]", parts.join(", "))
         }
-        Expr::Call(name, args) => {
-            let rendered: Vec<String> = args
-                .iter()
-                .map(|a| {
-                    expr_to_rust_mode(a, program, entity, input, bindings, idx, is_create, plain)
-                })
-                .collect();
-            match name.as_str() {
-                "matches" => format!(
-                    "{}.matches(&regex::Regex::new({}).unwrap())",
-                    rendered.first().cloned().unwrap_or_default(),
-                    rendered
-                        .get(1)
-                        .cloned()
-                        .unwrap_or_else(|| "\"\".to_string()".into())
-                ),
-                _ => "true".to_string(),
-            }
-        }
         Expr::Not(inner) => format!(
             "!({})",
-            expr_to_rust_mode(inner, program, entity, input, bindings, idx, is_create, plain)
+            expr_to_rust_access(inner, program, entity, row, relations, vars, bindings, idx)
         ),
+        Expr::Call(_, _) => "true".to_string(),
+        Expr::Null => "Default::default()".to_string(),
         Expr::Bin(op, a, b) => {
-            let l = expr_to_rust_mode(a, program, entity, input, bindings, idx, is_create, plain);
-            let r = expr_to_rust_mode(b, program, entity, input, bindings, idx, is_create, plain);
-            let op_str = match op {
-                BinOp::Eq => "==",
-                BinOp::Ne => "!=",
-                BinOp::Lt => "<",
-                BinOp::Le => "<=",
-                BinOp::Gt => ">",
-                BinOp::Ge => ">=",
-                BinOp::And => "&&",
-                BinOp::Or => "||",
-                BinOp::Add => "+",
-                BinOp::Sub => "-",
-                BinOp::Mul => "*",
-                BinOp::Div => "/",
-                BinOp::In => {
-                    return format!("{}.contains(&{})", r, l);
+            let l = expr_to_rust_access(a, program, entity, row, relations, vars, bindings, idx);
+            let l_type = access_operand_type(program, entity, a);
+            let r = match &**b {
+                Expr::Num(v) if l_type.as_deref() == Some("Decimal") => decimal_literal(*v),
+                other => {
+                    expr_to_rust_access(other, program, entity, row, relations, vars, bindings, idx)
                 }
             };
-            format!("({l} {op_str} {r})")
+            let r_type = access_operand_type(program, entity, b);
+            let l_final = match &**a {
+                Expr::Num(v) if r_type.as_deref() == Some("Decimal") => decimal_literal(*v),
+                _ => l,
+            };
+            match op {
+                BinOp::In => format!("{r}.contains(&{l_final})"),
+                BinOp::Eq => format!("({l_final} == {r})"),
+                BinOp::Ne => format!("({l_final} != {r})"),
+                BinOp::Lt => format!("({l_final} < {r})"),
+                BinOp::Le => format!("({l_final} <= {r})"),
+                BinOp::Gt => format!("({l_final} > {r})"),
+                BinOp::Ge => format!("({l_final} >= {r})"),
+                BinOp::And => format!("({l_final} && {r})"),
+                BinOp::Or => format!("({l_final} || {r})"),
+                BinOp::Add => format!("({l_final} + {r})"),
+                BinOp::Sub => format!("({l_final} - {r})"),
+                BinOp::Mul => format!("({l_final} * {r})"),
+                BinOp::Div => format!("({l_final} / {r})"),
+            }
         }
     }
 }
@@ -935,11 +731,97 @@ fn table_of(entity: &EntityDecl) -> String {
     crate::identity::to_snake_case(&pluralize(&entity.name))
 }
 
+fn cursor_fields<'a>(program: &'a Program, api: &crate::dsl::ApiDecl) -> Vec<&'a FieldDecl> {
+    let Some(list) = api.list.as_ref() else {
+        return Vec::new();
+    };
+    if list.paginate.as_deref() != Some("cursor") {
+        return Vec::new();
+    }
+    let Some(entity) = super::find_entity(program, &api.entity) else {
+        return Vec::new();
+    };
+    list.sort
+        .iter()
+        .filter_map(|(name, _)| entity.fields.iter().find(|f| f.name == *name))
+        .collect()
+}
+
+/// Cursor 值在 handler / repository 中的具体 Rust 类型（全限定名，避免导入漂移）。
+fn cursor_rust_type(program: &Program, field: &FieldDecl) -> String {
+    if super::is_enum(program, &field.type_name) {
+        return "String".to_string();
+    }
+    match field.type_name.as_str() {
+        "Uuid" | "String" | "Text" | "Email" => "String".to_string(),
+        "Int" => "i64".to_string(),
+        "Float" => "f64".to_string(),
+        "Decimal" => "rust_decimal::Decimal".to_string(),
+        "Timestamp" => "chrono::DateTime<chrono::Utc>".to_string(),
+        "Date" => "chrono::NaiveDate".to_string(),
+        _other => rust_type(program, field)
+            .replace("Decimal", "rust_decimal::Decimal")
+            .replace("DateTime<Utc>", "chrono::DateTime<chrono::Utc>")
+            .replace("NaiveDate", "chrono::NaiveDate"),
+    }
+}
+
+fn cursor_value_expr(field: &FieldDecl) -> String {
+    let col = snake(&field.name);
+    match field.type_name.as_str() {
+        "Timestamp" => format!("last.{col}.to_rfc3339()"),
+        _ => format!("last.{col}.to_string()"),
+    }
+}
+
+/// Keyset lexicographic seek expression and binding sequence.
+/// Each sort key uses its own direction; `id` is appended in the final key direction.
+fn cursor_seek(sort: &[(String, bool)]) -> (String, Vec<usize>) {
+    let cols: Vec<String> = sort
+        .iter()
+        .map(|(f, _)| format!("s.{}", snake(f)))
+        .collect();
+    let mut terms = Vec::new();
+    let mut binds = Vec::new();
+    for i in 0..cols.len() {
+        let mut pieces = Vec::new();
+        for (j, col) in cols.iter().enumerate().take(i) {
+            pieces.push(format!("{col} = ?"));
+            binds.push(j);
+        }
+        let op = if sort[i].1 { "<" } else { ">" };
+        pieces.push(format!("{} {op} ?", cols[i]));
+        binds.push(i);
+        terms.push(format!("({})", pieces.join(" AND ")));
+    }
+    let mut tie = Vec::new();
+    for (i, col) in cols.iter().enumerate() {
+        tie.push(format!("{col} = ?"));
+        binds.push(i);
+    }
+    let tie_op = if sort.last().map(|(_, d)| *d).unwrap_or(false) {
+        "<"
+    } else {
+        ">"
+    };
+    tie.push(format!("s.id {tie_op} ?"));
+    binds.push(usize::MAX); // cursor id
+    terms.push(format!("({})", tie.join(" AND ")));
+    (format!("({})", terms.join(" OR ")), binds)
+}
+
 fn repo_rs(program: &Program) -> String {
     let mut out = String::from("// @generated by Forma (gen-rust) — do not edit manually.\n");
     out.push_str(
         "use serde::Deserialize;\nuse crate::models::*;\nuse sqlx::MySqlPool;\nuse uuid::Uuid;\n\n",
     );
+    if program
+        .apis
+        .iter()
+        .any(|a| a.list.as_ref().and_then(|l| l.paginate.as_deref()) == Some("cursor"))
+    {
+        out.push_str("#[derive(Debug, Deserialize)]\npub struct CursorPayload { pub values: Vec<String>, pub id: String }\n\n");
+    }
 
     for entity in &program.entities {
         let name = &entity.name;
@@ -1071,7 +953,7 @@ fn repo_rs(program: &Program) -> String {
             })
             .unwrap_or_else(|| format!("{s}.id"));
 
-        // ListParams（q 仅在该 api 声明 search 字段时存在——否则 serde 字段恒空 → dead_code）
+        // ListParams（offset 与 cursor 是互斥协议形状）
         if has_op("list") {
             let q_field = if list_cfg
                 .as_ref()
@@ -1082,14 +964,94 @@ fn repo_rs(program: &Program) -> String {
             } else {
                 ""
             };
+            let cursor_mode =
+                list_cfg.as_ref().and_then(|l| l.paginate.as_deref()) == Some("cursor");
+            let pagination_fields = if cursor_mode {
+                "    #[serde(default, rename = \"pageSize\", alias = \"page_size\")]\n    pub page_size: Option<u64>,\n    #[serde(default)]\n    pub cursor: Option<String>,\n"
+            } else {
+                "    #[serde(default)]\n    pub page: Option<u64>,\n    #[serde(default, rename = \"pageSize\", alias = \"page_size\")]\n    pub page_size: Option<u64>,\n"
+            };
             out.push_str(&format!(
-                "#[derive(Debug, Default, Deserialize)]\npub struct {name}ListParams {{\n    #[serde(default)]\n    pub page: Option<u64>,\n    #[serde(default)]\n    pub page_size: Option<u64>,\n{q_field}{param_fields}}}\n\n"
+                "#[derive(Debug, Default, Deserialize)]\npub struct {name}ListParams {{\n{pagination_fields}{q_field}{param_fields}}}\n\n"
             ));
         }
-        // use serde in repo
+
         // list
         if has_op("list") {
-            let frag = r#"pub async fn list__SNAKE__(db: &MySqlPool, params: &__NAME__ListParams) -> sqlx::Result<Vec<__NAME__ListRow>> {
+            let api_decl = program.apis.iter().find(|a| a.entity == *name).unwrap();
+            let cursor_mode =
+                list_cfg.as_ref().and_then(|l| l.paginate.as_deref()) == Some("cursor");
+            let mut cursor_bind_code = String::new();
+            if cursor_mode {
+                let sort_fields: Vec<(String, bool)> = api_decl.list.as_ref().unwrap().sort.clone();
+                let cfields = cursor_fields(program, api_decl);
+                let mut cursor_types: Vec<String> = cfields
+                    .iter()
+                    .map(|field| cursor_rust_type(program, field))
+                    .collect();
+                cursor_types.push("String".to_string()); // id tie-breaker
+                let cursor_ty = format!("({})", cursor_types.join(", "));
+                let (seek_expr, bind_order) = cursor_seek(&sort_fields);
+                let prefix = if where_clause.is_empty() {
+                    "WHERE"
+                } else {
+                    "AND"
+                };
+                let cursor_sql = format!("{prefix} {seek_expr}");
+                let mut order_parts: Vec<String> = sort_fields
+                    .iter()
+                    .map(|(f, desc)| {
+                        format!("{s}.{} {}", snake(f), if *desc { "DESC" } else { "ASC" })
+                    })
+                    .collect();
+                let last_desc = sort_fields.last().map(|(_, d)| *d).unwrap_or(false);
+                order_parts.push(format!("{s}.id {}", if last_desc { "DESC" } else { "ASC" }));
+                let cursor_order = order_parts.join(", ");
+                let cursor_vars: Vec<String> = (0..cfields.len())
+                    .map(|i| format!("cursor_value_{i}"))
+                    .collect();
+                let mut tuple_vars = cursor_vars.clone();
+                tuple_vars.push("cursor_id".to_string());
+                let tuple_binding = tuple_vars.join(", ");
+                let cursor_binds = bind_order
+                    .iter()
+                    .map(|i| {
+                        if *i == usize::MAX {
+                            "query = query.bind(cursor_id);\n".to_string()
+                        } else {
+                            format!("query = query.bind({}.clone());\n", cursor_vars[*i])
+                        }
+                    })
+                    .collect::<String>();
+                let frag = format!(
+                    r#"pub async fn list__SNAKE__(db: &MySqlPool, params: &__NAME__ListParams, cursor: Option<{cursor_ty}>) -> sqlx::Result<Vec<__NAME__ListRow>> {{
+    let page_size = params.page_size.unwrap_or(20).clamp(1, 200);
+    let cursor_where = if cursor.is_some() {{ {cursor_sql:?}.to_string() }} else {{ String::new() }};
+    let sql = format!(
+        "SELECT
+__SELECT__        FROM __TABLE__ AS s
+__JOINS__        __WHERE__ {{}}\n        ORDER BY __ORDER__
+        LIMIT ?",
+        cursor_where
+    );
+    let mut query = sqlx::query_as::<_, __NAME__ListRow>(&sql);
+"#,
+                    cursor_ty = cursor_ty,
+                    cursor_sql = cursor_sql,
+                )
+                .replace("__SNAKE__", &format!("_{}", snake_name))
+                .replace("__NAME__", name)
+                .replace("__SELECT__", &select_cols)
+                .replace("__TABLE__", &table)
+                .replace("__JOINS__", &joins)
+                .replace("__WHERE__", &where_clause)
+                .replace("__ORDER__", &cursor_order);
+                out.push_str(&frag);
+                cursor_bind_code = format!(
+                    "    if let Some(({tuple_binding})) = cursor {{\n{cursor_binds}    }}\n"
+                );
+            } else {
+                let frag = r#"pub async fn list__SNAKE__(db: &MySqlPool, params: &__NAME__ListParams) -> sqlx::Result<Vec<__NAME__ListRow>> {
     let page = params.page.unwrap_or(1).max(1);
     let page_size = params.page_size.unwrap_or(20).clamp(1, 200);
     let sql = format!(
@@ -1101,52 +1063,40 @@ __JOINS__        __WHERE__
     );
     let mut query = sqlx::query_as::<_, __NAME__ListRow>(&sql);
 "#;
-            let frag = frag
-                .replace("__SNAKE__", &format!("_{}", snake_name))
-                .replace("__NAME__", name)
-                .replace("__SELECT__", &select_cols)
-                .replace("__TABLE__", &table)
-                .replace("__JOINS__", &joins)
-                .replace("__WHERE__", &where_clause)
-                .replace("__ORDER__", &order);
-            out.push_str(&frag);
+                let frag = frag
+                    .replace("__SNAKE__", &format!("_{}", snake_name))
+                    .replace("__NAME__", name)
+                    .replace("__SELECT__", &select_cols)
+                    .replace("__TABLE__", &table)
+                    .replace("__JOINS__", &joins)
+                    .replace("__WHERE__", &where_clause)
+                    .replace("__ORDER__", &order);
+                out.push_str(&frag);
+            }
 
-            // 绑定参数
-            if let Some(list) = &program
-                .apis
-                .iter()
-                .find(|a| a.entity == *name)
-                .and_then(|a| a.list.clone())
-            {
+            // bind filters/search in declared placeholder order
+            if let Some(list) = &list_cfg {
                 for (field, _contains) in &list.filters {
                     let pname = snake(field);
-                    let is_rel = entity
-                        .fields
-                        .iter()
-                        .find(|f| f.name == *field)
-                        .map(|f| super::is_relation(program, &f.type_name))
-                        .unwrap_or(false);
-                    if is_rel {
-                        // 关系过滤列是 CHAR(36) → 绑字符串
-                        out.push_str(&format!(
+                    out.push_str(&format!(
                         "    query = query.bind(params.{pname}.clone()).bind(params.{pname}.clone());\n"
                     ));
-                    } else {
-                        out.push_str(&format!(
-                        "    query = query.bind(params.{pname}.clone()).bind(params.{pname}.clone());\n"
-                    ));
-                    }
                 }
                 if !list.search.is_empty() {
-                    // 1 次 NULL 判断 + 每个搜索字段 1 次（与 WHERE 占位符一一对应）
                     out.push_str("    query = query.bind(params.q.clone());\n");
                     for _ in &list.search {
                         out.push_str("    query = query.bind(params.q.clone());\n");
                     }
                 }
             }
-            out.push_str("    query = query.bind(page_size).bind((page - 1) * page_size);\n");
-            out.push_str("    query.fetch_all(db).await\n}\n\n");
+            if cursor_mode {
+                out.push_str(&cursor_bind_code);
+                out.push_str(
+                    "    query = query.bind(page_size + 1);\n    query.fetch_all(db).await\n}\n\n",
+                );
+            } else {
+                out.push_str("    query = query.bind(page_size).bind((page - 1) * page_size);\n    query.fetch_all(db).await\n}\n\n");
+            }
         }
 
         // get：路由的 GET handler 使用 find_X（返回实体本身），此处不再重复生成
@@ -1363,15 +1313,15 @@ async fn list_audit_logs_handler(
             );
         }
         // handlers 追加到文件尾部
-        // /auth/me 需要当前用户 → 挂在受保护路由上
-        if program.auth.is_some() {
-            out = out.replace(
-                "    app = app.merge(protected);",
-                "    protected = protected.merge(\n        Router::new()\n            .route(\"/api/auth/me\", get(crate::auth::me))\n            .with_state(db.clone()),\n    );\n    app = app.merge(protected);",
-            );
-        }
         out.push('\n');
         out.push_str(&handlers);
+    }
+    // /auth/me 需要当前用户 → 挂在受保护路由上（与是否有命令无关）
+    if program.auth.is_some() {
+        out = out.replace(
+            "    app = app.merge(protected);",
+            "    protected = protected.merge(\n        Router::new()\n            .route(\"/api/auth/me\", get(crate::auth::me))\n            .with_state(db.clone()),\n    );\n    app = app.merge(protected);",
+        );
     }
     // 保护层：所有受保护路由 merge 完成后统一挂载（axum layer 只影响已挂载路由）
     let protect = if program.auth.is_some() {
@@ -1384,6 +1334,22 @@ async fn list_audit_logs_handler(
         &format!("{protect}    app = app.merge(protected);"),
     );
     Ok(out)
+}
+
+/// 该 api 的操作级授权：`op → 允许的角色`（多条规则合并去重）。
+fn api_auth_roles(api: &crate::dsl::ApiDecl) -> std::collections::HashMap<String, Vec<String>> {
+    let mut map: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    for rule in &api.auth {
+        for op in &rule.operations {
+            let entry = map.entry(op.clone()).or_default();
+            for role in &rule.roles {
+                if !entry.contains(role) {
+                    entry.push(role.clone());
+                }
+            }
+        }
+    }
+    map
 }
 
 fn routes_rs(program: &Program) -> String {
@@ -1399,17 +1365,30 @@ fn routes_rs(program: &Program) -> String {
     let any_create_only = program.apis.iter().any(|a| {
         a.operations.iter().any(|o| o == "create") && !a.operations.iter().any(|o| o == "list")
     });
-    // 命令一律 POST
+    // 操作级授权（api { auth { ... } } 或 rules { access { ... } }）
+    // ——存在即需要 Extension 提取器与 CurrentUser
+    let any_auth = has_any_auth_rules(program);
+    // 命令一律 POST；auth module 的 register/login 也是 POST
     let has_commands = !program.commands.is_empty();
-    let routing = if any_create_only || has_commands {
+    let routing = if any_create_only || has_commands || program.auth.is_some() {
         "use axum::routing::{get, post};"
     } else {
         "use axum::routing::get;"
     };
-    let extract = if any_list {
+    let extract = if any_list && any_auth {
+        "use axum::extract::{Extension, Path, Query, State};"
+    } else if any_list {
         "use axum::extract::{Path, Query, State};"
+    } else if any_auth {
+        "use axum::extract::{Extension, Path, State};"
     } else {
         "use axum::extract::{Path, State};"
+    };
+    // 操作级授权需要当前用户扩展（由 require_auth 注入）
+    let auth_import = if any_auth {
+        "use crate::auth::CurrentUser;\n"
+    } else {
+        ""
     };
     // 校验器走全限定路径 crate::validators::validate_* → 不需要 glob 导入
     let validators_import = "";
@@ -1417,7 +1396,7 @@ fn routes_rs(program: &Program) -> String {
         "{extract}\n{routing}\nuse axum::{{Json, Router}};\n"
     ));
     out.push_str(&format!(
-        "use crate::error::{{AppError, AppResult}};\nuse crate::models::*;\nuse crate::repo;\n{validators_import}use crate::repo::*;\nuse std::sync::Arc;\n\npub type Db = Arc<sqlx::MySqlPool>;\n\n"
+        "use crate::error::{{AppError, AppResult}};\nuse crate::models::*;\nuse crate::repo;\n{validators_import}use crate::repo::*;\n{auth_import}use std::sync::Arc;\n\npub type Db = Arc<sqlx::MySqlPool>;\n\n"
     ));
 
     // guards 汇总（delete 时校验）
@@ -1476,6 +1455,35 @@ fn routes_rs(program: &Program) -> String {
         let api = program.apis.iter().find(|a| a.entity == *name);
         let ops = api.map(|a| a.operations.clone()).unwrap_or_default();
         let has = |op: &str| ops.iter().any(|o| o == op);
+        // 操作级授权：op → 允许的角色（api 级）
+        let auth_map = api.map(api_auth_roles).unwrap_or_default();
+        // 实体级访问规则：op → 条件表达式
+        let access_map = access_conditions(program, name);
+        let relations: Vec<(&str, String)> = entity
+            .fields
+            .iter()
+            .filter(|f| super::is_relation(program, &f.type_name))
+            .map(|f| {
+                let alias = format!(
+                    "t{}",
+                    1 + entity
+                        .fields
+                        .iter()
+                        .take(
+                            entity
+                                .fields
+                                .iter()
+                                .position(|x| x.name == f.name)
+                                .unwrap_or(0)
+                        )
+                        .filter(|x| super::is_relation(program, &x.type_name))
+                        .count()
+                );
+                (f.name.as_str(), alias)
+            })
+            .collect();
+        let guard =
+            |op: &str| op_guard_bundle(program, entity, &auth_map, &access_map, op, &relations);
 
         let frag = "pub fn __SNAKE___routes(db: Db) -> Router {\n    Router::new()\n"
             .replace("__SNAKE___routes", &format!("{}_routes", snake_name));
@@ -1520,28 +1528,98 @@ fn routes_rs(program: &Program) -> String {
         out.push_str("        .with_state(db)\n}\n\n");
 
         if has("list") {
-            out.push_str(&format!(
-                r#"async fn list_{snake_name}(State(db): State<Db>, Query(params): Query<{name}ListParams>) -> AppResult<Json<Vec<{name}ListRow>>> {{
-    Ok(Json(repo::list_{snake_name}(&db, &params).await?))
+            let g = guard("list");
+            let cursor_mode = api
+                .and_then(|a| a.list.as_ref())
+                .and_then(|l| l.paginate.as_deref())
+                == Some("cursor");
+            if cursor_mode {
+                let api_decl = api.expect("cursor api");
+                let cfields = cursor_fields(program, api_decl);
+                let mut parse_values = String::new();
+                let mut cursor_vars = Vec::new();
+                let mut cursor_tuple_types = Vec::new();
+                let mut next_values = Vec::new();
+                for (i, field) in cfields.iter().enumerate() {
+                    let var = format!("cursor_value_{i}");
+                    let ty = cursor_rust_type(program, field);
+                    parse_values.push_str(&format!(
+                        "            let {var}: {ty} = payload.values.get({i}).ok_or_else(|| AppError::Validation(vec![crate::error::FieldError::new(\"cursor\", \"cursor sort values do not match this endpoint\")]))?.parse().map_err(|_| AppError::Validation(vec![crate::error::FieldError::new(\"cursor\", \"invalid cursor sort value\")]))?;\n"
+                    ));
+                    cursor_vars.push(var);
+                    cursor_tuple_types.push(ty);
+                    next_values.push(cursor_value_expr(field));
+                }
+                cursor_vars.push("payload.id".to_string());
+                cursor_tuple_types.push("String".to_string());
+                let tuple_expr = cursor_vars.join(", ");
+                let tuple_type = format!("({})", cursor_tuple_types.join(", "));
+                let values_expr = next_values.join(", ");
+                let values_len = cfields.len();
+                out.push_str(&format!(
+                    r#"async fn list_{snake_name}(State(db): State<Db>, Query(params): Query<{name}ListParams>{ext_last}) -> AppResult<Json<serde_json::Value>> {{
+{pre}    let cursor: Option<{tuple_type}> = match params.cursor.as_deref() {{
+        Some(raw) => {{
+            let payload: repo::CursorPayload = serde_json::from_str(raw).map_err(|_| AppError::Validation(vec![crate::error::FieldError::new("cursor", "invalid cursor")]))?;
+            if payload.values.len() != {values_len} || payload.id.is_empty() {{
+                return Err(AppError::Validation(vec![crate::error::FieldError::new("cursor", "cursor shape does not match this endpoint")]));
+            }}
+{parse_values}            Some(({tuple_expr}))
+        }}
+        None => None,
+    }};
+    let page_size = params.page_size.unwrap_or(20).clamp(1, 200) as usize;
+    let mut items = repo::list_{snake_name}(&db, &params, cursor).await?;
+    let has_more = items.len() > page_size;
+    items.truncate(page_size);
+    let next_cursor = if has_more {{
+        let last = items.last().expect("has_more implies at least one item");
+        let payload = serde_json::json!({{ "values": [{values_expr}], "id": last.id }});
+        Some(serde_json::to_string(&payload).map_err(|e| AppError::Db(sqlx::Error::Protocol(e.to_string())))?)
+    }} else {{ None }};
+    Ok(Json(serde_json::json!({{ "items": items, "nextCursor": next_cursor }})))
 }}
 
-"#
-            ));
+"#,
+                    ext_last = g.ext_last,
+                    pre = g.pre,
+                    tuple_type = tuple_type,
+                    values_len = values_len,
+                    parse_values = parse_values,
+                    tuple_expr = tuple_expr,
+                    values_expr = values_expr,
+                ));
+            } else {
+                out.push_str(&format!(
+                    r#"async fn list_{snake_name}(State(db): State<Db>, Query(params): Query<{name}ListParams>{ext_last}) -> AppResult<Json<Vec<{name}ListRow>>> {{
+{pre}    Ok(Json(repo::list_{snake_name}(&db, &params).await?))
+}}
+
+"#,
+                    ext_last = g.ext_last,
+                    pre = g.pre
+                ));
+            }
         }
         if has("get") {
+            let g = guard("get");
             out.push_str(&format!(
-                r#"async fn get_{snake_name}(State(db): State<Db>, Path(id): Path<String>) -> AppResult<Json<{name}>> {{
-    let row = repo::find_{snake_name}(&db, &id).await?.ok_or(AppError::NotFound)?;
-    Ok(Json(row))
+                r#"async fn get_{snake_name}(State(db): State<Db>, Path(id): Path<String>{ext_last}) -> AppResult<Json<{name}>> {{
+{pre}    let row = repo::find_{snake_name}(&db, &id).await?.ok_or(AppError::NotFound)?;
+{after_row}    Ok(Json(row))
 }}
 
-"#
+"#,
+                ext_last = g.ext_last,
+                pre = g.pre,
+                after_row = g.after_row
             ));
         }
         if has("create") {
+            let g = guard("create");
             out.push_str(&format!(
-                r#"async fn create_{snake_name}(State(db): State<Db>, Json(input): Json<Create{name}>) -> AppResult<Json<serde_json::Value>> {{
-    let errs = crate::validators::validate_create_{snake_name}(&input);
+                r#"async fn create_{snake_name}(State(db): State<Db>, {ext_mid}Json(input): Json<Create{name}>) -> AppResult<Json<serde_json::Value>> {{
+{pre}    let errs = crate::validators::validate_create_{snake_name}(&input);
     if !errs.is_empty() {{
         return Err(AppError::Validation(errs));
     }}
@@ -1549,24 +1627,46 @@ fn routes_rs(program: &Program) -> String {
     Ok(Json(serde_json::json!({{ "ok": true }})))
 }}
 
-"#
+"#,
+                ext_mid = g.ext_mid,
+                pre = g.pre
             ));
         }
         if has("update") {
-            out.push_str(&format!(
-                r#"async fn update_{snake_name}(State(db): State<Db>, Path(id): Path<String>, Json(input): Json<Update{name}>) -> AppResult<Json<serde_json::Value>> {{
-    let errs = crate::validators::validate_update_{snake_name}(&input);
+            let g = guard("update");
+            // 有行级访问条件时必须先取到实体行（判定需要行数据）→ 先取行、再授权、最后校验
+            let body = if g.after_row.is_empty() {
+                format!(
+                    r#"    let errs = crate::validators::validate_update_{snake_name}(&input);
     if !errs.is_empty() {{
         return Err(AppError::Validation(errs));
     }}
     if repo::find_{snake_name}(&db, &id).await?.is_none() {{
         return Err(AppError::NotFound);
     }}
-    repo::update_{snake_name}(&db, &id, &input).await?;
+"#
+                )
+            } else {
+                format!(
+                    r#"    let row = repo::find_{snake_name}(&db, &id).await?.ok_or(AppError::NotFound)?;
+{after_row}    let errs = crate::validators::validate_update_{snake_name}(&input);
+    if !errs.is_empty() {{
+        return Err(AppError::Validation(errs));
+    }}
+"#,
+                    after_row = g.after_row
+                )
+            };
+            out.push_str(&format!(
+                r#"async fn update_{snake_name}(State(db): State<Db>, Path(id): Path<String>, {ext_mid}Json(input): Json<Update{name}>) -> AppResult<Json<serde_json::Value>> {{
+{pre}{body}    repo::update_{snake_name}(&db, &id, &input).await?;
     Ok(Json(serde_json::json!({{ "ok": true }})))
 }}
 
-"#
+"#,
+                ext_mid = g.ext_mid,
+                pre = g.pre,
+                body = body
             ));
         }
         if has("delete") {
@@ -1580,16 +1680,26 @@ fn routes_rs(program: &Program) -> String {
             } else {
                 String::new()
             };
-            // 无守卫时 row 只用于存在性检查 → 避免 unused variable 警告
-            let row_binding = if has_guard { "row" } else { "_row" };
+            let g = guard("delete");
+            // 无守卫且无行级访问条件时 row 只用于存在性检查 → 避免 unused variable 警告
+            let row_binding = if has_guard || !g.after_row.is_empty() {
+                "row"
+            } else {
+                "_row"
+            };
             out.push_str(&format!(
-                r#"async fn delete_{snake_name}(State(db): State<Db>, Path(id): Path<String>) -> AppResult<Json<serde_json::Value>> {{
-    let {row_binding} = repo::find_{snake_name}(&db, &id).await?.ok_or(AppError::NotFound)?;
-{guard_call}    repo::delete_{snake_name}(&db, &id).await?;
+                r#"async fn delete_{snake_name}(State(db): State<Db>, Path(id): Path<String>{ext_last}) -> AppResult<Json<serde_json::Value>> {{
+{pre}    let {row_binding} = repo::find_{snake_name}(&db, &id).await?.ok_or(AppError::NotFound)?;
+{after_row}{guard_call}    repo::delete_{snake_name}(&db, &id).await?;
     Ok(Json(serde_json::json!({{ "ok": true }})))
 }}
 
-"#
+"#,
+                ext_last = g.ext_last,
+                pre = g.pre,
+                after_row = g.after_row,
+                row_binding = row_binding,
+                guard_call = guard_call
             ));
         }
     }
@@ -2016,6 +2126,25 @@ fn auth_rs(program: &Program, app_name: &str) -> String {
     let first_role = auth.roles.first().cloned().unwrap_or_else(|| "user".into());
     let token_hours = auth.token_hours.to_string();
     let n_roles = auth.roles.len().to_string();
+    // 操作级授权守卫——只在确实有 api 授权规则时生成（否则「never used」警告）。
+    let require_role_block = if has_api_auth_rules(program) {
+        r#"/// 操作级授权（服务端权威执行，ADR-0004）：调用方角色必须在允许列表内。
+///
+/// 前端按同一规则隐藏按钮只是体验层，**不构成**安全边界——本函数才是边界。
+pub fn require_role(allowed: &[&str], user: &CurrentUser) -> AppResult<()> {
+    if !allowed.contains(&user.role.as_str()) {
+        return Err(AppError::Forbidden(format!(
+            "role '{}' is not permitted for this operation",
+            user.role
+        )));
+    }
+    Ok(())
+}
+"#
+        .to_string()
+    } else {
+        String::new()
+    };
     let roles_list = auth
         .roles
         .iter()
@@ -2133,6 +2262,8 @@ pub struct CurrentUser {
     pub role: String,
 }
 
+//REQUIRE_ROLE_BLOCK
+
 pub async fn register(
     State(db): State<Db>,
     Json(input): Json<RegisterInput>,
@@ -2208,6 +2339,7 @@ pub async fn me(req_user: axum::Extension<CurrentUser>) -> Json<serde_json::Valu
         .replace("__TOKEN_HOURS__", &token_hours)
         .replace("__FIRST_ROLE__", &first_role)
         .replace("__APP__", app_name)
+        .replace("//REQUIRE_ROLE_BLOCK\n", &require_role_block)
 }
 
 /// audit.rs：审计钩子 = 结构化日志 + audit_logs 表落库（actor 待 auth 模块接入）。
@@ -2267,4 +2399,662 @@ pub async fn list_audit_logs(db: &MySqlPool, page: u64, page_size: u64) -> sqlx:
 }
 "#
     .to_string()
+}
+
+fn check_rule_code(program: &Program, entity_name: &str, input: &str, is_create: bool) -> String {
+    let mut out = String::new();
+    let Some(entity) = super::find_entity(program, entity_name) else {
+        return out;
+    };
+    let mut idx = 0usize;
+    for rules in &program.rules {
+        for check in &rules.checks {
+            if check.entity != *entity_name {
+                continue;
+            }
+            // Create 输入包含所有非 @id 字段；Update 同。readonly 字段取 default 兜底。
+            let fields = expr_fields(&check.expr);
+            let mut bindings = String::new();
+            let expr_code = expr_to_rust(
+                &check.expr,
+                program,
+                entity,
+                input,
+                &mut bindings,
+                &mut idx,
+                is_create,
+            );
+            let _ = fields;
+            out.push_str(&bindings);
+            let msg = pick_message(&check.message, "check failed");
+            out.push_str(&format!(
+                "    if !({expr_code}) {{ errs.push(FieldError::new(\"__check\", \"{}\")); }}\n",
+                escape_rust(&msg)
+            ));
+        }
+    }
+    let _ = entity;
+    out
+}
+
+fn display_column(program: &Program, entity_name: &str) -> String {
+    let Some(entity) = super::find_entity(program, entity_name) else {
+        return "id".into();
+    };
+    for f in &entity.fields {
+        if matches!(f.type_name.as_str(), "String" | "Email") && super::has_attr(f, "required") {
+            return crate::identity::to_snake_case(&f.name);
+        }
+    }
+    "id".into()
+}
+
+fn enum_membership_checks(
+    program: &Program,
+    entity: &EntityDecl,
+    input: &str,
+    _is_create: bool,
+) -> String {
+    let mut out = String::new();
+    for field in &entity.fields {
+        if super::is_enum(program, &field.type_name) {
+            let Some(e) = program.enums.iter().find(|x| x.name == field.type_name) else {
+                continue;
+            };
+            let variants: Vec<String> = e
+                .variants
+                .iter()
+                .map(|v| format!("\"{}\".to_string()", v.name))
+                .collect();
+            let col = snake(&field.name);
+            out.push_str(&format!(
+                "    let allowed_{col} = [{}];\n",
+                variants.join(", ")
+            ));
+            if field.optional || super::has_attr(field, "default") {
+                out.push_str(&format!(
+                    "    if let Some(v) = &{input}.{col} {{ if !allowed_{col}.contains(v) {{ errs.push(FieldError::new(\"{col}\", \"must be one of {}\")); }} }}\n",
+                    e.variants.iter().map(|v| v.name.as_str()).collect::<Vec<_>>().join("|")
+                ));
+            } else {
+                out.push_str(&format!(
+                    "    if !allowed_{col}.contains(&{input}.{col}) {{ errs.push(FieldError::new(\"{col}\", \"must be one of {}\")); }}\n",
+                    e.variants.iter().map(|v| v.name.as_str()).collect::<Vec<_>>().join("|")
+                ));
+            }
+        }
+    }
+    out
+}
+
+fn expr_fields(expr: &Expr) -> Vec<Vec<String>> {
+    match expr {
+        Expr::Ref { path, .. } => vec![path.clone()],
+        Expr::Bin(_, a, b) => {
+            let mut v = expr_fields(a);
+            v.extend(expr_fields(b));
+            v
+        }
+        Expr::Not(a) => expr_fields(a),
+        Expr::Call(_, args) => {
+            let mut v = Vec::new();
+            for a in args {
+                v.extend(expr_fields(a));
+            }
+            v
+        }
+        Expr::List(items) => {
+            let mut v = Vec::new();
+            for a in items {
+                v.extend(expr_fields(a));
+            }
+            v
+        }
+        _ => vec![],
+    }
+}
+
+fn expr_to_rust(
+    expr: &Expr,
+    program: &Program,
+    entity: &EntityDecl,
+    input: &str,
+    bindings: &mut String,
+    idx: &mut usize,
+    is_create: bool,
+) -> String {
+    expr_to_rust_mode(
+        expr, program, entity, input, bindings, idx, is_create, false,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn expr_to_rust_mode(
+    expr: &Expr,
+    program: &Program,
+    entity: &EntityDecl,
+    input: &str,
+    bindings: &mut String,
+    idx: &mut usize,
+    is_create: bool,
+    plain: bool,
+) -> String {
+    match expr {
+        Expr::Num(v) => {
+            if v.fract() == 0.0 {
+                format!("{}", *v as i64)
+            } else {
+                format!("{v}")
+            }
+        }
+        Expr::Str(s) => format!("\"{}\".to_string()", escape_rust(s)),
+        Expr::Bool(b) => b.to_string(),
+        Expr::Null => "Default::default()".to_string(),
+        Expr::Ref { path, old: _ } => {
+            let field = entity.fields.iter().find(|f| f.name == path[0]);
+            let Some(field) = field else {
+                return "Default::default()".to_string();
+            };
+            let col = snake(&field.name);
+            let readonly = super::has_attr(field, "readonly");
+            // 多级路径（跨关系）v1 不在输入校验中支持 JOIN 值；编译为输入自身
+            let _ = path.len() > 1;
+            let accessor = format!("{input}.{col}");
+            let is_option =
+                !plain && (field.optional || super::has_attr(field, "default") || readonly);
+            if !is_option {
+                return accessor;
+            }
+            // Option 字段：绑定临时变量并给出兜底
+            *idx += 1;
+            let var = format!("__r{idx}");
+            let _base_ty_known = true;
+            let ty = String::new();
+            let base_ty = match field.type_name.as_str() {
+                "Decimal" => "Decimal".to_string(),
+                "Int" => "i64".to_string(),
+                "Timestamp" => "chrono::DateTime<chrono::Utc>".to_string(),
+                _ => "String".to_string(),
+            };
+            let fallback = if readonly {
+                let attr = super::field_attr(field, "default").unwrap();
+                match attr.args.first().map(|s| s.as_str()) {
+                    Some("now") => "chrono::Utc::now()".to_string(),
+                    Some("uuid") => "Uuid::new_v4()".to_string(),
+                    Some(lit) => literal_for(&base_ty, lit.parse().unwrap_or(0.0)),
+                    _ => typed_fallback(program, &field.type_name),
+                }
+            } else {
+                typed_fallback(program, &field.type_name)
+            };
+            let _ = (ty, is_create);
+            bindings.push_str(&format!(
+                "    let {var} = {accessor}.unwrap_or({fallback});\n"
+            ));
+            var
+        }
+        Expr::List(items) => {
+            let parts: Vec<String> = items
+                .iter()
+                .map(|i| {
+                    expr_to_rust_mode(i, program, entity, input, bindings, idx, is_create, plain)
+                })
+                .collect();
+            format!("vec![{}]", parts.join(", "))
+        }
+        Expr::Call(name, args) => {
+            let rendered: Vec<String> = args
+                .iter()
+                .map(|a| {
+                    expr_to_rust_mode(a, program, entity, input, bindings, idx, is_create, plain)
+                })
+                .collect();
+            match name.as_str() {
+                "matches" => format!(
+                    "{}.matches(&regex::Regex::new({}).unwrap())",
+                    rendered.first().cloned().unwrap_or_default(),
+                    rendered
+                        .get(1)
+                        .cloned()
+                        .unwrap_or_else(|| "\"\".to_string()".into())
+                ),
+                _ => "true".to_string(),
+            }
+        }
+        Expr::Not(inner) => format!(
+            "!({})",
+            expr_to_rust_mode(inner, program, entity, input, bindings, idx, is_create, plain)
+        ),
+        Expr::Bin(op, a, b) => {
+            let l = expr_to_rust_mode(a, program, entity, input, bindings, idx, is_create, plain);
+            let r = expr_to_rust_mode(b, program, entity, input, bindings, idx, is_create, plain);
+            let op_str = match op {
+                BinOp::Eq => "==",
+                BinOp::Ne => "!=",
+                BinOp::Lt => "<",
+                BinOp::Le => "<=",
+                BinOp::Gt => ">",
+                BinOp::Ge => ">=",
+                BinOp::And => "&&",
+                BinOp::Or => "||",
+                BinOp::Add => "+",
+                BinOp::Sub => "-",
+                BinOp::Mul => "*",
+                BinOp::Div => "/",
+                BinOp::In => {
+                    return format!("{}.contains(&{})", r, l);
+                }
+            };
+            format!("({l} {op_str} {r})")
+        }
+    }
+}
+
+/// 按字段类型给出带类型注解的兜底表达式（避免 Default 推断失败）。
+fn field_constraint_checks(
+    program: &Program,
+    entity: &EntityDecl,
+    input: &str,
+    is_create: bool,
+) -> String {
+    let mut out = String::new();
+    // 收集该实体的字段规则
+    let mut rules_by_field: std::collections::HashMap<String, Vec<&FieldConstraint>> =
+        Default::default();
+    for rules in &program.rules {
+        for fr in &rules.field_rules {
+            if fr.entity == entity.name {
+                rules_by_field
+                    .entry(fr.field.clone())
+                    .or_default()
+                    .extend(fr.constraints.iter());
+            }
+        }
+    }
+
+    for field in &entity.fields {
+        if super::has_attr(field, "id") {
+            continue;
+        }
+        let col = snake(&field.name);
+        let is_relation = super::is_relation(program, &field.type_name);
+        // @required（关系字段 NOT NULL 在 repo 层保证；字符串/数值必填校验在这里）
+        if !is_relation
+            && !field.optional
+            && matches!(field.type_name.as_str(), "String" | "Email" | "Text")
+        {
+            out.push_str(&format!(
+                "    if {input}.{col}.trim().is_empty() {{ errs.push(FieldError::new(\"{col}\", \"必填 / required\")); }}\n"
+            ));
+        }
+        // @min/@max 属性
+        for attr in &field.attrs {
+            if matches!(attr.name.as_str(), "min" | "max") {
+                if let Some(v) = attr.args.first().and_then(|a| a.parse::<f64>().ok()) {
+                    let cmp = if attr.name == "min" { "<" } else { ">" };
+                    out.push_str(&numeric_check(
+                        &col,
+                        &rust_type(program, field),
+                        v,
+                        cmp,
+                        &format!(
+                            "{} must be {} {}",
+                            col,
+                            if attr.name == "min" { ">=" } else { "<=" },
+                            v
+                        ),
+                    ));
+                }
+            }
+        }
+        // rules.field 约束
+        if let Some(constraints) = rules_by_field.get(&field.name) {
+            for c in constraints {
+                match c {
+                    FieldConstraint::Required(msg) => {
+                        if matches!(field.type_name.as_str(), "String" | "Email" | "Text") {
+                            out.push_str(&format!(
+                                "    if {input}.{col}.trim().is_empty() {{ errs.push(FieldError::new(\"{col}\", \"{}\")); }}\n",
+                                escape_rust(&pick_message(msg, "required"))
+                            ));
+                        }
+                    }
+                    FieldConstraint::Min(v, msg) => {
+                        out.push_str(&numeric_check(
+                            &col,
+                            &rust_type(program, field),
+                            *v,
+                            "<",
+                            &pick_message(msg, "value too small"),
+                        ));
+                    }
+                    FieldConstraint::Max(v, msg) => {
+                        out.push_str(&numeric_check(
+                            &col,
+                            &rust_type(program, field),
+                            *v,
+                            ">",
+                            &pick_message(msg, "value too large"),
+                        ));
+                    }
+                    FieldConstraint::Length(min, max, msg) => {
+                        if matches!(field.type_name.as_str(), "String" | "Email" | "Text") {
+                            let mut cond = String::new();
+                            if let Some(mn) = min {
+                                cond.push_str(&format!(
+                                    "{input}.{col}.trim().chars().count() < {mn}"
+                                ));
+                            }
+                            if let Some(mx) = max {
+                                if !cond.is_empty() {
+                                    cond.push_str(" || ");
+                                }
+                                cond.push_str(&format!(
+                                    "{input}.{col}.trim().chars().count() > {mx}"
+                                ));
+                            }
+                            if !cond.is_empty() {
+                                out.push_str(&format!(
+                                    "    if {cond} {{ errs.push(FieldError::new(\"{col}\", \"{}\")); }}\n",
+                                    escape_rust(&pick_message(msg, "invalid length"))
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let _ = is_create;
+    }
+    out
+}
+
+fn input_fields(program: &Program, entity: &EntityDecl, is_create: bool) -> String {
+    let mut out = String::new();
+    for field in &entity.fields {
+        if super::has_attr(field, "id") {
+            continue; // id 由服务端生成（update 走路径参数）
+        }
+        let readonly = super::has_attr(field, "readonly");
+        if readonly && !is_create {
+            // update 仍带 readonly 字段（Option，供规则校验引用），repo 忽略
+        }
+        let is_relation = super::is_relation(program, &field.type_name);
+        let base = if is_relation {
+            "String".to_string()
+        } else {
+            let rt = rust_type(program, field);
+            // 只剥一层 Option<T>（DateTime<Utc> 等内部泛型的 `>` 不能被误剥）
+            match rt
+                .strip_prefix("Option<")
+                .and_then(|inner| inner.strip_suffix('>'))
+            {
+                Some(inner) => inner.to_string(),
+                None => rt,
+            }
+        };
+        let has_default = super::has_attr(field, "default");
+        let required = super::has_attr(field, "required");
+        let is_option = field.optional || has_default || readonly;
+        if is_relation {
+            let t = if field.optional || (has_default && !required) {
+                format!("Option<{base}>")
+            } else {
+                base
+            };
+            out.push_str(&format!("    pub {}: {},\n", snake(&field.name), t));
+            continue;
+        }
+        let t = match base.as_str() {
+            "Option<T>" => unreachable!(),
+            "DateTime<Utc>" | "NaiveDate" => {
+                if is_option || (is_create && has_default) || readonly {
+                    format!("Option<{base}>")
+                } else {
+                    base.clone()
+                }
+            }
+            _ => {
+                if is_option {
+                    format!("Option<{base}>")
+                } else {
+                    base.clone()
+                }
+            }
+        };
+        out.push_str(&format!("    pub {}: {},\n", snake(&field.name), t));
+    }
+    out
+}
+
+/// 目标实体的展示列：第一个 required 的 String/Email 字段，否则 id。
+fn literal_for(ty: &str, v: f64) -> String {
+    match ty {
+        // Decimal 与整数字面量直接比较会产生**多个候选 impl**（i32/i64/…）→ 类型不明确。
+        // 必须显式类型化（与访问条件编译器的 decimal_literal 同一口径）。
+        "Decimal" => decimal_literal(v),
+        "f64" => format!("{v}"),
+        "i64" => format!("{}", v as i64),
+        _ => format!("{v}"),
+    }
+}
+
+/// 枚举字段：值必须 ∈ variants。
+fn models_rs(program: &Program) -> String {
+    let mut out = String::from("// @generated by Forma (gen-rust) — do not edit manually.\n");
+    out.push_str(&uses_header(program));
+    // 模型层只承载文本 UUID（CHAR(36)）→ 不需要 uuid crate
+    out.push_str("use serde::{Deserialize, Serialize};\nuse sqlx::FromRow;\n\n");
+
+    for entity in &program.entities {
+        let struct_name = &entity.name;
+        out.push_str(&format!(
+            "#[derive(Debug, Serialize, FromRow)]\npub struct {struct_name} {{\n"
+        ));
+        for field in &entity.fields {
+            let (name, col_type) = if super::is_relation(program, &field.type_name) {
+                (
+                    format!("{}_id", snake(&field.name)),
+                    if field.optional {
+                        "Option<String>".to_string()
+                    } else {
+                        "String".to_string()
+                    },
+                )
+            } else {
+                (snake(&field.name), rust_type(program, field))
+            };
+            out.push_str(&format!("    pub {name}: {col_type},\n"));
+        }
+        out.push_str("}\n\n");
+
+        // 列表行：关系字段带显示名列
+        let mut row_fields = String::new();
+        for field in &entity.fields {
+            let (name, col_type) = if super::is_relation(program, &field.type_name) {
+                (
+                    format!("{}_id", snake(&field.name)),
+                    if field.optional {
+                        "Option<String>".to_string()
+                    } else {
+                        "String".to_string()
+                    },
+                )
+            } else {
+                (snake(&field.name), rust_type(program, field))
+            };
+            row_fields.push_str(&format!("    pub {name}: {col_type},\n"));
+            if super::is_relation(program, &field.type_name) {
+                row_fields.push_str(&format!(
+                    "    pub {}_name: Option<String>,\n",
+                    snake(&field.name)
+                ));
+            }
+        }
+        out.push_str(&format!(
+            "#[derive(Debug, Serialize, FromRow)]\npub struct {struct_name}ListRow {{\n{row_fields}}}\n\n"
+        ));
+
+        // Create / Update 输入
+        out.push_str(&format!(
+            "#[derive(Debug, Deserialize)]\n#[allow(dead_code)] // readonly/契约字段可能只参与 JSON 与规则引用\npub struct Create{struct_name} {{\n{}\n}}\n\n",
+            input_fields(program, entity, true)
+        ));
+        out.push_str(&format!(
+            "#[derive(Debug, Deserialize)]\n#[allow(dead_code)] // readonly/契约字段可能只参与 JSON 与规则引用\npub struct Update{struct_name} {{\n{}\n}}\n\n",
+            input_fields(program, entity, false)
+        ));
+    }
+    out
+}
+
+fn numeric_check(col: &str, ty: &str, v: f64, cmp: &str, message: &str) -> String {
+    let access = format!("input.{col}");
+    if ty.starts_with("Option<") {
+        let inner = ty
+            .trim_start_matches("Option<")
+            .trim_end_matches('>')
+            .to_string();
+        let literal = literal_for(&inner, v);
+        format!(
+            "    if let Some(v) = {access} {{ if v {cmp} {literal} {{ errs.push(FieldError::new(\"{col}\", \"{}\")); }} }}\n",
+            escape_rust(message)
+        )
+    } else {
+        let literal = literal_for(ty, v);
+        format!(
+            "    if {access} {cmp} {literal} {{ errs.push(FieldError::new(\"{col}\", \"{}\")); }}\n",
+            escape_rust(message)
+        )
+    }
+}
+
+fn rust_type(_program: &Program, field: &FieldDecl) -> String {
+    let base = match field.type_name.as_str() {
+        // Uuid 列在 MySQL 侧是 CHAR(36)（gen-mysql）→ sqlx 的 Uuid 解码仅支持 16 字节二进制，
+        // 故 Rust 侧统一用 String 承载文本 UUID（API JSON 不变：仍是带连字符的字符串）
+        "Uuid" => "String".to_string(),
+        "String" | "Email" | "Text" => "String".to_string(),
+        "Int" => "i64".to_string(),
+        "Float" => "f64".to_string(),
+        "Decimal" => "Decimal".to_string(),
+        "Bool" => "bool".to_string(),
+        "Timestamp" => "DateTime<Utc>".to_string(),
+        "Date" => "NaiveDate".to_string(),
+        "Json" => "serde_json::Value".to_string(),
+        // 枚举与关系字段在 Rust 侧都是文本（枚举存变体名，关系存 CHAR(36) 文本 UUID）
+        _ => "String".to_string(),
+    };
+    if field.optional {
+        format!("Option<{base}>")
+    } else {
+        base
+    }
+}
+
+fn strip_outer_parens(s: &str) -> String {
+    let t = s.trim();
+    if !t.starts_with('(') || !t.ends_with(')') {
+        return t.to_string();
+    }
+    let inner = &t[1..t.len() - 1];
+    let mut depth = 0i32;
+    for (i, c) in inner.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 && i + 1 != inner.len() {
+                    return t.to_string(); // 括号未包住整个表达式
+                }
+            }
+            _ => {}
+        }
+    }
+    inner.to_string()
+}
+
+fn uses_header(program: &Program) -> String {
+    let mut needs_decimal = false;
+    let mut needs_date = false;
+    let mut needs_naive = false;
+    for e in &program.entities {
+        for f in &e.fields {
+            match f.type_name.as_str() {
+                "Decimal" => needs_decimal = true,
+                "Timestamp" => needs_date = true,
+                "Date" => needs_naive = true,
+                _ => {}
+            }
+        }
+    }
+    let mut out = String::new();
+    if needs_decimal {
+        out.push_str("use rust_decimal::Decimal;\n");
+    }
+    if needs_date {
+        out.push_str("use chrono::{DateTime, Utc};\n");
+    }
+    if needs_naive {
+        out.push_str("use chrono::NaiveDate;\n");
+    }
+    out
+}
+
+fn validators_rs(program: &Program) -> String {
+    let mut out = String::from("// @generated by Forma (gen-rust) — do not edit manually.\n");
+    out.push_str("use crate::error::FieldError;\n");
+    // validators 只用 fully-qualified 的 chrono 路径 → 不导入 DateTime/Utc/Uuid
+    let needs_decimal = program
+        .entities
+        .iter()
+        .any(|e| e.fields.iter().any(|f| f.type_name == "Decimal"));
+    if needs_decimal {
+        out.push_str("use rust_decimal::Decimal;\n");
+    }
+    out.push_str("use crate::models::*;\n\n");
+
+    for entity in &program.entities {
+        let name = &entity.name;
+        let snake_name = snake(&entity.name);
+        let api = program.apis.iter().find(|a| a.entity == *name);
+        let ops = api.map(|a| a.operations.clone()).unwrap_or_default();
+        for (kind, struct_name, is_create) in
+            [("create", "Create", true), ("update", "Update", false)]
+        {
+            if !ops.iter().any(|o| o == kind) {
+                continue; // 未声明该 op → 不生成对应校验器（避免 dead_code）
+            }
+            let mut body = String::new();
+            body.push_str(&field_constraint_checks(
+                program, entity, "input", is_create,
+            ));
+            body.push_str(&enum_membership_checks(program, entity, "input", is_create));
+            body.push_str(&check_rule_code(program, name, "input", is_create));
+            // 无校验项时 input 不被读取 → 改名 _input 消除 unused variable 警告
+            let arg = if body.contains("input.") {
+                "input"
+            } else {
+                "_input"
+            };
+            let mut_kw = if body.contains("errs.push") {
+                "mut "
+            } else {
+                ""
+            };
+            out.push_str(&format!(
+                "pub fn validate_{kind}_{snake_name}({arg}: &{struct_name}{name}) -> Vec<FieldError> {{\n    let {mut_kw}errs: Vec<FieldError> = Vec::new();\n"
+            ));
+            out.push_str(&body);
+            out.push_str("    errs\n}\n\n");
+        }
+    }
+    out
+}
+
+/// 字段级约束（rules.field + DSL 属性 @min/@max）→ Rust 校验。
+fn access_needs_row(cond: &Expr) -> bool {
+    crate::dsl::expr_refs(cond)
+        .iter()
+        .any(|p| !(p.len() == 1 && crate::dsl::ACCESS_VARS.contains(&p[0].as_str())))
 }

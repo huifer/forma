@@ -324,6 +324,10 @@ pub trait Lower {
 
 ## 15. Implementation Plan
 
+> **实施进度（2026-11-05 更新）**：M2 的「`Json` 入内建清单」子项已完成（`BUILTIN_TYPES` 11 型）；
+> **M4 已完成**——CLI 与 MCP 统一经 `engine::check_project` 分发，DSL 工程不再假绿；
+> M1 / M2 其余子项 / M3 仍未开始。
+
 | 阶段 | 交付物 | 依赖 |
 |---|---|---|
 | 阶段 1 | M1 + M2 + M4（诊断定位、类型清单、CLI 一致性） | 无 |

@@ -136,6 +136,10 @@ api Students {
     sort    [createdAt desc]
     paginate offset
   }
+  // 操作级授权：修改学生档案需 admin / teacher 角色（服务端权威执行 → 403）
+  auth {
+    update → role in ["admin", "teacher"]
+  }
 }
 
 api Courses {

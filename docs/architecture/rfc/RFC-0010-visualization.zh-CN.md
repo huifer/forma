@@ -837,6 +837,55 @@ V0.1 已落地的断言见 `crates/forma/tests/visualization.rs`。
 
 ---
 
+## 17. 架构上下文与边界（Architectural Context）
+
+可视化在 Forma 中是 **Tier 2 可扩展层**的一等能力，与 Data / API / UI 并列，**不是**核心编译器的一部分。
+
+| 位置 | 边界 |
+|---|---|
+| Semantic Core（Tier 1） | 只承载通用语义（实体 / 关系 / 类型 / 规则）。**新增图表类型不得修改 Core**（见 RFC-0001 §7.3、RFC-0004） |
+| Visualization IR（Tier 2） | Chart / Dashboard IR——本 RFC §4 / §5 定义，承载图表语义、编码与变换 |
+| Adapter | ECharts Adapter（本 RFC §7）——IR → option 的**确定性纯函数投影** |
+| Runtime | React Runtime（本 RFC §8）——取数 / 变换 / 渲染 / 事件 / 响应式 |
+
+- 依赖方向：Core ← IR ← Adapter ← Runtime，**禁止反向**。
+- 能力注册与兼容性声明遵循 RFC-0004；本 RFC 只负责可视化领域自身的语义与实现。
+
+## 18. 兼容性（Compatibility）
+
+| 维度 | 承诺 |
+|---|---|
+| **Chart IR 版本** | 独立于 Specification / Capability / Adapter / Runtime 版本（见 RFC-0004） |
+| **向后兼容** | 破坏语义的 Chart IR 变更须走迁移并验证；新增图表类型属增量变更 |
+| **向前兼容** | 未知 `extensions.visualization.echarts` 字段**保留、不擅解释**；Adapter 只处理声明支持的扩展 |
+| **渲染引擎可替换** | Chart IR 不含 ECharts 概念；换渲染引擎 = 换 Adapter + Capability，**不改 Chart IR**（renderer 为可选实现偏好） |
+| **产物归属** | 生成物带 `@generated` 头；人工修改不被静默覆盖（ADR-0003） |
+
+破坏性变更须同时具备：迁移计划（§20）+ 兼容验证 + `breaking_change: true` 声明。
+
+## 19. 安全考量（Security Considerations）
+
+- **受控逃逸口**：`nativeExtension` 是唯一允许直接使用目标库原生能力的通道，必须**显式标记为不可移植**，且不得覆盖核心语义（见 §1.3）。
+- **数据读权限**：Capability 声明 `permissions: [data.read]`；图表只消费既有 API 的可见数据，不建立新的数据通道。
+- **数据外泄面**：图表系列可暴露实体字段。**字段级可见性由后端权威校验决定**——前端按权限隐藏不构成安全边界（ADR-0004）。
+- **渲染面**：option 由服务端可信数据生成；不得把未校验的用户输入直接拼入 option。
+- **DSL 逃逸口**：`nativeExtension` 中的表达式与字符串须经 Check 阶段校验，避免把任意脚本带入产物。
+
+## 20. 迁移计划（Migration Plan）
+
+| 步骤 | 说明 |
+|---|---|
+| 1 | DSL 新增 `chart` / `dashboard` 顶层构造——**增量**，既有 `.fm` 无需修改即可继续编译 |
+| 2 | Check 阶段引入 `viz-*` 诊断码：语义错误在 Emit 前硬失败，不产出半成品 |
+| 3 | ECharts Adapter + React Runtime 生成；产物遵循统一的 `@generated` 头与归属规则 |
+| 4 | 可视化产物按需注册 ECharts（`echarts.use([...])`）；无 chart 的工程零产物、零依赖 |
+
+- **回滚**：删除 DSL 中的 `chart` / `dashboard` 块即可；涉及数据结构的变更按 `emit/migrate.rs` 的版本化机制生成 `upgrade` / `rollback` 配对。
+- **不破坏无关产物**：图表语义的变更只影响可视化相关产物（Chart IR / web runtime），不触及 DDL 与后端产物。
+- 既有 `diagrams` 产出（Mermaid）遵循其自身的「一渲染块一 diagram 文档」约束，不受本 RFC 影响。
+
+---
+
 ## 附录 A：完整示例（V0.1 语法）
 
 ```fm
@@ -900,3 +949,10 @@ page RevenueDashboard {
 ## 附录 B：IR → ECharts option 映射全表
 
 见 §7.2 / §7.3。`option` 生成器是纯函数：输入 `ChartSpec`，输出 `serde_json::Value`，不含任何运行时状态。
+
+## 附录 C：变更记录（Change Log）
+
+| 版本 | 日期 | 摘要 |
+|---|---|---|
+| 1.0 | 2026-11-05 | 初版采纳（Accepted）：V0.1 可视化子系统落地——DSL `chart` 块 → Chart IR → ECharts Adapter → React Runtime，诊断码 `viz-*` 在 `forma build` 的 Emit 前硬失败 |
+| 1.0 | 2026-11-05 | 迁入治理体系：由 `docs/rfc/0001-visualization.zh-CN.md` 迁入并统一编号为 RFC-0010 |

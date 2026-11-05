@@ -147,11 +147,11 @@ rules OrderRules {
     deny old.status == "approved" && old.status != status
   }
 
-  // 4) 权限：角色规则（RBAC）
+  // 4) 权限：角色规则（RBAC，服务端权威执行）
   access Order {
     read   → any
     create → role in ["admin", "ops"]
-    update → role in ["admin", "ops"] && status != "approved"
+    update → role in ["admin", "ops"] && status != "approved"   // 行级条件
     delete → role == "admin"
   }
 }
@@ -159,6 +159,11 @@ rules OrderRules {
 
 - `old.` 前缀引用更新前的值（后端直取；前端仅提示）。
 - `reason` 是面向用户的 i18n 消息（API 400 响应体 + 表单错误文案）。
+- **权限条件支持角色级 + 行级**：角色级 `role in [...]` / `role == "..."` / `any`；
+  行级 `&& <字段比较>`（需实体行 → 仅 `get` / `update` / `delete` 可用）。
+- 行级条件的边界：跨关系遍历（`school.name`）与 Json 比较**未实现**——
+  编译期分别报 `dsl-access-relation-unsupported` / `dsl-access-field-type-unsupported`；Timestamp/Date 仅允许同类型字段对字段比较，其他组合报 `dsl-access-temporal-type-mismatch`，
+  **不会静默忽略**。见 [spec:protocols](../architecture/specifications/protocols/api-ui-protocols.zh-CN.md) §4、§7。
 
 ## 9. 表达式语言（封闭子集）
 
@@ -192,6 +197,10 @@ api Orders {
     create update delete → role in ["admin", "ops"]
   }
 }
+
+> `api { auth { ... } }` 是**操作级**授权（按 api 声明）；`rules { access { ... } }` 是**实体级**授权
+> （按实体声明，可表达 `any`）。两者**可叠加**，且都**服务端权威执行**——不满足则 403。
+> 前端隐藏按钮只是体验层，**不构成**安全边界（见 ADR-0004）。
 
 api OrderApprove {
   POST "/orders/{id}/approve"                      // 命令类操作

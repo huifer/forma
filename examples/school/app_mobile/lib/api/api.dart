@@ -26,11 +26,16 @@ class FieldError {
 class ApiException implements Exception {
   final int status;
   final String message;
+
+  /// 稳定错误码（Runtime Contract E1）——公开 API，可据此分支处理：
+  /// FORMA_VALIDATION_FAILED | FORMA_NOT_FOUND | FORMA_CONFLICT
+  /// | FORMA_UNAUTHORIZED | FORMA_FORBIDDEN | FORMA_INTERNAL
+  final String code;
   final List<FieldError> fields;
-  ApiException(this.status, this.message, this.fields);
+  ApiException(this.status, this.message, this.fields, {this.code = 'FORMA_UNKNOWN'});
 
   @override
-  String toString() => 'ApiException($status): $message';
+  String toString() => 'ApiException($status, $code): $message';
 }
 
 class Api {
@@ -70,6 +75,7 @@ class Api {
         res.statusCode,
         (err['error'] as String?) ?? res.reasonPhrase ?? 'request failed',
         FieldError.fromJsonList(err['fields'] as List<dynamic>?),
+        code: (err['code'] as String?) ?? 'FORMA_UNKNOWN',
       );
     }
     if (res.statusCode == 204 || res.body.isEmpty) return null;

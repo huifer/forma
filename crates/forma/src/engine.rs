@@ -427,3 +427,169 @@ fn read_cache(path: &Path) -> BuildCache {
         entries: HashMap::new(),
     }
 }
+
+// ── DSL 工程检查（CLI `forma validate` / `doctor` 与 MCP `forma_check` 共用）────
+//
+// 治理要求（memory: forma-mcp-init-dsl / RFC-0003 M4）：CLI 与 MCP **不允许漂移**。
+// 任何"检查 DSL 工程"的入口都必须走本节函数，否则会出现
+// 「带语义错误的 DSL 工程 `forma validate` 仍退出 0」的假绿。
+
+/// 是否为 DSL 工程（`forma.yaml` 带 `source`）。
+pub fn is_dsl_project(project_dir: &Path) -> bool {
+    load_manifest(project_dir)
+        .map(|m| m.manifest.source.is_some())
+        .unwrap_or(false)
+}
+
+/// DSL 工程的完整检查结果。
+pub struct DslCheck {
+    pub program: crate::dsl::Program,
+    /// 解析 + 语义检查诊断（`dsl-*` / `viz-*`）
+    pub diagnostics: Vec<Diagnostic>,
+    /// 风格 lint（`lint::LintDiagnostic`，rule 级）
+    pub lint: Vec<crate::lint::LintDiagnostic>,
+    pub project_name: String,
+    pub version: String,
+}
+
+impl DslCheck {
+    pub fn error_count(&self) -> usize {
+        self.diagnostics
+            .iter()
+            .filter(|d| d.severity == "error")
+            .count()
+    }
+}
+
+/// 加载并检查一个 DSL 工程。
+///
+/// **MUST NOT** 在未运行 `check_program` 的情况下报告"valid"——那正是被修掉的假绿。
+pub fn dsl_check(project_dir: &Path) -> Result<DslCheck> {
+    let loaded = load_manifest(project_dir)?;
+    let Some(source) = loaded.manifest.source.clone() else {
+        anyhow::bail!("not a DSL project (forma.yaml has no `source`)");
+    };
+    let (program, diagnostics) = crate::dsl::load_program(&loaded.dir, &source)?;
+    let mut diagnostics = diagnostics;
+    // 语义检查是编译管线第 3 阶段：类型/引用/规则/路由/权限/可视化的硬错误。
+    diagnostics.extend(crate::dsl::check_program(&program));
+    let lint = crate::lint::run_lint(&program, None);
+    let version = program
+        .app
+        .as_ref()
+        .map(|a| a.version.clone())
+        .unwrap_or_else(|| loaded.manifest.project_version.clone());
+    Ok(DslCheck {
+        program,
+        diagnostics,
+        lint,
+        project_name: loaded.manifest.project_name,
+        version,
+    })
+}
+
+/// 统一的工程检查入口：DSL 工程走 `check_program` 管线，联邦工程走语义图管线。
+///
+/// CLI `forma validate` / `doctor` **必须**经由本函数分发——
+/// 这是修掉「DSL 工程假绿」的那个分发点（RFC-0003 M4）。
+pub enum ProjectCheck {
+    Dsl(Box<DslCheck>),
+    Federal(Box<LoadOutcome>),
+}
+
+pub fn check_project(project_dir: &Path) -> Result<ProjectCheck> {
+    if is_dsl_project(project_dir) {
+        Ok(ProjectCheck::Dsl(Box::new(dsl_check(project_dir)?)))
+    } else {
+        Ok(ProjectCheck::Federal(Box::new(load_project(project_dir)?)))
+    }
+}
+
+/// DSL 工程的模型摘要（实体/枚举/API/页面/规则/图表）。
+///
+/// 权威实现在此；MCP `forma_graph` 与 CLI `forma graph` 共用，避免两份实现漂移。
+pub fn dsl_model_summary(program: &crate::dsl::Program) -> serde_json::Value {
+    let entities: Vec<serde_json::Value> = program
+        .entities
+        .iter()
+        .map(|e| {
+            let fields: Vec<serde_json::Value> = e
+                .fields
+                .iter()
+                .map(|f| {
+                    serde_json::json!({
+                        "name": f.name,
+                        "type": f.type_name,
+                        "optional": f.optional,
+                        "relation": crate::dsl::is_relation(program, &f.type_name),
+                        "enum": crate::dsl::is_enum(program, &f.type_name),
+                    })
+                })
+                .collect();
+            serde_json::json!({
+                "name": e.name,
+                "table": crate::identity::to_snake_case(&crate::dsl::pluralize(&e.name)),
+                "fields": fields,
+                "indexes": e.indexes,
+                "uniques": e.uniques,
+            })
+        })
+        .collect();
+    let enums: Vec<serde_json::Value> = program
+        .enums
+        .iter()
+        .map(|e| {
+            serde_json::json!({
+                "name": e.name,
+                "variants": e.variants.iter().map(|v| v.name.clone()).collect::<Vec<_>>(),
+            })
+        })
+        .collect();
+    let apis: Vec<serde_json::Value> = program
+        .apis
+        .iter()
+        .map(|a| {
+            serde_json::json!({
+                "name": a.name,
+                "entity": a.entity,
+                "operations": a.operations,
+            })
+        })
+        .collect();
+    let pages: Vec<serde_json::Value> = program
+        .pages
+        .iter()
+        .map(|p| {
+            serde_json::json!({
+                "name": p.name,
+                "route": p.route,
+                "kind": match p.body {
+                    crate::dsl::PageBody::Table(_) => "table",
+                    crate::dsl::PageBody::Form(_) => "form",
+                    crate::dsl::PageBody::Detail(_) => "detail",
+                    crate::dsl::PageBody::Chart(_) => "chart",
+                },
+            })
+        })
+        .collect();
+    serde_json::json!({
+        "entityCount": entities.len(),
+        "entities": entities,
+        "enums": enums,
+        "apis": apis,
+        "pages": pages,
+        "ruleBlocks": program.rules.len(),
+        "chartCount": program.charts.len(),
+        "charts": program
+            .charts
+            .iter()
+            .map(|c| {
+                serde_json::json!({
+                    "name": c.name,
+                    "type": c.chart_type,
+                    "source": c.source.as_ref().map(|(a, op)| format!("{a}.{op}")),
+                })
+            })
+            .collect::<Vec<_>>(),
+    })
+}

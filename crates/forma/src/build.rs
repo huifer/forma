@@ -3,6 +3,7 @@
 //! 抽成库函数的原因：CLI 与 MCP 必须产出完全一致的产物集合——
 //! AI 通过 MCP 看到的构建结果与开发者本地跑 `forma build` 不会漂移。
 
+use crate::capability::{CapabilityRegistry, ResolvedCapability};
 use crate::dsl::{load_program, Program};
 use crate::generators::GeneratedFile;
 use crate::manifest::load_manifest;
@@ -19,6 +20,10 @@ pub struct StepReport {
 pub struct BuildReport {
     pub project_name: String,
     pub steps: Vec<StepReport>,
+    /// 本次构建解析出的能力集合（RFC-0004 Capability Registry）。
+    pub capabilities: Vec<ResolvedCapability>,
+    /// 能力解析产生的非阻断诊断（warning / info）。
+    pub capability_diagnostics: Vec<crate::validate::Diagnostic>,
 }
 
 impl BuildReport {
@@ -58,15 +63,68 @@ pub fn load_dsl_program(project_dir: &Path) -> Result<(PathBuf, Program)> {
     Ok((loaded.dir, program))
 }
 
+/// 解析工程启用的能力（RFC-0004）。
+///
+/// 能力错误（未知能力 / 依赖缺失 / 版本不兼容 / pin 不匹配）会**阻断构建**——
+/// 这正是「能力必须自洽」的执行点。
+pub fn resolve_capabilities(
+    project_dir: &Path,
+    manifest: &crate::manifest::FormaManifest,
+) -> Result<(Vec<ResolvedCapability>, Vec<crate::validate::Diagnostic>)> {
+    let mut registry = CapabilityRegistry::with_builtins();
+    let mut diags = registry.load_project_dir(project_dir);
+    let resolution = registry.resolve(&manifest.capabilities.enabled, &manifest.capabilities.pins);
+    diags.extend(resolution.diagnostics.iter().cloned());
+
+    let errors: Vec<_> = diags.iter().filter(|d| d.severity == "error").collect();
+    if !errors.is_empty() {
+        let mut msg = format!("✗ build failed: {} capability error(s)\n", errors.len());
+        for d in &errors {
+            msg.push_str(&crate::validate::format_diagnostic(d));
+            msg.push('\n');
+        }
+        bail!("{}", msg.trim_end());
+    }
+    let non_blocking: Vec<_> = diags
+        .into_iter()
+        .filter(|d| d.severity != "error")
+        .collect();
+    Ok((resolution.active, non_blocking))
+}
+
 /// 完整构建：全部已配置 target 的产物写入磁盘并返回报告。
 pub fn run_build(project_dir: &Path) -> Result<BuildReport> {
     let (dir, program) = load_dsl_program(project_dir)?;
-    let app_name = crate::manifest::load_manifest(project_dir)?
-        .manifest
-        .project_name;
-    let targets = crate::manifest::load_manifest(project_dir)?
-        .manifest
-        .targets;
+    let loaded = crate::manifest::load_manifest(project_dir)?;
+    let app_name = loaded.manifest.project_name.clone();
+    let targets = loaded.manifest.targets.clone();
+    let (capabilities, capability_diagnostics) = resolve_capabilities(&dir, &loaded.manifest)?;
+
+    // 游标响应是 `{items,nextCursor}` envelope：Web 已支持 useInfiniteQuery；
+    // Flutter / visualization runtime 仍消费裸列表，必须在任何 emitter 写盘前显式拒绝，
+    // 避免同一工程的多目标产物语义不一致。
+    let cursor_apis: Vec<&str> = program
+        .apis
+        .iter()
+        .filter(|api| api.list.as_ref().and_then(|l| l.paginate.as_deref()) == Some("cursor"))
+        .map(|api| api.name.as_str())
+        .collect();
+    if !cursor_apis.is_empty() && targets.mobile.is_some() {
+        bail!(
+            "cursor pagination is not yet supported by the configured Flutter target (api: {}); remove the mobile target or use `paginate offset`",
+            cursor_apis.join(", ")
+        );
+    }
+    for chart in &program.charts {
+        if let Some((source_api, _)) = &chart.source {
+            if cursor_apis.iter().any(|name| name == &source_api.as_str()) {
+                bail!(
+                    "chart `{}` consumes cursor-paginated api `{}` but the visualization runtime currently requires a list response; use offset pagination",
+                    chart.name, source_api
+                );
+            }
+        }
+    }
 
     let db_out = targets
         .database
@@ -134,5 +192,7 @@ pub fn run_build(project_dir: &Path) -> Result<BuildReport> {
     Ok(BuildReport {
         project_name: app_name,
         steps,
+        capabilities,
+        capability_diagnostics,
     })
 }

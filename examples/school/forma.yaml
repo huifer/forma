@@ -4,6 +4,12 @@ project:
 
 source: ["forma/**/*.fm"]
 
+# 启用的能力（RFC-0004 Capability Registry）。
+# 依赖闭包由注册表补全：visualization.echarts → data.binding。
+capabilities:
+  data.mysql: ">=1.0.0 <2.0.0"
+  visualization.echarts: ">=1.0.0 <2.0.0"
+
 targets:
   db:
     engine: mysql

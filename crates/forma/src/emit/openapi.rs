@@ -47,6 +47,9 @@ pub fn emit_openapi(
         schemas.insert(entity.name.clone(), schema_obj);
     }
 
+    // 统一错误体 schema（Runtime Contract）
+    schemas.insert("Error".to_string(), error_schema());
+
     // api → paths
     for api in &program.apis {
         let entity = api.entity.as_str();
@@ -79,13 +82,38 @@ pub fn emit_openapi(
                                 "schema": { "type": "string" }
                             }));
                         }
+                        if list.paginate.as_deref() == Some("cursor") {
+                            parameters.push(serde_json::json!({
+                                "name": "cursor", "in": "query", "required": false,
+                                "schema": { "type": "string" },
+                                "description": "Opaque cursor returned as nextCursor by the previous page"
+                            }));
+                        } else {
+                            parameters.push(serde_json::json!({
+                                "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 }
+                            }));
+                        }
                         parameters.push(serde_json::json!({
-                            "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 }
-                        }));
-                        parameters.push(serde_json::json!({
-                            "name": "pageSize", "in": "query", "schema": { "type": "integer", "default": 20 }
+                            "name": "pageSize", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 200 }
                         }));
                     }
+                    let cursor_mode =
+                        api.list.as_ref().and_then(|l| l.paginate.as_deref()) == Some("cursor");
+                    let success_schema = if cursor_mode {
+                        serde_json::json!({
+                            "type": "object",
+                            "required": ["items", "nextCursor"],
+                            "properties": {
+                                "items": { "type": "array", "items": { "$ref": format!("#/components/schemas/{entity}") } },
+                                "nextCursor": { "type": "string", "nullable": true }
+                            }
+                        })
+                    } else {
+                        serde_json::json!({
+                            "type": "array",
+                            "items": { "$ref": format!("#/components/schemas/{entity}") }
+                        })
+                    };
                     paths.insert(
                         base.clone(),
                         serde_json::json!({
@@ -93,7 +121,9 @@ pub fn emit_openapi(
                                 "tags": [tag],
                                 "summary": format!("List {}", entity),
                                 "parameters": parameters,
-                                "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": format!("#/components/schemas/{entity}") } } } } } }
+                                "responses": with_error_responses(serde_json::json!({
+                                    "200": { "description": "OK", "content": { "application/json": { "schema": success_schema } } }
+                                }))
                             }
                         }),
                     );
@@ -106,7 +136,7 @@ pub fn emit_openapi(
                                 "tags": [tag],
                                 "summary": format!("Get {entity} by id"),
                                 "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } } ],
-                                "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": format!("#/components/schemas/{entity}") } } } } }
+                                "responses": with_error_responses(serde_json::json!({ "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": format!("#/components/schemas/{entity}") } } } } }))
                             }
                         }),
                     );
@@ -123,7 +153,7 @@ pub fn emit_openapi(
                                 "tags": [tag],
                                 "summary": format!("Create {entity}"),
                                 "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": format!("#/components/schemas/Create{entity}") } } } },
-                                "responses": { "201": { "description": "Created" } }
+                                "responses": with_error_responses(serde_json::json!({ "201": { "description": "Created" } }))
                             }),
                         );
                     // Create schema
@@ -155,7 +185,7 @@ pub fn emit_openapi(
                                 "summary": format!("Update {entity}"),
                                 "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } } ],
                                 "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": format!("#/components/schemas/Update{entity}") } } } },
-                                "responses": { "200": { "description": "OK" } }
+                                "responses": with_error_responses(serde_json::json!({ "200": { "description": "OK" } }))
                             }
                         }),
                     );
@@ -184,7 +214,7 @@ pub fn emit_openapi(
                                 "tags": [tag],
                                 "summary": format!("Delete {entity}"),
                                 "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } } ],
-                                "responses": { "200": { "description": "OK" } }
+                                "responses": with_error_responses(serde_json::json!({ "200": { "description": "OK" } }))
                             }),
                         );
                 }
@@ -301,4 +331,73 @@ fn input_field_schema(
         );
     }
     field_schema(program, field)
+}
+
+/// 统一错误响应（Runtime Contract · RFC-0005 E1/E3/E4）。
+///
+/// 错误码 → 状态码的映射由后端的 `error.rs::status_for` 声明；此处是它的**镜像**，
+/// 供 API 消费者（Agent / 前端 / 文档）读取。
+fn error_responses() -> serde_json::Map<String, serde_json::Value> {
+    let mut m = serde_json::Map::new();
+    for (status, code) in [
+        ("400", "FORMA_VALIDATION_FAILED"),
+        ("401", "FORMA_UNAUTHORIZED"),
+        ("403", "FORMA_FORBIDDEN"),
+        ("404", "FORMA_NOT_FOUND"),
+        ("409", "FORMA_CONFLICT"),
+        ("500", "FORMA_INTERNAL"),
+    ] {
+        m.insert(
+            status.to_string(),
+            serde_json::json!({
+                "description": code,
+                "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+            }),
+        );
+    }
+    m
+}
+
+/// 给某个操作的 responses 补上统一错误响应。
+fn with_error_responses(responses: serde_json::Value) -> serde_json::Value {
+    let mut obj = responses.as_object().cloned().unwrap_or_default();
+    for (k, v) in error_responses() {
+        obj.insert(k, v);
+    }
+    serde_json::Value::Object(obj)
+}
+
+/// 错误体 schema（与后端 `ErrorBody` 同形）。
+fn error_schema() -> serde_json::Value {
+    serde_json::json!({
+        "type": "object",
+        "required": ["error", "code"],
+        "properties": {
+            "error": { "type": "string", "description": "面向用户的文案" },
+            "code": {
+                "type": "string",
+                "description": "稳定错误码（公开 API，Agent 可据此分支处理）",
+                "enum": [
+                    "FORMA_VALIDATION_FAILED",
+                    "FORMA_NOT_FOUND",
+                    "FORMA_CONFLICT",
+                    "FORMA_UNAUTHORIZED",
+                    "FORMA_FORBIDDEN",
+                    "FORMA_INTERNAL"
+                ]
+            },
+            "fields": {
+                "type": "array",
+                "description": "字段级错误（仅校验失败）",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "field": { "type": "string" },
+                        "message": { "type": "string" }
+                    }
+                }
+            },
+            "requestId": { "type": "string", "description": "请求追踪 id（预留）" }
+        }
+    })
 }

@@ -110,7 +110,7 @@ fn mcp_check_reports_diagnostics_and_lint() {
 fn mcp_build_matches_cli_pipeline() {
     let dir = school_dir();
     let build = call_tool(&dir, "forma_build", &args()).unwrap();
-    assert_eq!(build["totalFiles"], 92); // +auth.rs +Web Login.tsx +Flutter login.dart // +audit.rs（命令）+ 2 图表页（flutter）+ viz 模板 5 + school 图表 2? 按实际
+    assert_eq!(build["totalFiles"], 93); // +auth.rs +Web Login.tsx +Flutter login.dart // +audit.rs（命令）+ 2 图表页（flutter）+ viz 模板 5 + school 图表 2? +access.ts（授权规则存在时生成的角色感知） 按实际
     let steps: Vec<&str> = build["steps"]
         .as_array()
         .unwrap()

@@ -264,23 +264,93 @@ Forma 至少存在五类版本，**不可混为一谈**：
 
 ---
 
-## 9. 自动化治理（规划）
+## 9. 自动化治理
 
-Forma 面向 AI，其 RFC 体系也应机器可读。规划 `forma docs` 子命令：
+Forma 面向 AI，其 RFC 体系也应机器可读。`forma docs` 子命令族：
 
 ```text
-forma docs validate            # 校验 frontmatter 完整、ID 不重复、状态合法
-forma docs lint               # 模板合规性、章节完整、必填项（安全/兼容/边界/验收/迁移）无缺
-forma docs graph              # 生成 RFC/ADR/Spec 依赖图，检测非法循环依赖
-forma docs check-compatibility # 变更是否声明 breaking_change
-forma docs check-dependencies  # depends_on / related_specs 引用存在
-forma docs check-links         # 内部链接有效
+forma docs validate            # ✅ 校验 frontmatter 完整、ID 不重复、状态合法、引用存在、无非法循环
+forma docs lint                # ✅ 模板章节完整性（核心章节不得省略）+ N/A 标注规范
+forma docs graph               # ✅ 渲染 RFC/ADR/Spec 依赖图（--json 输出机器可读）
+forma docs check-compatibility [--base <git-ref>] # ✅ 生命周期 + Git 基线语义 diff 检测破坏性变更
+forma docs check-dependencies  # ✅ 依赖引用存在性 + 自依赖 + 循环依赖
+forma docs check-links         # ✅ 内部相对链接是否指向存在的文件
 ```
 
-检查项：RFC ID 唯一、Metadata 完整、Status 合法、Dependencies 引用存在、无非法循环、
-ADR/Spec 引用有效、兼容性变更有声明、验收标准明确、重要变更有 Change Log。
+### 各子命令的检查项
 
-> 在工具落地前，本 README 与 `REVIEW-CHECKLIST.zh-CN.md` 作为人工 + Agent 审查依据。
+| 命令 | 诊断码 | 级别 |
+|---|---|---|
+| `validate` | `docs-frontmatter-missing` | error |
+| `validate` | `docs-id-duplicate` | error |
+| `validate` | `docs-status-invalid` | error |
+| `validate` | `docs-ref-missing`（核心引用） | error |
+| `validate` | `docs-cycle` | error |
+| `validate` | `docs-metadata-incomplete` | warning |
+| `validate` | `docs-ref-missing`（`related_specs` 等） | warning |
+| `validate` | `docs-acceptance-missing` / `docs-changelog-missing` | warning |
+| `validate` | `docs-breakingchange-missing` | info |
+| `lint` | `docs-lint-section-missing`（核心章节不得省略） | error |
+| `lint` | `docs-lint-section-missing`（其余章节） | info |
+| `lint` | `docs-lint-section-empty`（核心章节为空） | error |
+| `lint` | `docs-lint-na-without-reason` | warning |
+| `graph` | `docs-cycle` | error |
+| `check-compatibility` | `docs-compat-breaking-without-migration` / `docs-compat-major-without-marker` / `docs-compat-spec-deleted` | error |
+| `check-compatibility` | `docs-compat-breaking-candidate`（Git 基线检测到 MUST 规范性条款或带反引号标识的契约表行被删除/弱化，需人工确认） | warning |
+| `check-compatibility` | `docs-compat-deprecated-without-successor` / `docs-compat-dep-on-deprecated` | warning |
+| `check-dependencies` | `docs-ref-missing` / `docs-dep-self` / `docs-cycle` | error / warning |
+| `check-links` | `docs-link-broken` | warning |
+
+### 严重级别策略
+
+- `depends_on` / `related_rfcs` / `related_adrs` 缺失 → **error**（核心文档图必须闭合）；
+- `related_specs` / `supersedes` / `superseded_by` 缺失 → **warning**（spec 属分阶段交付，暴露缺口但不阻塞）；
+- 元数据必填项按文档类型区分（RFC 要 version/authors/created/updated；ADR 要 date/deciders；Spec 要 id/title/status）。
+
+- P1-10 自动检测是**保守检测器**：移除/弱化 MUST 条款或删除带反引号标识的契约表行 → warning candidate（需人工确认）；major version 增长但未声明 `breaking_change: true`、直接删除 spec → error。
+- 本地默认比较工作树与 `HEAD`；CI 对 PR 比较 `origin/$GITHUB_BASE_REF`，对 push 比较 `HEAD^`。手动指定：`forma docs check-compatibility --base <git-ref> [dir]`。
+- 实现：`crates/forma/src/docs.rs::detect_spec_compatibility_changes`；回归测试：`crates/forma/tests/docs_validate.rs`。
+- 退出码：0 error → 0；存在 error → 1。
+- CI：`.github/workflows/ci.yml` 的 `governance docs` job 强制执行 docs validate / lint / capability check / Git 基线兼容性检查。
+
+> 核心章节（边界 / 兼容性 / 安全 / 验收 / 迁移）缺失或为空在 `lint` 中是 **error**，会阻断 CI；
+> 不适用某章节时，按治理规范写明 `N/A` **及原因**即可通过（`docs-lint-na-without-reason` 守这条）。
+
+### 机器可读输出
+
+所有 `forma docs <action>` 支持 `--json`，输出结构固定，便于 CI 直接消费：
+
+```json
+{
+  "action": "validate",
+  "root": ".",
+  "docs_checked": 21,
+  "summary": { "error": 0, "warning": 0, "info": 0 },
+  "exit_code": 0,
+  "diagnostics": [ { "severity": "error", "code": "docs-cycle", "message": "…" } ]
+}
+```
+
+> `forma docs graph --json` 输出的是依赖图（`nodes` / `edges`），与诊断报告结构不同。
+
+---
+
+## 9b. Capability Registry（已实现）
+
+RFC-0004 的可扩容机制**已落地为代码**，不是纸面设计：
+
+| 落点 | 位置 |
+|---|---|
+| Manifest 类型与注册表 | `crates/forma/src/capability.rs` |
+| 工程声明 | `forma.yaml` 的 `capabilities:` 段（列表 / 映射带 pin 两种形式） |
+| 项目自备能力 | `<project>/capabilities/*.yaml`——**新增能力不必改核心** |
+| 构建期校验 | `crates/forma/src/build.rs::resolve_capabilities`（能力错误**阻断构建**） |
+| CLI | `forma capability list \| check \| show <id>` |
+| 回归测试 | `crates/forma/tests/capability.rs`（9 项，含「新增能力不改核心」端到端证明） |
+| 模式定义 | [spec:manifests](specifications/manifests/capability-manifest.zh-CN.md) |
+
+注册表职责：**发现 → 注册 → 依赖闭包 → 版本兼容 → 权限汇总**。
+编译器只消费注册表的结论，**不认识任何具体能力**——这是「新增能力不改 Semantic Core」的实现方式。
 
 ---
 
@@ -336,15 +406,33 @@ ADR/Spec 引用有效、兼容性变更有声明、验收标准明确、重要�
 
 ### 新增一个 Capability
 
-1. 在 `capability/<category>/` 下写 Manifest（见 RFC-0004）；
-2. 在 `capability/registry.md` 登记；
-3. 提供 Conformance 测试（见 `conformance/`）；
-4. **不得修改 Semantic Core**，除非发现新的通用语义概念、现有 IR 无法合理表达。
+**零核心改动路径**（推荐）：只需放一个 Manifest，编译器不需重新编译。
+
+1. 在工程的 `capabilities/<id>.yaml` 写 Manifest（模式见 [spec:manifests](specifications/manifests/capability-manifest.zh-CN.md)）；
+2. 在 `forma.yaml` 的 `capabilities:` 段启用它（可带版本 pin）；
+3. `forma capability check` 验证依赖闭包与版本兼容；
+4. `forma build` 时能力错误会**阻断构建**（未知能力 / 依赖缺失 / 版本不兼容 / pin 不匹配）。
+
+**编译器内置能力路径**：若能力需要编译器内的实现（而非仅声明）：
+
+5. 在 `crates/forma/src/capability.rs::builtin_manifests()` 加内置 Manifest；
+6. 在 `capability/registry.md` 登记；
+7. 提供 Conformance 测试（见 `conformance/`）；
+8. **不得修改 Semantic Core**，除非发现新的通用语义概念、现有 IR 无法合理表达。
+
+### 新增一份 Specification
+
+1. 在 `specifications/<topic>/` 下创建（`ir/` `types/` `protocols/` `manifests/` `serialization/` `compatibility/`）；
+2. frontmatter 用 `id: spec:<topic>`、`status`、`version`、`depends_on`、`breaking_change`；
+3. 内容 **MUST** 只固化**已核实的事实**；未实现的条目标入「已知缺口」章节并声明**不受本规范约束**；
+4. 被相关 RFC 以 `related_specs` 引用——引用悬空会被 `forma docs check-dependencies` 报出。
 
 ---
 
 ## 12. 相关文档
 
+- 架构治理总入口（本文件）：[README.md](README.md)
+- **架构缺口台账**（各 spec 缺口的统一排期）：[roadmap/gap-backlog.zh-CN.md](roadmap/gap-backlog.zh-CN.md)
 - 架构蓝图 v0.3（详细实现伴侣）：[../architecture.zh-CN.md](../architecture.zh-CN.md)
 - DSL 语言规范：[../dsl-spec.zh-CN.md](../dsl-spec.zh-CN.md)
 - 验证体系 L1–L5：[../verification.zh-CN.md](../verification.zh-CN.md)

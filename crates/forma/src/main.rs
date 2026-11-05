@@ -1,7 +1,7 @@
 //! forma CLI — Specification Federation 的命令行入口。
 
 use anyhow::Result;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::exit;
 
 const HELP: &str = "forma — Universal Specification Compiler
@@ -15,6 +15,8 @@ Usage:
   forma seed [dir]           生成确定性案例数据（db/seed/*.sql + fixtures/*.json）
   forma migrate [dir]        数据库迁移：status/history/verify/up/down/risk [--sql] [--apply] [--to v] [--steps N]
   forma patch [dir] <file>   Apply a semantic patch (transactional)
+  forma docs validate [dir]   Governance docs: validate | lint | graph | check-compatibility [--base <git-ref>] | check-dependencies | check-links
+  forma capability <action>   Capability registry: list | check | show <id> [dir]
   forma mcp [dir]            Start MCP stdio server (for Codex / Claude Code / Pi)
   forma --help | --version
 ";
@@ -38,10 +40,17 @@ fn run(argv: &[String]) -> Result<i32> {
         if let Some(name) = arg.strip_prefix("--") {
             if let Some(eq) = name.find('=') {
                 flags.insert(name[..eq].to_string(), name[eq + 1..].to_string());
-            } else if ["export", "out", "json", "to", "steps"].contains(&name) {
-                if let Some(v) = argv.get(i + 1) {
-                    flags.insert(name.to_string(), v.clone());
-                    i += 1;
+            } else if ["export", "out", "json-out", "to", "steps", "base"].contains(&name) {
+                // 只有当下一个 token 存在且不是另一个 flag 时，才把它当作本 flag 的参数；
+                // 否则按布尔开关处理（如 `forma graph --json`）。
+                match argv.get(i + 1) {
+                    Some(v) if !v.starts_with("--") => {
+                        flags.insert(name.to_string(), v.clone());
+                        i += 1;
+                    }
+                    _ => {
+                        flags.insert(name.to_string(), String::new());
+                    }
                 }
             } else {
                 flags.insert(name.to_string(), String::new());
@@ -175,8 +184,17 @@ fn run(argv: &[String]) -> Result<i32> {
             Ok(cmd_diff(
                 &project_dir(0),
                 &PathBuf::from(positional[1].clone()),
-                flags.get("out").map(PathBuf::from),
-                flags.get("json").map(PathBuf::from),
+                flags
+                    .get("out")
+                    .filter(|s| !s.is_empty())
+                    .map(PathBuf::from),
+                flags
+                    .get("json-out")
+                    .filter(|s| !s.is_empty())
+                    .map(PathBuf::from)
+                    // `--json` 是全局布尔开关；diff 保持旧语法 `--json d.json`——
+                    // 其后的路径落到 positional[2]。
+                    .or_else(|| positional.get(2).map(PathBuf::from)),
             ))
         }
         "init" => {
@@ -185,52 +203,21 @@ fn run(argv: &[String]) -> Result<i32> {
             println!("  next: forma validate && forma build");
             Ok(0)
         }
-        "validate" => {
-            let outcome = forma::engine::load_project(&project_dir(0))?;
-            for d in &outcome.diagnostics {
-                eprintln!("{}", forma::validate::format_diagnostic(d));
-            }
-            let errors = outcome
-                .diagnostics
-                .iter()
-                .filter(|d| d.severity == "error")
-                .count();
-            println!(
-                "{} {} nodes, {} diagnostics ({errors} errors)",
-                if errors == 0 {
-                    "✓ valid —"
-                } else {
-                    "✗ invalid —"
-                },
-                outcome.graph.all_nodes().len(),
-                outcome.diagnostics.len()
-            );
-            Ok(if errors == 0 { 0 } else { 1 })
-        }
-        "doctor" => {
-            let outcome = forma::engine::load_project(&project_dir(0))?;
-            let mut all = outcome.diagnostics.clone();
-            all.extend(forma::validate::run_doctor(&outcome.graph));
-            if all.is_empty() {
-                println!("✓ no cross-standard issues found");
-                return Ok(0);
-            }
-            for severity in ["error", "warning", "info"] {
-                for d in all.iter().filter(|d| d.severity == severity) {
-                    eprintln!("{}", forma::validate::format_diagnostic(d));
-                }
-            }
-            let count = |s: &str| all.iter().filter(|d| d.severity == s).count();
-            println!(
-                "\n{} errors, {} warnings, {} info",
-                count("error"),
-                count("warning"),
-                count("info")
-            );
-            Ok(if count("error") > 0 { 1 } else { 0 })
-        }
+        "validate" => Ok(cmd_validate(&project_dir(0))),
+        "doctor" => Ok(cmd_doctor(&project_dir(0))),
         "graph" => {
             let dir = project_dir(0);
+            // DSL 工程走模型摘要（与 MCP forma_graph 同源），联邦工程走语义图
+            if forma::engine::is_dsl_project(&dir) {
+                let check = forma::engine::dsl_check(&dir)?;
+                let summary = forma::engine::dsl_model_summary(&check.program);
+                if flags.contains_key("json") {
+                    println!("{}", serde_json::to_string_pretty(&summary)?);
+                } else {
+                    println!("{}", render_dsl_model_text(&summary));
+                }
+                return Ok(if check.error_count() > 0 { 1 } else { 0 });
+            }
             let outcome = forma::engine::load_project(&dir)?;
             let summary = outcome.graph.to_summary();
             if flags.contains_key("json") {
@@ -311,6 +298,8 @@ fn run(argv: &[String]) -> Result<i32> {
                     .unwrap_or(1),
             ))
         }
+        "docs" => Ok(cmd_docs(&positional, &flags)),
+        "capability" => Ok(cmd_capability(&positional, &flags)),
         "patch" => {
             let Some(patch_file) = positional.get(1) else {
                 eprintln!("usage: forma patch [dir] <patch.json>");
@@ -418,6 +407,23 @@ fn cmd_build_dsl(project_dir: PathBuf, _force: bool) -> i32 {
                     println!("  + {} ({})", f.path, f.generator);
                 }
             }
+            for d in &report.capability_diagnostics {
+                eprintln!("{}", forma::validate::format_diagnostic(d));
+            }
+            if !report.capabilities.is_empty() {
+                let caps: Vec<String> = report
+                    .capabilities
+                    .iter()
+                    .map(|c| {
+                        if c.explicit {
+                            format!("{}@{}", c.id, c.version)
+                        } else {
+                            format!("{}@{} (dep)", c.id, c.version)
+                        }
+                    })
+                    .collect();
+                println!("capabilities: {}", caps.join(", "));
+            }
             println!(
                 "✓ build ok — {} file(s) written ({})",
                 report.total_files(),
@@ -433,6 +439,132 @@ fn cmd_build_dsl(project_dir: PathBuf, _force: bool) -> i32 {
         Err(err) => {
             eprintln!("{err:#}");
             1
+        }
+    }
+}
+
+/// `forma capability <list|check|show> [dir]` —— Capability Registry 的命令行入口。
+fn cmd_capability(positional: &[String], flags: &std::collections::HashMap<String, String>) -> i32 {
+    let action = positional.first().cloned().unwrap_or_else(|| "list".into());
+    // `show <id> [dir]`；其余动作为 `[dir]`。
+    let (dir, id) = if action == "show" {
+        (
+            positional
+                .get(2)
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from(".")),
+            positional.get(1).cloned(),
+        )
+    } else {
+        (
+            positional
+                .get(1)
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from(".")),
+            None,
+        )
+    };
+
+    let mut registry = forma::capability::CapabilityRegistry::with_builtins();
+    let mut diags = registry.load_project_dir(&dir);
+
+    match action.as_str() {
+        "list" => {
+            for m in registry.manifests() {
+                let src = registry
+                    .source_of(&m.metadata.id)
+                    .cloned()
+                    .unwrap_or_default();
+                println!(
+                    "{:<26} {:<8} {:<16} {}",
+                    m.metadata.id, m.metadata.version, m.spec.category, src
+                );
+            }
+            println!("\n{} capability(s) registered", registry.ids().len());
+            0
+        }
+        "show" => {
+            let Some(id) = id else {
+                eprintln!("usage: forma capability show <capability-id> [dir]");
+                return 2;
+            };
+            match registry.get(&id) {
+                Some(m) => {
+                    match serde_json::to_string_pretty(m) {
+                        Ok(t) => println!("{t}"),
+                        Err(e) => {
+                            eprintln!("cannot serialize manifest: {e}");
+                            return 1;
+                        }
+                    }
+                    0
+                }
+                None => {
+                    eprintln!("✗ unknown capability `{id}`");
+                    1
+                }
+            }
+        }
+        "check" => {
+            let manifest = match forma::manifest::load_manifest(&dir) {
+                Ok(m) => m,
+                Err(e) => {
+                    eprintln!("✗ {e:#}");
+                    return 1;
+                }
+            };
+            let resolution = registry.resolve(
+                &manifest.manifest.capabilities.enabled,
+                &manifest.manifest.capabilities.pins,
+            );
+            diags.extend(resolution.diagnostics.iter().cloned());
+            for d in &diags {
+                eprintln!("{}", forma::validate::format_diagnostic(d));
+            }
+            let errors = diags.iter().filter(|d| d.severity == "error").count();
+            let warnings = diags.iter().filter(|d| d.severity == "warning").count();
+            if flags.contains_key("json") {
+                let out = serde_json::json!({
+                    "capabilities": resolution.active,
+                    "permissions": resolution.permissions,
+                    "diagnostics": diags,
+                    "errors": errors,
+                    "warnings": warnings,
+                });
+                match serde_json::to_string_pretty(&out) {
+                    Ok(t) => println!("{t}"),
+                    Err(e) => {
+                        eprintln!("cannot serialize report: {e}");
+                        return 1;
+                    }
+                }
+            } else {
+                for c in &resolution.active {
+                    println!(
+                        "{:<26} {:<8} {}",
+                        c.id,
+                        c.version,
+                        if c.explicit { "explicit" } else { "dependency" }
+                    );
+                }
+                if !resolution.permissions.is_empty() {
+                    println!("\npermissions: {}", resolution.permissions.join(", "));
+                }
+            }
+            if errors > 0 {
+                println!("✗ capability check — {errors} error(s), {warnings} warning(s)");
+                1
+            } else {
+                println!(
+                    "✓ capability check — {} active, {warnings} warning(s)",
+                    resolution.active.len()
+                );
+                0
+            }
+        }
+        other => {
+            eprintln!("forma capability: unknown action `{other}` (available: list, check, show)");
+            2
         }
     }
 }
@@ -668,6 +800,306 @@ fn render_graph_text(summary: &forma::graph::GraphSummary) -> String {
                     "   ├─ {} → [{}] {} \"{}\" ({})",
                     edge.kind, target.standard, target.kind, target.name, target.source.file
                 ));
+            }
+        }
+    }
+    lines.join("\n")
+}
+
+fn cmd_docs(positional: &[String], flags: &std::collections::HashMap<String, String>) -> i32 {
+    let known = [
+        "validate",
+        "lint",
+        "graph",
+        "check-compatibility",
+        "check-dependencies",
+        "check-links",
+    ];
+    let (action, dir) = if positional
+        .first()
+        .map(|s| known.contains(&s.as_str()))
+        .unwrap_or(false)
+    {
+        (
+            positional[0].clone(),
+            positional
+                .get(1)
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from(".")),
+        )
+    } else {
+        (
+            "validate".to_string(),
+            positional
+                .first()
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from(".")),
+        )
+    };
+
+    if action == "graph" {
+        return cmd_docs_graph(&dir, flags);
+    }
+
+    let report = match action.as_str() {
+        "validate" => forma::docs::run_docs_validate(&dir),
+        "lint" => forma::docs::run_docs_lint(&dir),
+        "check-dependencies" => forma::docs::run_docs_check_dependencies(&dir),
+        "check-compatibility" => forma::docs::run_docs_check_compatibility_against(
+            &dir,
+            flags
+                .get("base")
+                .filter(|s| !s.is_empty())
+                .map(String::as_str),
+        ),
+        "check-links" => forma::docs::run_docs_check_links(&dir),
+        other => {
+            eprintln!(
+                "forma docs: unknown action '{other}' (available: {})",
+                known.join(", ")
+            );
+            return 2;
+        }
+    };
+
+    // `--json`：输出机器可读报告（诊断不重复写到 stderr）。
+    if flags.contains_key("json") {
+        let json = forma::docs::json_report(&action, &dir, &report);
+        match serde_json::to_string_pretty(&json) {
+            Ok(t) => println!("{t}"),
+            Err(e) => {
+                eprintln!("forma docs {action}: cannot serialize report: {e}");
+                return 1;
+            }
+        }
+        return json.exit_code;
+    }
+
+    for d in &report.diagnostics {
+        eprintln!("{}", forma::validate::format_diagnostic(d));
+    }
+    let errors = report
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == "error")
+        .count();
+    let warnings = report
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == "warning")
+        .count();
+    let infos = report
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == "info")
+        .count();
+
+    if errors > 0 {
+        println!(
+            "✗ docs {action} — {} governed doc(s) checked, {errors} error(s), {warnings} warning(s)",
+            report.docs_checked
+        );
+        1
+    } else {
+        println!(
+            "✓ docs {action} — {} governed doc(s) checked, {warnings} warning(s), {infos} info",
+            report.docs_checked
+        );
+        0
+    }
+}
+
+/// `forma docs graph` —— 渲染 RFC/ADR/Spec 依赖图（`--json` 输出机器可读格式）。
+fn cmd_docs_graph(dir: &Path, flags: &std::collections::HashMap<String, String>) -> i32 {
+    let (graph, diagnostics) = forma::docs::build_docs_graph(dir);
+    for d in &diagnostics {
+        eprintln!("{}", forma::validate::format_diagnostic(d));
+    }
+    if flags.contains_key("json") {
+        match serde_json::to_string_pretty(&graph) {
+            Ok(text) => println!("{text}"),
+            Err(e) => {
+                eprintln!("forma docs graph: cannot serialize graph: {e}");
+                return 1;
+            }
+        }
+    } else {
+        println!("{}", forma::docs::render_docs_graph(&graph, &diagnostics));
+    }
+    let errors = diagnostics.iter().filter(|d| d.severity == "error").count();
+    if errors > 0 {
+        1
+    } else {
+        0
+    }
+}
+
+/// `forma validate` —— DSL 工程走 `check_program` 管线，联邦工程走语义图管线。
+///
+/// **关键**：DSL 工程**必须**跑 `check_program`——否则带语义错误的工程会「假绿」
+/// （退出码 0、0 diagnostics）。这是 RFC-0003 M4 的落地点。
+fn cmd_validate(project_dir: &Path) -> i32 {
+    match forma::engine::check_project(project_dir) {
+        Ok(forma::engine::ProjectCheck::Dsl(check)) => {
+            for d in &check.diagnostics {
+                eprintln!("{}", forma::validate::format_diagnostic(d));
+            }
+            let errors = check.error_count();
+            let warnings = check
+                .diagnostics
+                .iter()
+                .filter(|d| d.severity == "warning")
+                .count();
+            println!(
+                "{} {} — {} entities, {} enums, {} apis, {} pages ({} errors, {} warnings)",
+                if errors == 0 {
+                    "✓ valid"
+                } else {
+                    "✗ invalid"
+                },
+                check.project_name,
+                check.program.entities.len(),
+                check.program.enums.len(),
+                check.program.apis.len(),
+                check.program.pages.len(),
+                errors,
+                warnings
+            );
+            if errors > 0 {
+                1
+            } else {
+                0
+            }
+        }
+        Ok(forma::engine::ProjectCheck::Federal(outcome)) => {
+            for d in &outcome.diagnostics {
+                eprintln!("{}", forma::validate::format_diagnostic(d));
+            }
+            let errors = outcome
+                .diagnostics
+                .iter()
+                .filter(|d| d.severity == "error")
+                .count();
+            println!(
+                "{} {} nodes, {} diagnostics ({errors} errors)",
+                if errors == 0 {
+                    "✓ valid —"
+                } else {
+                    "✗ invalid —"
+                },
+                outcome.graph.all_nodes().len(),
+                outcome.diagnostics.len()
+            );
+            if errors > 0 {
+                1
+            } else {
+                0
+            }
+        }
+        Err(err) => {
+            eprintln!("✗ {err:#}");
+            1
+        }
+    }
+}
+
+/// `forma doctor` —— DSL 工程跑语义检查，联邦工程跑跨标准诊断。
+fn cmd_doctor(project_dir: &Path) -> i32 {
+    match forma::engine::check_project(project_dir) {
+        Ok(forma::engine::ProjectCheck::Dsl(check)) => {
+            for d in &check.diagnostics {
+                eprintln!("{}", forma::validate::format_diagnostic(d));
+            }
+            for d in &check.lint {
+                eprintln!("[{}] {} — {}", d.severity.to_uppercase(), d.rule, d.message);
+            }
+            let errors = check.error_count();
+            let warnings = check
+                .diagnostics
+                .iter()
+                .filter(|d| d.severity == "warning")
+                .count()
+                + check
+                    .lint
+                    .iter()
+                    .filter(|d| d.severity == "warning")
+                    .count();
+            println!(
+                "\n{} errors, {} warnings, {} lint finding(s)",
+                errors,
+                warnings,
+                check.lint.len()
+            );
+            if errors > 0 {
+                1
+            } else {
+                0
+            }
+        }
+        Ok(forma::engine::ProjectCheck::Federal(outcome)) => {
+            let mut all = outcome.diagnostics.clone();
+            all.extend(forma::validate::run_doctor(&outcome.graph));
+            if all.is_empty() {
+                println!("✓ no cross-standard issues found");
+                return 0;
+            }
+            for severity in ["error", "warning", "info"] {
+                for d in all.iter().filter(|d| d.severity == severity) {
+                    eprintln!("{}", forma::validate::format_diagnostic(d));
+                }
+            }
+            let count = |s: &str| all.iter().filter(|d| d.severity == s).count();
+            println!(
+                "\n{} errors, {} warnings, {} info",
+                count("error"),
+                count("warning"),
+                count("info")
+            );
+            if count("error") > 0 {
+                1
+            } else {
+                0
+            }
+        }
+        Err(err) => {
+            eprintln!("✗ {err:#}");
+            1
+        }
+    }
+}
+
+/// DSL 模型摘要的文本渲染。
+fn render_dsl_model_text(summary: &serde_json::Value) -> String {
+    let mut lines = vec!["Forma DSL 模型".to_string(), "==============".to_string()];
+    if let Some(entities) = summary.get("entities").and_then(|v| v.as_array()) {
+        for e in entities {
+            let name = e.get("name").and_then(|v| v.as_str()).unwrap_or("?");
+            let table = e.get("table").and_then(|v| v.as_str()).unwrap_or("");
+            lines.push(format!("▣ {name}  ({table})"));
+            if let Some(fields) = e.get("fields").and_then(|v| v.as_array()) {
+                for f in fields {
+                    let fname = f.get("name").and_then(|v| v.as_str()).unwrap_or("?");
+                    let ftype = f.get("type").and_then(|v| v.as_str()).unwrap_or("?");
+                    let opt = if f.get("optional").and_then(|v| v.as_bool()).unwrap_or(false) {
+                        "?"
+                    } else {
+                        ""
+                    };
+                    lines.push(format!("    ├─ {fname}: {ftype}{opt}"));
+                }
+            }
+        }
+    }
+    for (label, key) in [("枚举", "enums"), ("API", "apis"), ("页面", "pages")] {
+        if let Some(items) = summary.get(key).and_then(|v| v.as_array()) {
+            if items.is_empty() {
+                continue;
+            }
+            lines.push(String::new());
+            lines.push(format!("{label}（{}）", items.len()));
+            for i in items {
+                let n = i.get("name").and_then(|v| v.as_str()).unwrap_or("?");
+                lines.push(format!("  • {n}"));
             }
         }
     }

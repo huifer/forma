@@ -47,7 +47,7 @@ Forma 的产物是**普通代码**——生成的 Rust / React / Flutter 工程�
 
 1. **无版本契约**：产物运行时不声明版本，无法判断「这个产物需要哪一版运行时行为」。
 2. **无配置分层约定**：Build-time / Environment / Tenant / User 四类配置的边界未定义；密钥注入方式未定义（RFC-0008 S1 引用了 Secret Provider，但未定义接口）。
-3. **无错误契约**：后端错误类型已生成（`src/error.rs`），但错误码与前端处理、Agent 消费之间的契约未成文。
+3. ~~**无错误契约**~~（**已关闭 2026-11-05**：`FORMA_*` 稳定错误码贯穿后端 / Web / Flutter / OpenAPI）。
 4. **无生命周期与健康检查约定**：生成的 axum 应用有无 `/health` 端点、优雅停机约定，未定义。
 
 ### 3.2 Why Existing Architecture Is Insufficient
@@ -206,7 +206,10 @@ pub trait SecretProvider {
 | E4 结构一致 | 所有后端错误同形；前端 API 客户端按同形解析 |
 | E5 不泄露内部细节 | 不返回堆栈、内部路径、SQL |
 
-> `fields[].message` 的 i18n 结构**已落地**（生成物 `ApiException` 已含 `fields`），本 RFC 是把它**契约化**。
+> **已落地（2026-11-05）**：`error` / `code`（`FORMA_*` 稳定错误码）/ `fields` 同形贯穿
+> 后端（`error.rs`）→ Web（`api.ts`）→ Flutter（`ApiException.code`）→ OpenAPI（`Error` schema + 统一错误响应）；
+> E5 已实现（内部错误只写日志，不回显 SQL）；`requestId` 为预留字段。
+> 行级条件 / 资源级 / 字段级授权见 [spec:protocols](../specifications/protocols/api-ui-protocols.zh-CN.md) §7。
 
 **生命周期与健康检查**：
 

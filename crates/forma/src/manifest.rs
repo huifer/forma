@@ -88,6 +88,8 @@ pub struct FormaManifest {
     pub specifications: Vec<(String, Vec<SpecEntry>)>,
     pub bindings: Vec<IdentityBinding>,
     pub targets: Targets,
+    /// 项目启用的能力（RFC-0004 Capability Registry）。
+    pub capabilities: crate::capability::CapabilitySelection,
 }
 
 impl FormaManifest {
@@ -154,6 +156,51 @@ fn normalize_manifest(
         .and_then(|v| v.as_str())
         .unwrap_or("0.0.0")
         .to_string();
+
+    // 能力选择（RFC-0004）：列表形式 `[id, ...]` 或映射形式 `{id: version-constraint}`。
+    let mut capabilities = crate::capability::CapabilitySelection::default();
+    if let Some(caps) = root.get(serde_yaml::Value::String("capabilities".into())) {
+        match caps {
+            serde_yaml::Value::Sequence(seq) => {
+                for item in seq {
+                    if let Some(id) = item.as_str() {
+                        capabilities.enabled.push(id.to_string());
+                    } else {
+                        issues.push(ManifestIssue {
+                            severity: "warning".into(),
+                            message: "capabilities list entries must be capability ids (strings)"
+                                .into(),
+                        });
+                    }
+                }
+            }
+            serde_yaml::Value::Mapping(map) => {
+                for (k, v) in map {
+                    let id = k.as_str().unwrap_or_default().to_string();
+                    if id.is_empty() {
+                        continue;
+                    }
+                    capabilities.enabled.push(id.clone());
+                    if let Some(pin) = v.as_str() {
+                        capabilities.pins.push((id, pin.to_string()));
+                    } else if !v.is_null() {
+                        issues.push(ManifestIssue {
+                            severity: "warning".into(),
+                            message: format!(
+                                "capability `{id}` pin must be a version constraint string"
+                            ),
+                        });
+                    }
+                }
+            }
+            _ => issues.push(ManifestIssue {
+                severity: "warning".into(),
+                message:
+                    "capabilities must be a list of ids or a mapping of id → version constraint"
+                        .into(),
+            }),
+        }
+    }
 
     let mut specifications: Vec<(String, Vec<SpecEntry>)> = Vec::new();
     if let Some(specs) = root
@@ -284,6 +331,7 @@ fn normalize_manifest(
         specifications,
         bindings,
         targets,
+        capabilities,
     })
 }
 

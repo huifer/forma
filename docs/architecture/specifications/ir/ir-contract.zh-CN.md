@@ -1,11 +1,11 @@
 ---
 id: spec:ir
 title: Unified Semantic IR Contract
-status: Proposed
-version: 1.0
+status: Accepted
+version: 1.0.0
 authors: [forma-maintainers]
 created: 2026-11-04
-updated: 2026-11-04
+updated: 2026-11-05
 domain: semantic-core
 governing_rfc: RFC-0003
 supersedes: []
@@ -17,6 +17,10 @@ breaking_change: false
 ---
 
 # spec:ir — 统一语义 IR 契约（Unified Semantic IR Contract）
+
+> **规范性**：本文件定义 IR 的**目标契约**（规范性条款用 MUST / MUST NOT / SHOULD 表述）。
+> §12「现状差距」逐条列出**当前实现与本契约的偏差**——这些条目**尚未符合本规范**，
+> 且**不受本规范约束**。契约获批 ≠ 实现达标；实现进度以 §12 表格为准。
 
 > 本文档是 Layer 2（Specification）层的**语义契约**，规定 IR 节点的结构、标识、来源、版本与扩展规则。
 > 边界与依赖红线由 [RFC-0003](../../rfc/RFC-0003-semantic-core.zh-CN.md) 规定；本文档只定义**语义**。
@@ -305,9 +309,9 @@ lint-*   风格与最佳实践
 | G-2 | DSL 侧无依赖边 | 无法计算影响面 | RFC-0003 M3 |
 | G-3 | 来源追踪仅覆盖字段与图表 | 诊断无法精确定位到实体 / API / 页面 | RFC-0003 M1 |
 | G-4 | IR 无版本 | 无法判定契约版本与兼容范围 | RFC-0003 M2 |
-| G-5 | `Json` 在生成层被识别但不在检查层内建清单 | `field meta Json` 被 `dsl-unknown-type` 拒绝（已复现） | RFC-0003 M2 |
-| G-6 | `access` / `auth` 被解析但检查层与生成层均不消费 | 权限声明是空承诺 | RFC-0008 C1/C2 |
-| G-7 | 无 DSL → 语义图降级 | 两条路径语义能力割裂 | ADR-0002 / RFC-0003 M3 |
+| ~~G-5~~ | ~~`Json` 在生成层被识别但不在检查层内建清单~~ | **已关闭（2026-11-05）**：`Json` 已纳入 `BUILTIN_TYPES`（11 型），四目标映射齐备 | ✅ 已完成 |
+| ~~G-6~~ | ~~`access` / `auth` 被解析但检查层与生成层均不消费~~ | **已关闭（2026-11-05）**：检查层新增 7 条 `dsl-auth-*` / `dsl-access-*` 诊断；生成层在服务端强制执行（401/403）；`api { auth }` 与 `rules { access }` 均已落地 | ✅ 已完成 |
+| G-7 | 无 DSL → 语义图降级 | 两条路径语义能力割裂（**M4 已完成**：CLI/MCP 对 DSL 工程统一走 `check_program`，假绿已消除） | ADR-0002 / RFC-0003 M3 |
 
 ---
 
@@ -333,3 +337,64 @@ lint-*   风格与最佳实践
 | 版本 | 日期 | 摘要 |
 |---|---|---|
 | 1.0 | 2026-11-04 | 初版：定义节点结构、稳定标识、依赖边、来源追踪、版本、扩展、类型系统、语义检查与序列化契约；记录 7 项现状差距 |
+| 1.0.0 | 2026-11-05 | 状态提升为 Accepted（契约定稿）；关闭 G-6（权限声明不再为空承诺）、G-5（`Json` 入内建清单）；补 §15 双 IR 桥接路径；M4 完成（CLI/MCP 对 DSL 工程统一走 `check_program`，消除假绿） |
+
+---
+
+## 15. 双 IR 桥接路径（DSL Program → 联邦语义图）
+
+现状是**两套互不相通的 IR**（ADR-0002 已裁定 DSL `Program` 为规范语义表示，联邦图降级为导入视图）：
+
+| 维度 | DSL 主线 `Program` | 联邦 `UnifiedSemanticGraph` |
+|---|---|---|
+| 稳定标识 | ❌ 仅声明名 | ✅ `forma://` URI |
+| 依赖边 | ❌ 无 | ✅ `EdgeKind`（5 类） |
+| 来源追踪 | ⚠️ 仅 `FieldDecl.line` / `ChartDecl.line` | ✅ `SourceRef` |
+| 语义检查 | ✅ `check_program` | ✅ `run_doctor` |
+
+**桥接目标**：让 DSL 工程也能获得稳定标识、依赖边与影响闭包，同时**不改动既有 emitter 契约**。
+
+### 15.1 四步渐进（与 RFC-0003 §14 的 M1–M3 对齐）
+
+| 步 | 交付物 | 依赖 | 验收 |
+|---|---|---|---|
+| **M1** | 补 `EntityDecl` / `ApiDecl` / `PageDecl` / `CommandDecl` 的 `line`；诊断携带精确 file/line | 无 | 全部 `dsl-*` 诊断可定位到规格行 |
+| **M2** | 引入 `IR_VERSION` 与 `Program.ir_version`；补 `Json` 等内建类型到**单一权威清单** | 无 | 检查层与生成层类型集合一致；`Json` 字段可通过 `forma check` |
+| **M3** | 引入 `StableId` 与 `SourceRef`；为 DSL 实体/字段/API/页面/命令**构造节点与边** | M1、M2 | DSL 工程可导出与联邦**同构**的节点/边集合 |
+| **M4** | 修正 CLI/MCP 一致性：`validate` / `doctor` / `graph` 对 DSL 工程走 `check_program` 路径 | 无 | 含语义错误的 DSL 工程 `forma validate` **必须非零退出** |
+
+> M4 是**安全相关**修复：当前「假绿」会让 CI 在带错误的规格上通过——优先于 M3 落地。
+
+### 15.2 桥接的落点
+
+```text
+DSL .fm ──parse──▶ Program（当前规范表示）
+                      │
+                      ├──▶ check_program（语义检查，L2）
+                      │
+                      └──▶ lower_to_graph()  ← 本桥接（M3 新增）
+                                │
+                                ▼
+                    UnifiedSemanticGraph（稳定标识 + 依赖边）
+                                │
+                    ┌───────────┼───────────┐
+                    ▼           ▼           ▼
+              impact 闭包   patch 预览   联邦导入视图
+```
+
+- **桥接是单向的**：`Program → 图`。联邦图**不得**反向成为规范表示（ADR-0002）。
+- 迁移期间既有 emitter 继续消费 `Program`（M1–M3 **不改变** `Program` 既有字段语义），
+  因此**无需同步改动任何 emitter**——这是「不改核心也能补齐契约」的关键。
+- 桥接完成后，`forma impact` / `forma patch` 对 DSL 工程**不再被拒绝**
+  （当前被 `reject_dsl_only_tool` 显式拒绝）。
+
+### 15.3 兼容性
+
+- 桥接**不改变** DSL 语法、IR 语义与目标产物——因此**不是破坏性变更**。
+- 新增的节点/边只影响**分析类工具**（impact / patch / 依赖图）的可用性。
+- 图的 `NodeKind` / `EdgeKind` 取值集合**MUST** 与联邦侧保持同构（Conformance §13 要求）。
+
+### 15.4 现状
+
+- G-1（稳定标识）、G-2（依赖边）、G-3（来源追踪）、G-4（IR 版本）、G-7（无降级）**仍未关闭**。
+- 本节是这些差距的**实施路径**，不是完成声明。

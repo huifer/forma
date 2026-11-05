@@ -39,6 +39,36 @@ jobs:
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
 
+  # RFC 治理：docs/architecture 下的受管文档（RFC / ADR / Spec）必须通过 forma docs validate。
+  # 这是治理契约的机器防线——ID 唯一、状态合法、依赖引用存在、无非法循环依赖。
+  docs:
+    name: governance docs (RFC/ADR/Spec)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Validate governance docs
+        run: cargo run --locked -- docs validate
+      - name: Lint governance docs (template sections)
+        run: cargo run --locked -- docs lint
+      - name: Check capabilities (registry / dependencies / compatibility)
+        run: cargo run --locked -- capability check
+      - name: Detect specification compatibility changes
+        shell: bash
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            git fetch --no-tags origin "$GITHUB_BASE_REF"
+            BASE="origin/$GITHUB_BASE_REF"
+          elif git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+            BASE="HEAD^"
+          else
+            BASE="HEAD"
+          fi
+          cargo run --locked -- docs check-compatibility --base "$BASE"
+
   # 案例协议 V9/V15：生成的 Flutter 工程必须 analyze 干净 + 契约测试通过。
   # 在线用例在后端不可达时自动跳过，因此这里不需要数据库。
   flutter:
@@ -79,6 +109,18 @@ jobs:
       - name: Production build
         working-directory: examples/school/generated/web
         run: npm run build
+      # P1-6：cursor-pagination reference app 验证 keyset emitter、Web useInfiniteQuery 与 OpenAPI envelope。
+      - name: Generate cursor pagination reference app
+        run: cargo run --locked -- build examples/cursor-pagination
+      - name: Type check and production build (cursor pagination)
+        working-directory: examples/cursor-pagination/generated/web
+        run: |
+          npm install --no-audit --no-fund
+          npx tsc --noEmit
+          npm run build
+      - name: Compile generated cursor backend
+        working-directory: examples/cursor-pagination/generated/backend
+        run: cargo check
 
   # 案例协议 V14：真实 MySQL 8 端到端——迁移链 + 种子数据 + 后端 + API 冒烟
   # （list/filter/search/create/validation-error/guard）。这是历史上抓出 8 类
