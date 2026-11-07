@@ -106,6 +106,7 @@ fn generate(dir: &Path) -> (PathBuf, String) {
         &out.join("web").to_string_lossy(),
         "errc",
         false,
+        false,
     )
     .unwrap();
     forma::emit::emit_openapi(

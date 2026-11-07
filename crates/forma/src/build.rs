@@ -276,6 +276,11 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
                     .as_ref()
                     .map(|t| t.uses_rhf)
                     .unwrap_or(false),
+                targets
+                    .frontend
+                    .as_ref()
+                    .map(|t| t.uses_zustand)
+                    .unwrap_or(false),
             ),
         )?;
     }

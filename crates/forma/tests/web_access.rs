@@ -133,6 +133,7 @@ fn generate_web(dir: &Path) -> String {
         &out.to_string_lossy(),
         "webaccess",
         false,
+        false,
     )
     .unwrap();
     fs::read_to_string(out.join("src/pages/StudentList.tsx")).unwrap()
@@ -153,6 +154,7 @@ fn access_rules_produce_access_ts() {
         &program,
         &out.to_string_lossy(),
         "webaccess",
+        false,
         false,
     )
     .unwrap();
@@ -222,6 +224,7 @@ fn unrestricted_entity_is_untouched() {
         &program,
         &out.to_string_lossy(),
         "webaccess",
+        false,
         false,
     )
     .unwrap();
@@ -298,6 +301,7 @@ page StudentEdit {
         &program,
         &out.to_string_lossy(),
         "webaccess",
+        false,
         false,
     )
     .unwrap();
@@ -383,6 +387,7 @@ auth module {
         &program,
         &out.to_string_lossy(),
         "webaccess",
+        false,
         false,
     )
     .unwrap();

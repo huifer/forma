@@ -72,6 +72,8 @@ pub struct TargetConfig {
     pub out: Option<String>,
     /// M9/P1：前端表单库（react-hook-form）；缺省 = 受控 state 表单（零变化）
     pub uses_rhf: bool,
+    /// M9/P1：客户端状态库（zustand，列表过滤/搜索从页面数据依赖派生）；缺省 = 局部 useState
+    pub uses_zustand: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -365,6 +367,11 @@ fn parse_target_config(cfg: &serde_yaml::Mapping) -> TargetConfig {
         uses_rhf: cfg
             .get(serde_yaml::Value::String("usesRhf".into()))
             .or_else(|| cfg.get(serde_yaml::Value::String("uses_rhf".into())))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        uses_zustand: cfg
+            .get(serde_yaml::Value::String("usesZustand".into()))
+            .or_else(|| cfg.get(serde_yaml::Value::String("uses_zustand".into())))
             .and_then(|v| v.as_bool())
             .unwrap_or(false),
     }

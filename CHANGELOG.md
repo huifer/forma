@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **状态管理生成 · Zustand（M9 / P1）**：
+  - manifest opt-in：`targets.frontend.usesZustand: true`（缺省 = 局部 useState，零变化）；
+  - `src/store.ts`：**从列表页数据依赖派生**——每个列表页一个 store（filters 键取自
+    api.list filters / search），setter 与受控模板调用签名兼容（setFilters 收 updater、
+    setSearch 直传），列表页仅替换状态声明行，queryKey / 输入绑定零变化；
+  - package.json 按需引入 zustand；无列表页或未启用时零产物；
+  - 回归 `tests/web_zustand.rs`（2 项：派生 store + 缺省零变化）；
+  - 生成端验证：`npx tsc --noEmit` 0 错 + `npm run build`（vite）通过。
+  - 注：Pinia（Vue 侧）留待 Vue 列表页引入过滤/搜索依赖面后跟进（当前 Vue 列表页
+    无 filters/search 状态可派生，不造无源之 store）。
+
+### Added
 - **React Hook Form 适配（M9 / P1）**：
   - manifest opt-in：`targets.frontend.usesRhf: true`（缺省 = 受控 state 表单，产物零变化）；
   - 表单页改用 `useForm` + `register`（文本）/ `useController`（Select 关系与枚举）/ `setValue`
