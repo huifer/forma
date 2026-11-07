@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **OpenAPI 3.x 导入 → Forma DSL（M7 / P1）**：
+  - 新增 `forma import openapi <spec.yaml> [--out <path>]`，将 OpenAPI 规范逆向工程为 `.fm` 骨架；
+  - 实体来自 `components.schemas`，API 来自 `paths`（操作按 HTTP method 推导 list/get/create/update/delete，无路径的实体默认全量 CRUD）；
+  - 类型映射：string(email/uuid/date-time/date/maxLength) / integer→Int / number→Decimal（含 @min/@max）/ boolean→Bool / `$ref`→关系；
+  - 保证每个生成实体有 `@id` 主键（名为 id 的字段自动作为主键，Uuid/String 补 `@default(uuid)`），满足关系目标 PK 约束；
+  - 数组 / 裸 object 在 v1 保守降级（跳过或 Text），生成物保证通过 `forma check`，需人工校对业务规则；
+  - 回归 `tests/openapi_import.rs`（2 项：类型映射正确 + 生成 `.fm` 通过 `check_program`）。
+
 - **结构化日志基础（M10/P1）**：
   - 生成后端统一初始化 `tracing-subscriber`（features: `env-filter` + `json`）；
     默认 human-readable，`LOG_FORMAT=json` 输出 JSON Lines。

@@ -204,6 +204,17 @@ fn run(argv: &[String]) -> Result<i32> {
             println!("  next: forma validate && forma build");
             Ok(0)
         }
+        "import" => {
+            let sub = positional.first().map(String::as_str).unwrap_or("");
+            match sub {
+                "openapi" => Ok(cmd_import_openapi(&positional[1..], &flags)),
+                other => {
+                    eprintln!("unknown import target '{other}'");
+                    eprintln!("usage: forma import openapi <spec.yaml> [--out <path>]");
+                    Ok(2)
+                }
+            }
+        }
         "validate" => Ok(cmd_validate(&project_dir(0))),
         "doctor" => Ok(cmd_doctor(&project_dir(0))),
         "graph" => {
@@ -411,6 +422,50 @@ fn cmd_check(project_dir: PathBuf) -> i32 {
         0
     } else {
         1
+    }
+}
+
+fn cmd_import_openapi(positional: &[String], flags: &std::collections::HashMap<String, String>) -> i32 {
+    let spec_path = match positional.first() {
+        Some(p) => p.clone(),
+        None => {
+            eprintln!("error: missing OpenAPI spec file");
+            eprintln!("usage: forma import openapi <spec.yaml> [--out <path>]");
+            return 2;
+        }
+    };
+    let text = match std::fs::read_to_string(&spec_path) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("error reading {spec_path}: {e}");
+            return 2;
+        }
+    };
+    let file = std::path::Path::new(&spec_path)
+        .file_name()
+        .map(|f| f.to_string_lossy().to_string())
+        .unwrap_or_else(|| spec_path.clone());
+    match forma::adapters::openapi::openapi_to_dsl(&text, &file) {
+        Ok(dsl) => match flags.get("out").filter(|s| !s.is_empty()) {
+            Some(out) => match std::fs::write(out, &dsl) {
+                Ok(()) => {
+                    println!("✓ wrote {out}");
+                    0
+                }
+                Err(e) => {
+                    eprintln!("error writing {out}: {e}");
+                    2
+                }
+            },
+            None => {
+                print!("{dsl}");
+                0
+            }
+        },
+        Err(e) => {
+            eprintln!("error: {e}");
+            2
+        }
     }
 }
 
