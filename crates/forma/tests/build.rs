@@ -56,6 +56,7 @@ fn build_generates_all_four_targets_deterministically() {
         force: false,
         entities: None,
         dry_run: false,
+        ownership: forma::build::OwnershipPolicy::default(),
     })
     .unwrap();
     assert_eq!(
@@ -83,6 +84,7 @@ fn build_generates_all_four_targets_deterministically() {
         force: true,
         entities: None,
         dry_run: false,
+        ownership: forma::build::OwnershipPolicy::default(),
     })
     .unwrap();
     for f in &second.files {
@@ -103,6 +105,7 @@ fn incremental_build_skips_unchanged_outputs() {
         force: false,
         entities: None,
         dry_run: false,
+        ownership: forma::build::OwnershipPolicy::default(),
     })
     .unwrap();
     let second = build_project(&BuildOptions {
@@ -110,6 +113,7 @@ fn incremental_build_skips_unchanged_outputs() {
         force: false,
         entities: None,
         dry_run: false,
+        ownership: forma::build::OwnershipPolicy::default(),
     })
     .unwrap();
     assert!(
@@ -128,6 +132,7 @@ fn generated_types_shape() {
         force: false,
         entities: None,
         dry_run: false,
+        ownership: forma::build::OwnershipPolicy::default(),
     })
     .unwrap();
     let types = outcome
@@ -161,6 +166,7 @@ fn generated_hono_routes_contain_operations_with_validation() {
         force: false,
         entities: None,
         dry_run: false,
+        ownership: forma::build::OwnershipPolicy::default(),
     })
     .unwrap();
     let routes = outcome
@@ -181,6 +187,7 @@ fn generated_react_form_renders_controls_from_ui_schema() {
         force: false,
         entities: None,
         dry_run: false,
+        ownership: forma::build::OwnershipPolicy::default(),
     })
     .unwrap();
     let form = outcome

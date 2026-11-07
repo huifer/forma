@@ -42,6 +42,12 @@ pub enum NodeKind {
     UiControl,
     Workflow,
     WorkflowStep,
+    /// 可视化图表（spec:ir §3.1 可视化域 `ChartNode`；DSL `chart` 块）
+    Chart,
+    /// 版本化迁移链（schema 变更的物化载体；spec:compatibility §6.1）
+    Migration,
+    /// 定时任务（M10/P1：DSL `job` 块；调度域）
+    Job,
 }
 
 impl NodeKind {
@@ -58,6 +64,9 @@ impl NodeKind {
             NodeKind::UiControl => "ui-control",
             NodeKind::Workflow => "workflow",
             NodeKind::WorkflowStep => "workflow-step",
+            NodeKind::Chart => "chart",
+            NodeKind::Migration => "migration",
+            NodeKind::Job => "job",
         }
     }
 }

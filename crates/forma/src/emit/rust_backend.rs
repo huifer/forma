@@ -88,18 +88,27 @@ pub fn emit_rust_backend(
     // 命令类操作（spec §10）：有命令 → 生成输入模型/校验器/仓储/路由/审计钩子
     let has_commands = !program.commands.is_empty();
     let has_audit = program.commands.iter().any(|c| c.audit.is_some());
+    let has_live = !program.lives.is_empty();
 
     files.push(file(
         out_dir,
         "Cargo.toml",
-        cargo_toml(&pkg, has_commands, program.auth.is_some()),
+        cargo_toml(&pkg, has_commands, program.auth.is_some(), has_live),
+        "gen-rust",
+    ));
+    files.push(file(
+        out_dir,
+        "src/request_id.rs",
+        request_id_rs(),
         "gen-rust",
     ));
     files.push(file(
         out_dir,
         "src/error.rs",
         error_rs(
-            has_any_auth_rules(program),
+            has_any_auth_rules(program)
+                || crate::dsl::tenant_enabled(program)
+                || !crate::dsl::field_policy_roles(program).is_empty(),
             program.auth.is_some(),
             has_conflict_errors(program),
         ),
@@ -143,6 +152,23 @@ pub fn emit_rust_backend(
             auth_rs(program, app_name),
             "gen-rust",
         ));
+    }
+    let has_jobs = !program.jobs.is_empty();
+    let has_notify = program.entities.iter().any(|e| !e.notify.is_empty());
+    if has_jobs {
+        files.push(file(out_dir, "src/jobs.rs", jobs_rs(program), "gen-rust"));
+    }
+    if has_notify {
+        files.push(file(
+            out_dir,
+            "src/notify.rs",
+            notify_rs(program),
+            "gen-rust",
+        ));
+    }
+    let has_live = !program.lives.is_empty();
+    if has_live {
+        files.push(file(out_dir, "src/live.rs", live_rs(program), "gen-rust"));
     }
     files.push(file(
         out_dir,
@@ -195,12 +221,15 @@ fn file(
     }
 }
 
-fn cargo_toml(pkg: &str, has_commands: bool, has_auth: bool) -> String {
+fn cargo_toml(pkg: &str, _has_commands: bool, has_auth: bool, has_live: bool) -> String {
     // error.rs uses tracing::error! for internal failures (Runtime Contract E5), so tracing is always present.
-    let tracing_deps = if has_commands {
-        "\ntracing = \"0.1\"\ntracing-subscriber = \"0.3\""
+    // tracing 恒存在（M10/P1）：error.rs / 审计 / 请求 id 统一走 tracing；
+    // tracing-subscriber 带 env-filter + json features（RUST_LOG + LOG_FORMAT=json）
+    let tracing_deps = "\ntracing = \"0.1\"\ntracing-subscriber = { version = \"0.3\", features = [\"env-filter\", \"json\"] }";
+    let live_deps = if has_live {
+        "\ntokio-stream = { version = \"0.1\", features = [\"sync\"] }"
     } else {
-        "\ntracing = \"0.1\""
+        ""
     };
     let auth_deps = if has_auth {
         "\nargon2 = \"0.5\"\njsonwebtoken = \"9\""
@@ -219,7 +248,7 @@ tokio = {{ version = "1", features = ["full"] }}
 serde = {{ version = "1", features = ["derive"] }}
 serde_json = "1"
 sqlx = {{ version = "0.8", features = ["runtime-tokio", "mysql", "uuid", "chrono", "rust_decimal"] }}
-uuid = {{ version = "1", features = ["v4", "serde"] }}{tracing_deps}{auth_deps}
+uuid = {{ version = "1", features = ["v4", "serde"] }}{tracing_deps}{auth_deps}{live_deps}
 chrono = {{ version = "0.4", features = ["serde"] }}
 rust_decimal = {{ version = "1", features = ["serde"] }}
 tower-http = {{ version = "0.5", features = ["cors"] }}
@@ -289,6 +318,7 @@ fn op_guard_bundle(
     access: &std::collections::HashMap<String, Expr>,
     op: &str,
     relations: &[(&str, String)],
+    force_ext: bool,
 ) -> OpGuard {
     let mut pre = String::new();
     let mut after_row = String::new();
@@ -315,7 +345,9 @@ fn op_guard_bundle(
             }
         }
     }
-    let needs_ext = !pre.is_empty() || !after_row.is_empty();
+    // 租户维度（M10 收尾）：force_ext（@tenant 实体全操作）也要注入 Extension<CurrentUser>
+    let needs_ext =
+        !pre.is_empty() || !after_row.is_empty() || (force_ext && program.auth.is_some());
     if !needs_ext {
         return OpGuard::empty();
     }
@@ -332,6 +364,11 @@ fn error_rs(has_forbidden: bool, has_auth: bool, has_conflict: bool) -> String {
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
+
+// 当前请求的追踪 id（§4.4）——request_id.rs 中间件写入，错误体读取。
+tokio::task_local! {
+    pub static REQUEST_ID: String;
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FieldError {
@@ -390,6 +427,8 @@ pub enum AppError {
     //AUTH_VARIANT
     //FORBIDDEN_VARIANT
     Db(sqlx::Error),
+    /// 序列化失败（P0-2 字段裁剪；细节只写日志）
+    Internal(String),
 }
 
 impl IntoResponse for AppError {
@@ -404,6 +443,10 @@ impl IntoResponse for AppError {
             //CONFLICT_MATCH
             //AUTH_MATCH
             //FORBIDDEN_MATCH
+            AppError::Internal(msg) => {
+                tracing::error!(error = %msg, "internal error");
+                (error_code::INTERNAL, "internal server error".to_string(), None)
+            }
             AppError::Db(e) => {
                 if matches!(e, sqlx::Error::RowNotFound) {
                     (error_code::NOT_FOUND, "not found".to_string(), None)
@@ -426,7 +469,8 @@ impl IntoResponse for AppError {
             error,
             code: code.to_string(),
             fields,
-            request_id: None,
+            // §4.4：task-local 里的请求 id（中间件挂最外层，总有值）
+            request_id: crate::request_id::REQUEST_ID.try_with(|id| id.clone()).ok(),
         };
         (status, axum::Json(body)).into_response()
     }
@@ -435,6 +479,13 @@ impl IntoResponse for AppError {
 impl From<sqlx::Error> for AppError {
     fn from(e: sqlx::Error) -> Self {
         AppError::Db(e)
+    }
+}
+
+impl From<serde_json::Error> for AppError {
+    fn from(e: serde_json::Error) -> Self {
+        // 字段级策略（P0-2）：裁剪路径的 ? 需要
+        AppError::Internal(e.to_string())
     }
 }
 
@@ -812,15 +863,34 @@ fn cursor_seek(sort: &[(String, bool)]) -> (String, Vec<usize>) {
 
 fn repo_rs(program: &Program) -> String {
     let mut out = String::from("// @generated by Forma (gen-rust) — do not edit manually.\n");
-    out.push_str(
-        "use serde::Deserialize;\nuse crate::models::*;\nuse sqlx::MySqlPool;\nuse uuid::Uuid;\n\n",
-    );
+    // 导入按需（P2-4）：entity-only（无 api）→ repo 无任何函数 → 零 import
+    let any_repo_api = program.apis.iter().any(|a| !a.operations.is_empty());
+    let any_create_op = program
+        .apis
+        .iter()
+        .any(|a| a.operations.iter().any(|o| o == "create"));
+    if !any_repo_api {
+        return out;
+    }
+    out.push_str("use serde::Deserialize;\nuse crate::models::*;\nuse sqlx::MySqlPool;\n");
+    // ListParams（含 CursorPayload）都 derive Deserialize
+    if program
+        .apis
+        .iter()
+        .any(|a| !a.operations.is_empty() && a.list.is_some())
+    {
+        out.push_str("use serde::Deserialize;\n");
+    }
+    if any_create_op {
+        out.push_str("use uuid::Uuid;\n");
+    }
+    out.push('\n');
     if program
         .apis
         .iter()
         .any(|a| a.list.as_ref().and_then(|l| l.paginate.as_deref()) == Some("cursor"))
     {
-        out.push_str("#[derive(Debug, Deserialize)]\npub struct CursorPayload { pub values: Vec<String>, pub id: String }\n\n");
+        out.push_str("#[derive(serde::Deserialize)]\npub struct CursorPayload { pub values: Vec<String>, pub id: String }\n\n");
     }
 
     for entity in &program.entities {
@@ -924,6 +994,12 @@ fn repo_rs(program: &Program) -> String {
             }
             let _ = &binds;
         }
+        // 租户维度（M10 收尾）：实体含 @tenant 字段 → 查询强制限当前租户。
+        // tenant=None → `s.{col} = NULL` 恒不命中 → 空集（安全且确定，无绕过路径）。
+        let tenant_col = crate::dsl::tenant_field_of(program, &entity.name).map(|f| snake(&f));
+        if let Some(col) = &tenant_col {
+            wheres.push_str(&format!("        (s.{col} = ?) AND\n"));
+        }
         // 去掉末尾 " AND\n"
         let where_clause = if wheres.is_empty() {
             String::new()
@@ -1024,7 +1100,7 @@ fn repo_rs(program: &Program) -> String {
                     })
                     .collect::<String>();
                 let frag = format!(
-                    r#"pub async fn list__SNAKE__(db: &MySqlPool, params: &__NAME__ListParams, cursor: Option<{cursor_ty}>) -> sqlx::Result<Vec<__NAME__ListRow>> {{
+                    r#"pub async fn list__SNAKE__(db: &MySqlPool, params: &__NAME__ListParams, cursor: Option<{cursor_ty}>, tenant: Option<&str>) -> sqlx::Result<Vec<__NAME__ListRow>> {{
     let page_size = params.page_size.unwrap_or(20).clamp(1, 200);
     let cursor_where = if cursor.is_some() {{ {cursor_sql:?}.to_string() }} else {{ String::new() }};
     let sql = format!(
@@ -1051,7 +1127,7 @@ __JOINS__        __WHERE__ {{}}\n        ORDER BY __ORDER__
                     "    if let Some(({tuple_binding})) = cursor {{\n{cursor_binds}    }}\n"
                 );
             } else {
-                let frag = r#"pub async fn list__SNAKE__(db: &MySqlPool, params: &__NAME__ListParams) -> sqlx::Result<Vec<__NAME__ListRow>> {
+                let frag = r#"pub async fn list__SNAKE__(db: &MySqlPool, params: &__NAME__ListParams, tenant: Option<&str>) -> sqlx::Result<Vec<__NAME__ListRow>> {
     let page = params.page.unwrap_or(1).max(1);
     let page_size = params.page_size.unwrap_or(20).clamp(1, 200);
     let sql = format!(
@@ -1088,6 +1164,10 @@ __JOINS__        __WHERE__
                         out.push_str("    query = query.bind(params.q.clone());\n");
                     }
                 }
+            }
+            // 租户维度（M10 收尾）：wheres 尾部的 `s.{col} = ?` 条件对应绑定
+            if tenant_col.is_some() {
+                out.push_str("    query = query.bind(tenant);\n");
             }
             if cursor_mode {
                 out.push_str(&cursor_bind_code);
@@ -1171,9 +1251,15 @@ __JOINS__        __WHERE__
                 insert_binds.push("Default::default()".to_string());
             }
         }
+        // 租户维度（M10 收尾）：create 时租户来自 JWT claim（服务端权威绑定），
+        // 输入体里的同名字段被忽略（防越权指定租户）。
+        if let Some(col) = &tenant_col {
+            insert_cols.push(col.clone());
+            insert_vals.push("?".to_string());
+        }
 
         if has_op("create") {
-            let frag = r#"pub async fn insert__SNAKE__(db: &MySqlPool, input: &Create__NAME__) -> sqlx::Result<()> {
+            let frag = r#"pub async fn insert__SNAKE__(db: &MySqlPool, input: &Create__NAME__, tenant: Option<&str>) -> sqlx::Result<()> {
     let id = Uuid::new_v4().to_string();
     let sql = "INSERT INTO __TABLE__ (__COLS__) VALUES (__VALS__)";
     sqlx::query(sql)
@@ -1188,6 +1274,9 @@ __JOINS__        __WHERE__
             out.push_str(&frag);
             for b in &insert_binds[1..] {
                 out.push_str(&format!("        .bind({b})\n"));
+            }
+            if tenant_col.is_some() {
+                out.push_str("        .bind(tenant)\n");
             }
             out.push_str("        .execute(db)\n        .await?;\n    Ok(())\n}\n\n");
         }
@@ -1245,16 +1334,25 @@ __JOINS__        __WHERE__
             ));
         }
         if has_op("get") || has_op("update") || has_op("delete") {
+            let tenant_find = match &tenant_col {
+                Some(col) => format!(" AND {col} = ?"),
+                None => String::new(),
+            };
+            let tenant_bind = if tenant_col.is_some() {
+                ".bind(tenant)"
+            } else {
+                ""
+            };
             out.push_str(&format!(
-                r#"pub async fn find_{snake_name}(db: &MySqlPool, id: &str) -> sqlx::Result<Option<{name}>> {{
-    let sql = "SELECT * FROM {table} WHERE id = ?";
-    sqlx::query_as::<_, {name}>(sql)
-        .bind(id)
-        .fetch_optional(db)
+                r#"pub async fn find_{snake_name}(db: &MySqlPool, id: &str, tenant: Option<&str>) -> sqlx::Result<Option<{name}>> {{
+    let sql = "SELECT * FROM {table} WHERE id = ?{tenant_find}";
+    let query = sqlx::query_as::<_, {name}>(sql).bind(id);
+    query{tenant_bind}.fetch_optional(db)
         .await
 }}
 
-"#
+"#,
+                tenant_bind = tenant_bind,
             ));
         }
     }
@@ -1266,6 +1364,12 @@ __JOINS__        __WHERE__
 /// routes + 命令 handlers/路由（命令路由挂到 router 汇总处）。
 fn routes_rs_with_commands(program: &Program, has_commands: bool) -> anyhow::Result<String> {
     let mut out = routes_rs(program);
+    // 字段级策略（P0-2）：有策略时在 handlers 末尾注入裁剪 helper
+    let trim_helpers = field_trim_helpers(program);
+    if !trim_helpers.is_empty() {
+        out.push('\n');
+        out.push_str(&trim_helpers);
+    }
     if has_commands {
         let (handlers, routes) = command_routes_rs(program)?;
         // 命令路由插在 router() 的 layer 之前
@@ -1316,6 +1420,37 @@ async fn list_audit_logs_handler(
         out.push('\n');
         out.push_str(&handlers);
     }
+    // 实时推送端点（M10/P1）：SSE 订阅（挂公开组）
+    if !program.lives.is_empty() {
+        let live_router =
+            "    app = app.merge(\n        crate::live::router().with_state(db.clone()),\n    );\n";
+        out = out.replace("    app.layer(", &format!("{live_router}    app.layer("));
+    }
+    // 租户管理端点（M10 收尾）：挂公开组（授权走 TENANT_ADMIN_TOKEN 环境变量，
+    // 不依赖业务登录/角色；未设置 env 时端点 403 关闭）
+    if crate::dsl::tenant_enabled(program) {
+        let tenant_admin_router = "    app = app.merge(\n        Router::new()\n            .route(\"/api/admin/tenants/:tenant/revoke\", post(crate::auth::revoke_tenant))\n            .route(\"/api/admin/tenants/:tenant/transfer\", post(crate::auth::transfer_tenant))\n            .with_state(db.clone()),\n    );\n";
+        out = out.replace(
+            "    app.layer(",
+            &format!("{tenant_admin_router}    app.layer("),
+        );
+    }
+    // 定时任务管理端点（M10/P1）：挂受保护路由组
+    if !program.jobs.is_empty() {
+        let jobs_router = "    protected = protected.merge(\n        crate::jobs::router().with_state(db.clone()),\n    );\n";
+        out = out.replace(
+            "    app = app.merge(protected);",
+            &format!("{jobs_router}    app = app.merge(protected);"),
+        );
+    }
+    // 租户管理端点（M10 收尾）：挂公开组（授权走 TENANT_ADMIN_TOKEN env）
+    if crate::dsl::tenant_enabled(program) {
+        let tenant_admin_router = "    app = app.merge(\n        Router::new()\n            .route(\"/api/admin/tenants/:tenant/revoke\", post(crate::auth::revoke_tenant))\n            .route(\"/api/admin/tenants/:tenant/transfer\", post(crate::auth::transfer_tenant))\n            .with_state(db.clone()),\n    );\n";
+        out = out.replace(
+            "    app.layer(",
+            &format!("{tenant_admin_router}    app.layer("),
+        );
+    }
     // /auth/me 需要当前用户 → 挂在受保护路由上（与是否有命令无关）
     if program.auth.is_some() {
         out = out.replace(
@@ -1352,8 +1487,73 @@ fn api_auth_roles(api: &crate::dsl::ApiDecl) -> std::collections::HashMap<String
     map
 }
 
+// ── 字段级策略（P0-2）：服务端输出裁剪 ────────────────────
+
+/// 生成 routes.rs 头部的字段裁剪 helper：
+/// `fn trim_{entity}_fields(v: &mut serde_json::Value, role: &str)` —— 按 FieldRule 表裁剪字段。
+fn field_trim_helpers(program: &Program) -> String {
+    let policies = crate::dsl::field_policy_roles(program);
+    if policies.is_empty() {
+        return String::new();
+    }
+    let mut by_entity: std::collections::BTreeMap<String, Vec<(String, Vec<String>)>> =
+        Default::default();
+    for (entity, field, roles) in &policies {
+        by_entity
+            .entry(entity.clone())
+            .or_default()
+            .push((crate::identity::to_snake_case(field), roles.clone()));
+    }
+    let mut out = String::new();
+    for (entity, fields) in &by_entity {
+        let snake_e = snake(entity);
+        let mut table_rows = String::new();
+        for (col, roles) in fields {
+            let roles_lit: Vec<String> = roles
+                .iter()
+                .map(|r| format!("\"{}\"", escape_rust(r)))
+                .collect();
+            table_rows.push_str(&format!(
+                "        ({}, &[{}]),\n",
+                rust_string_lit(col),
+                roles_lit.join(", ")
+            ));
+        }
+        // 生成 trim_{snake}_fields 函数体——不用 format!(r#""#) 避免 { } 转义冲突
+        out.push_str("/// 字段级策略裁剪（P0-2）：按允许角色表移除调用方不可见的字段。\n");
+        out.push_str(&format!(
+            "fn trim_{snake_e}_fields(v: &mut serde_json::Value, role: &str) {{\n"
+        ));
+        out.push_str("    let obj = match v.as_object_mut() {\n        Some(o) => o,\n        None => return,\n    };\n");
+        out.push_str("    const POLICY: &[(&str, &[&str])] = &[\n");
+        out.push_str(&table_rows);
+        out.push_str("    ];\n");
+        out.push_str("    for (col, allowed) in POLICY {\n");
+        out.push_str("        if !allowed.is_empty() && !allowed.contains(&role) {\n");
+        out.push_str("            obj.remove(col);\n");
+        out.push_str("        }\n");
+        out.push_str("    }\n");
+        out.push_str("}\n\n");
+    }
+    out
+}
+
 fn routes_rs(program: &Program) -> String {
     let mut out = String::from("// @generated by Forma (gen-rust) — do not edit manually.\n");
+    // 字段级策略（P0-2）：有策略时生成裁剪 helper
+    let trim_helpers = field_trim_helpers(program);
+    out.push_str(&trim_helpers);
+    // entity-only（P2-4）：无 api/auth/commands → 极简 router + 零多余导入
+    if program.apis.is_empty()
+        && program.commands.is_empty()
+        && program.auth.is_none()
+        && program.jobs.is_empty()
+    {
+        out.push_str(
+            "use axum::Router;\n\npub fn router(_db: sqlx::MySqlPool) -> Router {\n    Router::new()\n}\n",
+        );
+        return out;
+    }
     // 导入按需：无 create op → 不需要 post；无 create/update op → 不需要 validators；
     // 无 list op → 不需要 Query 提取器（否则生成后端出现 unused_imports 警告）
     let any_list = program
@@ -1367,7 +1567,12 @@ fn routes_rs(program: &Program) -> String {
     });
     // 操作级授权（api { auth { ... } } 或 rules { access { ... } }）
     // ——存在即需要 Extension 提取器与 CurrentUser
-    let any_auth = has_any_auth_rules(program);
+    // 租户维度（M10 收尾）：@tenant 实体全操作注入当前用户 → 同样需要
+    let any_tenant_entity = program
+        .entities
+        .iter()
+        .any(|e| crate::dsl::tenant_field_of(program, &e.name).is_some());
+    let any_auth = has_any_auth_rules(program) || any_tenant_entity;
     // 命令一律 POST；auth module 的 register/login 也是 POST
     let has_commands = !program.commands.is_empty();
     let routing = if any_create_only || has_commands || program.auth.is_some() {
@@ -1375,14 +1580,29 @@ fn routes_rs(program: &Program) -> String {
     } else {
         "use axum::routing::get;"
     };
-    let extract = if any_list && any_auth {
-        "use axum::extract::{Extension, Path, Query, State};"
-    } else if any_list {
-        "use axum::extract::{Path, Query, State};"
-    } else if any_auth {
-        "use axum::extract::{Extension, Path, State};"
+    let any_id_op = program.apis.iter().any(|a| {
+        a.operations
+            .iter()
+            .any(|o| o == "get" || o == "update" || o == "delete")
+    });
+    let ext_list = if any_auth {
+        "Extension, Query, State"
     } else {
-        "use axum::extract::{Path, State};"
+        "Query, State"
+    };
+    let ext_id = if any_auth {
+        "Extension, Path, State"
+    } else {
+        "Path, State"
+    };
+    let extract = if any_list && any_id_op {
+        format!("use axum::extract::{{{ext_list}, Path}};")
+    } else if any_list {
+        format!("use axum::extract::{{{ext_list}}};")
+    } else if any_id_op {
+        format!("use axum::extract::{{{ext_id}}};")
+    } else {
+        "use axum::extract::State;".to_string()
     };
     // 操作级授权需要当前用户扩展（由 require_auth 注入）
     let auth_import = if any_auth {
@@ -1395,9 +1615,26 @@ fn routes_rs(program: &Program) -> String {
     out.push_str(&format!(
         "{extract}\n{routing}\nuse axum::{{Json, Router}};\n"
     ));
-    out.push_str(&format!(
-        "use crate::error::{{AppError, AppResult}};\nuse crate::models::*;\nuse crate::repo;\n{validators_import}use crate::repo::*;\n{auth_import}use std::sync::Arc;\n\npub type Db = Arc<sqlx::MySqlPool>;\n\n"
-    ));
+    // 按需导入（P2-4）：entity-only / auth-only 不需要 models/repo
+    let needs_repo = !program.apis.is_empty();
+    let needs_models = needs_repo;
+    let needs_error =
+        !program.apis.is_empty() || program.auth.is_some() || !program.commands.is_empty();
+    let mut header = String::new();
+    if needs_error {
+        header.push_str("use crate::error::{AppError, AppResult};\n");
+    }
+    if needs_models {
+        header.push_str("use crate::models::*;\n");
+    }
+    if needs_repo {
+        header.push_str("use crate::repo;\n");
+        header.push_str(validators_import);
+        header.push_str("use crate::repo::*;\n");
+    }
+    header.push_str(auth_import);
+    header.push_str("use std::sync::Arc;\n\npub type Db = Arc<sqlx::MySqlPool>;\n\n");
+    out.push_str(&header);
 
     // guards 汇总（delete 时校验）
     let mut guard_helpers = String::new();
@@ -1482,8 +1719,42 @@ fn routes_rs(program: &Program) -> String {
                 (f.name.as_str(), alias)
             })
             .collect();
-        let guard =
-            |op: &str| op_guard_bundle(program, entity, &auth_map, &access_map, op, &relations);
+        // 字段级策略（P0-2）：list/get 需要角色做显隐裁剪
+        let has_field_policies = !crate::dsl::field_policy_roles(program)
+            .iter()
+            .filter(|(e, _, _)| e == name)
+            .collect::<Vec<_>>()
+            .is_empty();
+        // 租户调用参数：有 auth 时从 claim 取；无 auth 时 None（repo 按参数过滤）
+        let tenant_arg = if program.auth.is_some() {
+            "user.tenant.as_deref()"
+        } else {
+            "None"
+        };
+        // 实时推送（M10/P1）：实体有 live 通道时，CRUD 成功后 publish
+        let live_table = crate::identity::to_snake_case(&crate::dsl::pluralize(name));
+        let live_publish = if has_live_channel(program, &live_table) {
+            format!(
+                "    crate::live::publish({}, \"{{event}}\");\n",
+                rust_string_lit(&live_table)
+            )
+        } else {
+            String::new()
+        };
+        // 租户维度（M10 收尾）：@tenant 实体全操作需要当前用户（claim 的 tenant）
+        let has_tenant_col = crate::dsl::tenant_field_of(program, name).is_some();
+        let guard = |op: &str| {
+            let force_ext = (has_field_policies && matches!(op, "list" | "get")) || has_tenant_col;
+            op_guard_bundle(
+                program,
+                entity,
+                &auth_map,
+                &access_map,
+                op,
+                &relations,
+                force_ext,
+            )
+        };
 
         let frag = "pub fn __SNAKE___routes(db: Db) -> Router {\n    Router::new()\n"
             .replace("__SNAKE___routes", &format!("{}_routes", snake_name));
@@ -1569,7 +1840,8 @@ fn routes_rs(program: &Program) -> String {
         None => None,
     }};
     let page_size = params.page_size.unwrap_or(20).clamp(1, 200) as usize;
-    let mut items = repo::list_{snake_name}(&db, &params, cursor).await?;
+    let tenant = {tenant_arg};
+    let mut items = repo::list_{snake_name}(&db, &params, cursor, tenant).await?;
     let has_more = items.len() > page_size;
     items.truncate(page_size);
     let next_cursor = if has_more {{
@@ -1582,6 +1854,7 @@ fn routes_rs(program: &Program) -> String {
 
 "#,
                     ext_last = g.ext_last,
+                    tenant_arg = tenant_arg,
                     pre = g.pre,
                     tuple_type = tuple_type,
                     values_len = values_len,
@@ -1589,31 +1862,76 @@ fn routes_rs(program: &Program) -> String {
                     tuple_expr = tuple_expr,
                     values_expr = values_expr,
                 ));
-            } else {
+            } else if crate::dsl::field_policy_roles(program)
+                .iter()
+                .any(|(e, _, _)| e == name)
+            {
+                // 字段级策略（P0-2）：list 走裁剪路径（返回 Value）
                 out.push_str(&format!(
-                    r#"async fn list_{snake_name}(State(db): State<Db>, Query(params): Query<{name}ListParams>{ext_last}) -> AppResult<Json<Vec<{name}ListRow>>> {{
-{pre}    Ok(Json(repo::list_{snake_name}(&db, &params).await?))
+                    r#"async fn list_{snake_name}(State(db): State<Db>, Query(params): Query<{name}ListParams>{ext_last}) -> AppResult<Json<Vec<serde_json::Value>>> {{
+{pre}    let mut rows = repo::list_{snake_name}(&db, &params, {tenant_arg}).await?;
+    let mut result = Vec::with_capacity(rows.len());
+    for row in rows {{
+        let mut v = serde_json::to_value(row).map_err(AppError::Internal)?;
+        trim_{snake_name}_fields(&mut v, &user.role);
+        result.push(v);
+    }}
+    Ok(Json(result))
 }}
 
 "#,
                     ext_last = g.ext_last,
+                    tenant_arg = tenant_arg,
+                    pre = g.pre
+                ));
+            } else {
+                out.push_str(&format!(
+                    r#"async fn list_{snake_name}(State(db): State<Db>, Query(params): Query<{name}ListParams>{ext_last}) -> AppResult<Json<Vec<{name}ListRow>>> {{
+{pre}    Ok(Json(repo::list_{snake_name}(&db, &params, {tenant_arg}).await?))
+}}
+
+"#,
+                    ext_last = g.ext_last,
+                    tenant_arg = tenant_arg,
                     pre = g.pre
                 ));
             }
         }
         if has("get") {
             let g = guard("get");
-            out.push_str(&format!(
-                r#"async fn get_{snake_name}(State(db): State<Db>, Path(id): Path<String>{ext_last}) -> AppResult<Json<{name}>> {{
-{pre}    let row = repo::find_{snake_name}(&db, &id).await?.ok_or(AppError::NotFound)?;
+            if crate::dsl::field_policy_roles(program)
+                .iter()
+                .any(|(e, _, _)| e == name)
+            {
+                // 字段级策略（P0-2）：get 走裁剪路径（返回 Value）
+                out.push_str(&format!(
+                    r#"async fn get_{snake_name}(State(db): State<Db>, Path(id): Path<String>{ext_last}) -> AppResult<Json<serde_json::Value>> {{
+{pre}    let row = repo::find_{snake_name}(&db, &id, {tenant_arg}).await?.ok_or(AppError::NotFound)?;
+{after_row}    let mut value = serde_json::to_value(row).map_err(AppError::Internal)?;
+    trim_{snake_name}_fields(&mut value, &user.role);
+    Ok(Json(value))
+}}
+
+"#,
+                    ext_last = g.ext_last,
+                    tenant_arg = tenant_arg,
+                    pre = g.pre,
+                    after_row = g.after_row
+                ));
+            } else {
+                out.push_str(&format!(
+                    r#"async fn get_{snake_name}(State(db): State<Db>, Path(id): Path<String>{ext_last}) -> AppResult<Json<{name}>> {{
+{pre}    let row = repo::find_{snake_name}(&db, &id, {tenant_arg}).await?.ok_or(AppError::NotFound)?;
 {after_row}    Ok(Json(row))
 }}
 
 "#,
-                ext_last = g.ext_last,
-                pre = g.pre,
-                after_row = g.after_row
-            ));
+                    ext_last = g.ext_last,
+                    tenant_arg = tenant_arg,
+                    pre = g.pre,
+                    after_row = g.after_row
+                ));
+            }
         }
         if has("create") {
             let g = guard("create");
@@ -1623,13 +1941,15 @@ fn routes_rs(program: &Program) -> String {
     if !errs.is_empty() {{
         return Err(AppError::Validation(errs));
     }}
-    repo::insert_{snake_name}(&db, &input).await?;
-    Ok(Json(serde_json::json!({{ "ok": true }})))
+    repo::insert_{snake_name}(&db, &input, {tenant_arg}).await?;
+{live_publish}    Ok(Json(serde_json::json!({{ "ok": true }})))
 }}
 
 "#,
                 ext_mid = g.ext_mid,
-                pre = g.pre
+                pre = g.pre,
+                live_publish = live_publish.replace("{event}", "create"),
+                tenant_arg = tenant_arg,
             ));
         }
         if has("update") {
@@ -1641,14 +1961,14 @@ fn routes_rs(program: &Program) -> String {
     if !errs.is_empty() {{
         return Err(AppError::Validation(errs));
     }}
-    if repo::find_{snake_name}(&db, &id).await?.is_none() {{
+    if repo::find_{snake_name}(&db, &id, {tenant_arg}).await?.is_none() {{
         return Err(AppError::NotFound);
     }}
 "#
                 )
             } else {
                 format!(
-                    r#"    let row = repo::find_{snake_name}(&db, &id).await?.ok_or(AppError::NotFound)?;
+                    r#"    let row = repo::find_{snake_name}(&db, &id, {tenant_arg}).await?.ok_or(AppError::NotFound)?;
 {after_row}    let errs = crate::validators::validate_update_{snake_name}(&input);
     if !errs.is_empty() {{
         return Err(AppError::Validation(errs));
@@ -1660,13 +1980,14 @@ fn routes_rs(program: &Program) -> String {
             out.push_str(&format!(
                 r#"async fn update_{snake_name}(State(db): State<Db>, Path(id): Path<String>, {ext_mid}Json(input): Json<Update{name}>) -> AppResult<Json<serde_json::Value>> {{
 {pre}{body}    repo::update_{snake_name}(&db, &id, &input).await?;
-    Ok(Json(serde_json::json!({{ "ok": true }})))
+{live_publish}    Ok(Json(serde_json::json!({{ "ok": true }})))
 }}
 
 "#,
                 ext_mid = g.ext_mid,
                 pre = g.pre,
-                body = body
+                body = body,
+                live_publish = live_publish.replace("{event}", "update"),
             ));
         }
         if has("delete") {
@@ -1689,9 +2010,9 @@ fn routes_rs(program: &Program) -> String {
             };
             out.push_str(&format!(
                 r#"async fn delete_{snake_name}(State(db): State<Db>, Path(id): Path<String>{ext_last}) -> AppResult<Json<serde_json::Value>> {{
-{pre}    let {row_binding} = repo::find_{snake_name}(&db, &id).await?.ok_or(AppError::NotFound)?;
+{pre}    let {row_binding} = repo::find_{snake_name}(&db, &id, {tenant_arg}).await?.ok_or(AppError::NotFound)?;
 {after_row}{guard_call}    repo::delete_{snake_name}(&db, &id).await?;
-    Ok(Json(serde_json::json!({{ "ok": true }})))
+{live_publish}    Ok(Json(serde_json::json!({{ "ok": true }})))
 }}
 
 "#,
@@ -1699,7 +2020,9 @@ fn routes_rs(program: &Program) -> String {
                 pre = g.pre,
                 after_row = g.after_row,
                 row_binding = row_binding,
-                guard_call = guard_call
+                guard_call = guard_call,
+                live_publish = live_publish.replace("{event}", "delete"),
+                tenant_arg = tenant_arg,
             ));
         }
     }
@@ -1730,34 +2053,61 @@ fn routes_rs(program: &Program) -> String {
     // 受保护路由整体并入；保护层在 routes_rs_with_commands 中、所有受保护路由
     // merge 之后才加（axum 的 layer 只作用于调用时已挂载的路由）。
     out.push_str("    app = app.merge(protected);\n");
-    out.push_str("    app.layer(tower_http::cors::CorsLayer::permissive())\n}\n");
+    out.push_str(
+        "    app.layer(axum::middleware::from_fn(crate::request_id::attach_request_id))
+            .layer(tower_http::cors::CorsLayer::permissive())\n}\n",
+    );
     out
 }
 
-fn main_rs(program: &Program, has_commands: bool, has_audit: bool) -> String {
+fn main_rs(program: &Program, _has_commands: bool, has_audit: bool) -> String {
+    let has_jobs = !program.jobs.is_empty();
+    let has_notify = program.entities.iter().any(|e| !e.notify.is_empty());
+    let has_live = !program.lives.is_empty();
     let app_name = program
         .app
         .as_ref()
         .map(|a| a.name.clone())
         .unwrap_or_else(|| "forma-app".into());
     let audit_mod = if has_audit { "\nmod audit;" } else { "" };
+    let jobs_mod = if has_jobs { "\nmod jobs;" } else { "" };
+    let notify_mod = if has_notify { "\nmod notify;" } else { "" };
+    let live_mod = if has_live { "\nmod live;" } else { "" };
+    let jobs_spawn = if has_jobs {
+        "\n    // 定时任务调度器（M10/P1）：后台轮询，30s tick\n    crate::jobs::spawn_scheduler(db.clone());\n"
+    } else {
+        ""
+    };
     let auth_mod = if program.auth.is_some() {
         "\nmod auth;"
     } else {
         ""
     };
-    let tracing_init = if has_commands {
-        "\n    tracing_subscriber::fmt::init();"
+    // M10/P1：结构化日志恒存在（RUST_LOG 过滤 + LOG_FORMAT=json 输出 JSON Lines）
+    let tracing_init = r#"
+    // M10/P1：结构化日志。默认 human-readable；LOG_FORMAT=json 时输出 JSON Lines。
+    // RUST_LOG 控制过滤级别（默认 info）。
+    let log_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+    if std::env::var("LOG_FORMAT").as_deref() == Ok("json") {
+        tracing_subscriber::fmt()
+            .json()
+            .with_env_filter(log_filter)
+            .init();
     } else {
-        ""
-    };
+        tracing_subscriber::fmt()
+            .with_env_filter(log_filter)
+            .init();
+    }
+"#;
     format!(
         r#"// @generated by Forma (gen-rust) — do not edit manually.
 mod error;
 mod models;
 mod repo;
+mod request_id;
 mod routes;
-mod validators;{audit_mod}{auth_mod}
+mod validators;{audit_mod}{auth_mod}{jobs_mod}{notify_mod}{live_mod}
 
 use routes::router;
 
@@ -1769,6 +2119,7 @@ async fn main() {{{tracing_init}
         .connect(&database_url)
         .await
         .expect("failed to connect to MySQL");
+{jobs_spawn}
     let app = router(db);
     // 端口可用 PORT 环境变量覆盖（默认 8080，与 Web proxy / Flutter 默认 API_BASE 对齐）
     let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());
@@ -1781,6 +2132,10 @@ async fn main() {{{tracing_init}
         app_name = app_name,
         audit_mod = audit_mod,
         auth_mod = auth_mod,
+        jobs_mod = jobs_mod,
+        notify_mod = notify_mod,
+        live_mod = live_mod,
+        jobs_spawn = jobs_spawn,
         tracing_init = tracing_init,
     )
 }
@@ -2101,6 +2456,15 @@ fn command_routes_rs(program: &Program) -> anyhow::Result<(String, Vec<(String, 
             })
             .unwrap_or_default();
 
+        let notify_call = if has_notify_rules(program, entity_name, &cmd.name) {
+            format!(
+                "    crate::notify::fire(\"{}\", \"{}\", &id);\n",
+                escape_rust(entity_name),
+                escape_rust(&cmd.name)
+            )
+        } else {
+            String::new()
+        };
         handlers.push_str(&format!(
             r#"async fn {fn_name}_handler(State(db): State<Db>, {user_arg}Path(id): Path<String>, Json(input): Json<{struct_name}Input>) -> AppResult<Json<serde_json::Value>> {{
     let errs = crate::validators::validate_{fn_name}(&input);
@@ -2109,7 +2473,7 @@ fn command_routes_rs(program: &Program) -> anyhow::Result<(String, Vec<(String, 
     }}
     let row = repo::find_{0}(&db, &id).await?.ok_or(AppError::NotFound)?;
 {pre_check}{audit_call}    repo::{fn_name}(&db, &id, &input).await?;
-    Ok(Json(serde_json::json!({{ "ok": true }})))
+{notify_call}    Ok(Json(serde_json::json!({{ "ok": true }})))
 }}
 
 "#,
@@ -2120,12 +2484,540 @@ fn command_routes_rs(program: &Program) -> anyhow::Result<(String, Vec<(String, 
     Ok((handlers, routes))
 }
 
+// ── 请求追踪 id（Runtime Contract §4.4 / spec:protocols §7）────────
+
+/// 生成 src/request_id.rs：x-request-id 透传/生成 + 响应头回写 + task-local 暴露。
+fn request_id_rs() -> String {
+    let mut s = String::new();
+    s.push_str("// @generated by Forma (gen-rust) — do not edit manually.\n");
+    s.push_str("//! 请求追踪 id（§4.4）：x-request-id 透传/生成 + 响应头回写。\n");
+    s.push_str("//! 错误体经 task-local 拿同一 id（对账日志与错误响应对得上）。\n\n");
+    s.push_str("use axum::{extract::Request, http::HeaderValue, middleware::Next, response::Response};\n\n");
+    s.push_str("/// 追踪 id 的请求/响应头名。\npub const HEADER: &str = \"x-request-id\";\n\n");
+    s.push_str("tokio::task_local! {\n    /// 当前请求的追踪 id（错误体填充用）。\n    pub static REQUEST_ID: String;\n}\n\n");
+    s.push_str("/// 透传调用方 x-request-id（非空时），否则生成 uuid v4；\n");
+    s.push_str("/// 挂到响应头，并在 task-local 作用域内暴露给错误体。\n");
+    s.push_str("pub async fn attach_request_id(req: Request, next: Next) -> Response {\n");
+    s.push_str("    let incoming = req\n        .headers()\n        .get(HEADER)\n        .and_then(|v| v.to_str().ok())\n        .map(|s| s.trim().to_string())\n        .filter(|s| !s.is_empty());\n");
+    s.push_str("    let id = incoming.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());\n");
+    s.push_str("    let mut req = req;\n    req.extensions_mut().insert(id.clone());\n");
+    s.push_str("    let mut res = REQUEST_ID\n        .scope(id.clone(), next.run(req))\n        .await;\n");
+    s.push_str("    if let Ok(v) = HeaderValue::from_str(&id) {\n        res.headers_mut().insert(HEADER, v);\n    }\n    res\n}\n");
+    s
+}
+
+// ── 定时任务（M10/P1）调度器生成器 ─────────────────────────
+
+/// effect 值 → SQL 字面量。
+fn effect_value_sql(v: &crate::dsl::EffectValue) -> Option<String> {
+    let q = |s: &str| format!("'{}'", s.replace('\'', "''"));
+    Some(match v {
+        crate::dsl::EffectValue::Bool(true) => "TRUE".into(),
+        crate::dsl::EffectValue::Bool(false) => "FALSE".into(),
+        crate::dsl::EffectValue::Str(s) => q(s),
+        crate::dsl::EffectValue::Num(n) => {
+            if n.fract() == 0.0 {
+                format!("{}", *n as i64)
+            } else {
+                format!("{n}")
+            }
+        }
+        crate::dsl::EffectValue::Now => "NOW()".into(),
+        crate::dsl::EffectValue::Ident(v) => q(v),
+        crate::dsl::EffectValue::InputRef(_) => return None,
+    })
+}
+
+/// pre 右值 → SQL 字面量。
+fn pre_rhs_sql(expr: &crate::dsl::Expr) -> Option<String> {
+    match expr {
+        crate::dsl::Expr::Str(s) => Some(format!("'{}'", s.replace('\'', "''"))),
+        crate::dsl::Expr::Num(n) => {
+            if n.fract() == 0.0 {
+                Some(format!("{}", *n as i64))
+            } else {
+                Some(format!("{n}"))
+            }
+        }
+        crate::dsl::Expr::Bool(b) => Some(if *b { "TRUE".into() } else { "FALSE".into() }),
+        _ => None,
+    }
+}
+
+fn bin_op_sql(op: &crate::dsl::BinOp) -> Option<&'static str> {
+    Some(match op {
+        crate::dsl::BinOp::Eq => "=",
+        crate::dsl::BinOp::Ne => "<>",
+        crate::dsl::BinOp::Lt => "<",
+        crate::dsl::BinOp::Le => "<=",
+        crate::dsl::BinOp::Gt => ">",
+        crate::dsl::BinOp::Ge => ">=",
+        _ => return None,
+    })
+}
+
+/// 生成 src/jobs.rs：TARGETS 由 DSL 静态展开（运行时零 DSL 依赖）。
+fn jobs_rs(program: &Program) -> String {
+    let mut target_items = String::new();
+    for cmd in &program.commands {
+        if !program.jobs.iter().any(|j| j.op == cmd.name) {
+            continue;
+        }
+        let Some(first) = cmd.effects.first() else {
+            continue;
+        };
+        let table = snake(&crate::dsl::pluralize(&first.entity));
+        let mut sets: Vec<String> = Vec::new();
+        let mut ok = true;
+        for eff in &cmd.effects {
+            match effect_value_sql(&eff.value) {
+                Some(val) => {
+                    let col = snake(&eff.field);
+                    sets.push(format!(
+                        "({}, {})",
+                        rust_string_lit(&col),
+                        rust_string_lit(&val)
+                    ));
+                }
+                None => {
+                    ok = false;
+                    break;
+                }
+            }
+        }
+        if !ok {
+            continue;
+        }
+        let pre = cmd.pre.as_ref().and_then(|p| match p {
+            crate::dsl::Expr::Bin(op, a, b) => {
+                let op_sql = bin_op_sql(op)?;
+                let crate::dsl::Expr::Ref { path, old: false } = a.as_ref() else {
+                    return None;
+                };
+                if path.len() != 1 {
+                    return None;
+                }
+                let col = snake(&path[0]);
+                let rhs = pre_rhs_sql(b.as_ref())?;
+                Some((col, op_sql.to_string(), rhs))
+            }
+            _ => None,
+        });
+        let pre_lit = match pre {
+            Some((c, o, v)) => format!(
+                "Some(({}, {}, {}))",
+                rust_string_lit(&c),
+                rust_string_lit(&o),
+                rust_string_lit(&v)
+            ),
+            None => "None".to_string(),
+        };
+        target_items.push_str(&format!(
+            "        CommandTarget {{ op: {}, table: {}, set_cols: &[{}], pre: {} }},\n",
+            rust_string_lit(&cmd.name),
+            rust_string_lit(&table),
+            sets.join(", "),
+            pre_lit
+        ));
+    }
+    if target_items.is_empty() {
+        target_items.push_str("        // （无可静态执行的目标：api 类 job 仅记录执行时间）\n");
+    }
+
+    let mut s = String::new();
+    s.push_str("// @generated by Forma (gen-rust) — do not edit manually.\n");
+    s.push_str("// 定时任务（M10/P1）：进程内轮询调度器 + 管理端点。\n");
+    s.push_str("// 调度器每 30s tick：对 enabled 且 cron 命中的 job 批量应用目标 command 的\n");
+    s.push_str("// effect（纯 SQL WHERE pre，服务端权威语义）；api 类 job 仅记录执行时间。\n\n");
+    s.push_str("use axum::extract::{Path, State};\n");
+    s.push_str("use axum::routing::{get, post};\n");
+    s.push_str("use axum::{Json, Router};\n");
+    s.push_str("use chrono::{Datelike, Timelike};\n");
+    s.push_str("use sqlx::MySqlPool;\n\n");
+    s.push_str("use crate::error::{AppError, AppResult};\n\n");
+    s.push_str("type Pool = std::sync::Arc<MySqlPool>;\n\n");
+    s.push_str("struct CommandTarget {\n    op: &'static str,\n    table: &'static str,\n    set_cols: &'static [(&'static str, &'static str)],\n    pre: Option<(&'static str, &'static str, &'static str)>,\n}\n\n");
+    s.push_str("fn command_targets() -> Vec<CommandTarget> {\n    vec![\n");
+    s.push_str(&target_items);
+    s.push_str("    ]\n}\n\n");
+    s.push_str("/// cron 5 字段求值（minute hour dom month dow；支持 `*` `,` `-`）。\n");
+    s.push_str("pub fn cron_matches(cron: &str, now: chrono::DateTime<chrono::Local>) -> bool {\n");
+    s.push_str("    let fields: Vec<&str> = cron.split_whitespace().collect();\n");
+    s.push_str("    if fields.len() != 5 {\n        return false;\n    }\n");
+    s.push_str("    let values = [\n        now.minute(),\n        now.hour(),\n        now.day(),\n        now.month(),\n        now.weekday().num_days_from_sunday(),\n    ];\n");
+    s.push_str("    for (i, raw) in fields.iter().enumerate() {\n        if !cron_field_matches(raw, values[i]) {\n            return false;\n        }\n    }\n    true\n}\n\n");
+    s.push_str("fn cron_field_matches(raw: &str, value: u32) -> bool {\n    if raw == \"*\" {\n        return true;\n    }\n    for part in raw.split(',') {\n        if let Some((a, b)) = part.split_once('-') {\n            if let (Ok(lo), Ok(hi)) = (a.parse::<u32>(), b.parse::<u32>()) {\n                if value >= lo && value <= hi {\n                    return true;\n                }\n            }\n        } else if let Ok(v) = part.parse::<u32>() {\n            if v == value {\n                return true;\n            }\n        }\n    }\n    false\n}\n\n");
+    s.push_str("async fn run_job(pool: &MySqlPool, id: &str, name: &str, op: &str) {\n");
+    s.push_str("    let target = command_targets().into_iter().find(|t| t.op == op);\n");
+    s.push_str("    match target {\n");
+    s.push_str("        Some(t) => {\n");
+    s.push_str("            let sets: Vec<String> = t\n                .set_cols\n                .iter()\n                .map(|(c, v)| format!(\"{c} = {v}\"))\n                .collect();\n");
+    s.push_str(
+        "            let mut sql = format!(\"UPDATE {} SET {}\", t.table, sets.join(\", \"));\n",
+    );
+    s.push_str("            if let Some((pc, pop, pv)) = t.pre {\n");
+    s.push_str("                sql.push_str(&format!(\" WHERE {pc} {pop} {pv}\"));\n");
+    s.push_str("            }\n");
+    s.push_str("            match sqlx::query(&sql).execute(pool).await {\n");
+    s.push_str("                Ok(res) => tracing::info!(job = name, affected = res.rows_affected(), \"job effect applied\"),\n");
+    s.push_str("                Err(e) => tracing::error!(job = name, error = %e, \"job effect failed\"),\n");
+    s.push_str("            }\n");
+    s.push_str("        }\n");
+    s.push_str("        None => {\n");
+    s.push_str("            tracing::warn!(job = name, op, \"no static target for op; recorded run only\");\n");
+    s.push_str("        }\n");
+    s.push_str("    }\n");
+    s.push_str(
+        "    let _ = sqlx::query(\"UPDATE forma_jobs SET last_run_at = NOW() WHERE id = ?\")\n",
+    );
+    s.push_str("        .bind(id)\n        .execute(pool)\n        .await;\n}\n\n");
+    s.push_str("/// 每 30s tick：检查 enabled job 的 cron 是否命中当前分钟。\n");
+    s.push_str("pub fn spawn_scheduler(pool: MySqlPool) {\n    tokio::spawn(async move {\n        loop {\n");
+    s.push_str("            tokio::time::sleep(std::time::Duration::from_secs(30)).await;\n");
+    s.push_str("            let rows = sqlx::query_as::<_, (String, String, String, String)>(\n");
+    s.push_str(
+        "                \"SELECT id, name, cron, op FROM forma_jobs WHERE status = 'enabled'\",\n",
+    );
+    s.push_str("            )\n            .fetch_all(&pool)\n            .await;\n");
+    s.push_str(
+        "            let Ok(rows) = rows else {\n                continue;\n            };\n",
+    );
+    s.push_str("            let now = chrono::Local::now();\n");
+    s.push_str("            for (id, name, cron, op) in rows {\n");
+    s.push_str("                if cron_matches(&cron, now) {\n");
+    s.push_str("                    tracing::info!(job = %name, \"job firing\");\n");
+    s.push_str("                    run_job(&pool, &id, &name, &op).await;\n");
+    s.push_str("                }\n            }\n        }\n    });\n}\n\n");
+    s.push_str(
+        "async fn list_jobs(State(db): State<Pool>) -> AppResult<Json<serde_json::Value>> {\n",
+    );
+    s.push_str("    let rows = sqlx::query_as::<_, (String, String, String, Option<String>, String, String, Option<chrono::NaiveDateTime>, Option<chrono::NaiveDateTime>)>(\n");
+    s.push_str("        \"SELECT id, name, cron, label, op, status, last_run_at, next_run_at FROM forma_jobs ORDER BY name\",\n");
+    s.push_str("    )\n    .fetch_all(&*db)\n    .await?;\n");
+    s.push_str("    let jobs: Vec<serde_json::Value> = rows\n        .into_iter()\n");
+    s.push_str("        .map(|(id, name, cron, label, op, status, last, next)| {\n");
+    s.push_str("            serde_json::json!({ \"id\": id, \"name\": name, \"cron\": cron, \"label\": label, \"op\": op, \"status\": status, \"lastRunAt\": last.map(|d| d.to_string()), \"nextRunAt\": next.map(|d| d.to_string()) })\n");
+    s.push_str("        })\n        .collect();\n");
+    s.push_str("    Ok(Json(serde_json::json!({ \"jobs\": jobs })))\n}\n\n");
+    s.push_str("async fn trigger_job(State(db): State<Pool>, Path(id): Path<String>) -> AppResult<Json<serde_json::Value>> {\n");
+    s.push_str("    let row =\n        sqlx::query_as::<_, (String, String, String)>(\"SELECT name, cron, op FROM forma_jobs WHERE id = ?\")\n            .bind(&id)\n            .fetch_optional(&*db)\n            .await?\n            .ok_or(AppError::NotFound)?;\n");
+    s.push_str("    run_job(&db, &id, &row.0, &row.2).await;\n");
+    s.push_str("    Ok(Json(serde_json::json!({ \"ok\": true })))\n}\n\n");
+    s.push_str(
+        "async fn set_job_status(db: &MySqlPool, id: &str, status: &str) -> AppResult<()> {\n",
+    );
+    s.push_str("    let res = sqlx::query(\"UPDATE forma_jobs SET status = ? WHERE id = ?\")\n");
+    s.push_str(
+        "        .bind(status)\n        .bind(id)\n        .execute(db)\n        .await?;\n",
+    );
+    s.push_str("    if res.rows_affected() == 0 {\n        return Err(AppError::NotFound);\n    }\n    Ok(())\n}\n\n");
+    s.push_str("async fn enable_job(State(db): State<Pool>, Path(id): Path<String>) -> AppResult<Json<serde_json::Value>> {\n");
+    s.push_str("    set_job_status(&db, &id, \"enabled\").await?;\n");
+    s.push_str("    Ok(Json(serde_json::json!({ \"ok\": true, \"status\": \"enabled\" })))\n}\n\n");
+    s.push_str("async fn disable_job(State(db): State<Pool>, Path(id): Path<String>) -> AppResult<Json<serde_json::Value>> {\n");
+    s.push_str("    set_job_status(&db, &id, \"disabled\").await?;\n");
+    s.push_str(
+        "    Ok(Json(serde_json::json!({ \"ok\": true, \"status\": \"disabled\" })))\n}\n\n",
+    );
+    s.push_str("pub fn router() -> Router<Pool> {\n");
+    s.push_str("    Router::new()\n");
+    s.push_str("        .route(\"/api/jobs\", get(list_jobs))\n");
+    s.push_str("        .route(\"/api/jobs/:id/trigger\", post(trigger_job))\n");
+    s.push_str("        .route(\"/api/jobs/:id/enable\", post(enable_job))\n");
+    s.push_str("        .route(\"/api/jobs/:id/disable\", post(disable_job))\n}\n");
+    s
+}
+
+/// Rust 字符串字面量（debug 转义）。
+fn rust_string_lit(v: &str) -> String {
+    format!("{:?}", v)
+}
+
+// ── 通知派发（M10/P1）生成器 ───────────────────────────────
+
+/// 生成 src/notify.rs：NotifyRule 静态表 + fire()（规则由 DSL 展开）。
+fn notify_rs(program: &Program) -> String {
+    let mut rule_items = String::new();
+    for entity in &program.entities {
+        for n in &entity.notify {
+            let target = n.target.as_deref().unwrap_or("-");
+            rule_items.push_str(&format!(
+                "        NotifyRule {{ entity: {}, event: {}, channel: {}, target: {} }},\n",
+                rust_string_lit(&entity.name),
+                rust_string_lit(&n.event.clone().unwrap_or_else(|| "*".into())),
+                rust_string_lit(&n.channel),
+                rust_string_lit(target),
+            ));
+        }
+    }
+    if rule_items.is_empty() {
+        rule_items.push_str("        // （无通知规则）\n");
+    }
+    let mut s = String::new();
+    s.push_str("// @generated by Forma (gen-rust) — do not edit manually.\n");
+    s.push_str("// 通知派发（M10/P1）：字段级 @notify 声明的事件订阅。\n");
+    s.push_str(
+        "// v1 驱动：log 渠道真实输出（tracing）；email/sms/webhook 为占位（外部集成点）。\n",
+    );
+    s.push_str("// 规则由 DSL 静态展开——运行时零 DSL 依赖（spec:ir）。\n\n");
+    s.push_str("struct NotifyRule {\n    entity: &'static str,\n    event: &'static str,\n    channel: &'static str,\n    target: &'static str,\n}\n\n");
+    s.push_str("fn notify_rules() -> &'static [NotifyRule] {\n    &[\n");
+    s.push_str(&rule_items);
+    s.push_str("    ]\n}\n\n");
+    s.push_str("/// 事件触发点：command handler 成功后调用。\n");
+    s.push_str("pub fn fire(entity: &str, event: &str, entity_id: &str) {\n");
+    s.push_str("    for rule in notify_rules() {\n");
+    s.push_str("        if rule.entity != entity {\n            continue;\n        }\n");
+    s.push_str("        if rule.event != \"*\" && rule.event != event {\n            continue;\n        }\n");
+    s.push_str("        match rule.channel {\n");
+    s.push_str("            \"log\" => tracing::info!(\n                entity, event, id = entity_id, target = rule.target,\n                \"notify: log channel\"\n            ),\n");
+    s.push_str("            \"email\" => tracing::warn!(\n                entity, event, id = entity_id, to = rule.target,\n                \"notify: email driver not configured (integration point)\"\n            ),\n");
+    s.push_str("            \"sms\" => tracing::warn!(\n                entity, event, id = entity_id, to = rule.target,\n                \"notify: sms driver not configured (integration point)\"\n            ),\n");
+    s.push_str("            \"webhook\" => tracing::warn!(\n                entity, event, id = entity_id, url = rule.target,\n                \"notify: webhook driver not configured (integration point)\"\n            ),\n");
+    s.push_str(
+        "            other => tracing::error!(channel = other, \"notify: unknown channel\"),\n",
+    );
+    s.push_str("        }\n    }\n}\n");
+    s
+}
+
+// ── 实时推送（M10/P1）：SSE 通道 ─────────────────────────
+
+/// 生成 src/live.rs：SSE 广播通道 + 订阅端点。
+/// 通道按 live 块名命名；handler 成功后调用 publish() 通知订阅者。
+/// 零新增依赖：axum::response::sse + tokio broadcast。
+fn live_rs(program: &Program) -> String {
+    let mut s = String::new();
+    s.push_str("// @generated by Forma (gen-rust) — do not edit manually.\n");
+    s.push_str("// 实时推送（M10/P1）：SSE 通道。订阅端点 + 广播发布。\n");
+    s.push_str("// 零新增依赖：axum SSE + tokio broadcast channel。\n\n");
+    s.push_str("use axum::extract::{State};\n");
+    s.push_str("use axum::response::sse::{Event, KeepAlive, Sse};\n");
+    s.push_str("use axum::Router;\n");
+    s.push_str("use sqlx::MySqlPool;\n\n");
+    s.push_str("type Pool = std::sync::Arc<MySqlPool>;\n\n");
+
+    // 静态通道表：live 名 → 目标实体表（事件载荷 = 实体刷新提示）
+    let mut chan_items = String::new();
+    let mut entities = Vec::new();
+    for live in &program.lives {
+        let entity = program
+            .apis
+            .iter()
+            .find(|a| a.name == live.api)
+            .map(|a| a.entity.clone())
+            .unwrap_or_default();
+        let table = crate::identity::to_snake_case(&crate::dsl::pluralize(&entity));
+        if !entities.contains(&table) {
+            entities.push(table.clone());
+        }
+        chan_items.push_str(&format!(
+            "        ChannelSpec {{ name: {}, table: {} }},\n",
+            rust_string_lit(&live.name),
+            rust_string_lit(&table),
+        ));
+    }
+    s.push_str("struct ChannelSpec {\n    name: &'static str,\n    table: &'static str,\n}\n\n");
+    s.push_str("fn channel_specs() -> &'static [ChannelSpec] {\n    &[\n");
+    s.push_str(&chan_items);
+    s.push_str("    ]\n}\n\n");
+
+    // 全局广播总线（每表一条 broadcast channel，容量 64）
+    s.push_str("/// 全局事件总线：entity table → broadcast sender。\n");
+    s.push_str("static BUS: std::sync::OnceLock<std::collections::BTreeMap<&'static str, tokio::sync::broadcast::Sender<String>>> = std::sync::OnceLock::new();\n\n");
+    s.push_str("fn bus() -> &'static std::collections::BTreeMap<&'static str, tokio::sync::broadcast::Sender<String>> {\n");
+    s.push_str("    BUS.get_or_init(|| {\n");
+    s.push_str("        let mut map = std::collections::BTreeMap::new();\n");
+    s.push_str("        for spec in channel_specs() {\n");
+    s.push_str("            map.insert(spec.table, tokio::sync::broadcast::channel(64).0);\n");
+    s.push_str("        }\n        map\n    })\n}\n\n");
+
+    // publish：业务操作成功后调用（按表广播）
+    s.push_str("/// 业务操作成功后调用：向订阅该表的 SSE 客户端广播一条刷新事件。\n");
+    s.push_str("pub fn publish(table: &str, event: &str) {\n");
+    s.push_str("    if let Some(tx) = bus().get(table) {\n");
+    s.push_str("        let payload = format!(\"{{\\\\\\\"table\\\\\\\": \\\\\\\"{}\\\\\\\", \\\\\\\"event\\\\\\\": \\\\\\\"{}\\\\\\\"}}\", table, event);\n");
+    s.push_str("        let _ = tx.send(payload);\n");
+    s.push_str("    }\n}\n\n");
+
+    // SSE 订阅端点：GET /api/live/:name
+    s.push_str("async fn subscribe(\n    State(_db): State<Pool>,\n    axum::extract::Path(name): axum::extract::Path<String>,\n) -> Sse<impl tokio_stream::Stream<Item = Result<Event, std::convert::Infallible>>> {\n");
+    s.push_str("    let spec = channel_specs().iter().find(|c| c.name == name);\n");
+    s.push_str("    let table = spec.map(|c| c.table).unwrap_or(\"\");\n");
+    s.push_str("    let rx = match bus().get(table) {\n");
+    s.push_str("        Some(tx) => tx.subscribe(),\n");
+    s.push_str("        None => {\n");
+    s.push_str("            // 未知通道：返回空流（连接立即结束）\n");
+    s.push_str("            let (_tx, rx) = tokio::sync::broadcast::channel(1);\n");
+    s.push_str("            rx\n        }\n    };\n");
+    s.push_str("    use tokio_stream::StreamExt;\n");
+    s.push_str("    let stream = tokio_stream::wrappers::BroadcastStream::new(rx)\n");
+    s.push_str("        .filter_map(|msg| match msg {\n");
+    s.push_str("                Ok(data) => Some(Ok::<_, std::convert::Infallible>(Event::default().data(data))),\n");
+    s.push_str("                Err(_) => None,\n");
+    s.push_str("            }\n        });\n");
+    s.push_str("    Sse::new(stream).keep_alive(KeepAlive::default())\n}\n\n");
+
+    // router
+    s.push_str("pub fn router() -> Router<Pool> {\n");
+    s.push_str("    let mut r = Router::new();\n");
+    for live in &program.lives {
+        s.push_str(&format!(
+            "    r = r.route(\"/api/live/{name}\", axum::routing::get(subscribe));\n",
+            name = live.name,
+        ));
+    }
+    s.push_str("    r\n}\n");
+    s
+}
+
+/// 该实体是否有 live 通道（handler publish 钩子按需生成）。
+fn has_live_channel(program: &Program, entity_table: &str) -> bool {
+    program.lives.iter().any(|l| {
+        let entity = program
+            .apis
+            .iter()
+            .find(|a| a.name == l.api)
+            .map(|a| a.entity.clone())
+            .unwrap_or_default();
+        crate::identity::to_snake_case(&crate::dsl::pluralize(&entity)) == entity_table
+    })
+}
+
+/// 该 (entity, command) 是否有 @notify 订阅（handler fire 钩子按需生成）。
+fn has_notify_rules(program: &Program, entity: &str, event: &str) -> bool {
+    program.entities.iter().any(|e| {
+        e.name == entity
+            && e.notify
+                .iter()
+                .any(|n| n.event.as_deref().map(|ev| ev == event).unwrap_or(false))
+    })
+}
+
 /// auth.rs：注册/登录/me + JWT 签发校验 + 保护中间件。
+/// 租户维度（M10 收尾）的条件代码片段——te=false 时全空（产物零变化）。
+struct TenantBlocks {
+    tenant_let: String,
+    field_tail: String,
+    login_tail: String,
+    token_field: String,
+    userrow: String,
+    claim: String,
+    extract: String,
+    user_field: String,
+    register_field: String,
+    register_cols: String,
+    register_vals: String,
+    insert_bind: String,
+    login_select: String,
+    disabled_check: String,
+    me: String,
+}
+
+fn tenant_block(te: bool) -> TenantBlocks {
+    if !te {
+        return TenantBlocks {
+            tenant_let: String::new(),
+            field_tail: String::new(),
+            login_tail: String::new(),
+            token_field: String::new(),
+            userrow: String::new(),
+            claim: String::new(),
+            extract: String::new(),
+            user_field: String::new(),
+            register_field: String::new(),
+            register_cols: String::new(),
+            register_vals: String::new(),
+            insert_bind: String::new(),
+            login_select: String::new(),
+            disabled_check: String::new(),
+            me: String::new(),
+        };
+    }
+    TenantBlocks {
+        tenant_let: "    let tenant = input.tenant.clone();\n".into(),
+        field_tail: ", tenant".into(),
+        login_tail: ", tenant: user.tenant".into(),
+        token_field: "\n    pub tenant: Option<String>,".into(),
+        userrow: "\n    pub tenant: Option<String>,\n    pub disabled: bool,".into(),
+        claim: "        \"tenant\": tenant,\n".into(),
+        extract: "    let tenant = data.claims[\"tenant\"].as_str().map(|s| s.to_string());\n".into(),
+        user_field: "\n    pub tenant: Option<String>,".into(),
+        register_field: "\n    #[serde(default)]\n    pub tenant: Option<String>,".into(),
+        register_cols: ", tenant".into(),
+        register_vals: ", ?".into(),
+        insert_bind: "        .bind(&input.tenant)\n".into(),
+        login_select: ", tenant, disabled".into(),
+        disabled_check: "    if user.disabled {\n        return Err(AppError::Auth(\"账号已停用\".into()));\n    }\n".into(),
+        me: "        \"tenant\": req_user.tenant,".into(),
+    }
+}
+
+/// 租户管理（M10 收尾）：吊销 = 停用租户全部用户；迁移 = 业务行改绑新租户。
+/// 授权：TENANT_ADMIN_TOKEN 环境变量 + x-admin-token 头匹配；未设置时管理面关闭（403）。
+fn tenant_admin_block(te: bool, tenant_tables: &[(String, String)]) -> String {
+    if !te {
+        return String::new();
+    }
+    let mut items = String::new();
+    for (t, c) in tenant_tables {
+        items.push_str(&format!("        ({t:?}, {c:?}),\n"));
+    }
+    let mut f = String::new();
+    f.push_str("\nconst TENANT_TABLES: [(&str, &str); ");
+    f.push_str(&tenant_tables.len().to_string());
+    f.push_str("] = [\n");
+    f.push_str(&items);
+    f.push_str("];\n\n");
+    f.push_str("/// 授权：TENANT_ADMIN_TOKEN 环境变量 + x-admin-token 头匹配；未设置时管理面关闭（403）。\n");
+    f.push_str("fn require_tenant_admin(headers: &axum::http::HeaderMap) -> AppResult<()> {\n");
+    f.push_str("    let expected = std::env::var(\"TENANT_ADMIN_TOKEN\").unwrap_or_default();\n");
+    f.push_str("    if expected.is_empty() {\n        return Err(AppError::Forbidden(\n            \"tenant admin is disabled (TENANT_ADMIN_TOKEN not set)\".into(),\n        ));\n    }\n");
+    f.push_str("    let provided = headers\n        .get(\"x-admin-token\")\n        .and_then(|v| v.to_str().ok())\n        .unwrap_or(\"\");\n");
+    f.push_str("    if provided != expected {\n        return Err(AppError::Forbidden(\"invalid tenant admin token\".into()));\n    }\n    Ok(())\n}\n\n");
+    f.push_str("#[derive(Debug, Deserialize)]\npub struct TenantTransferInput {\n    pub to: String,\n}\n\n");
+    f.push_str("/// 吊销租户：停用该租户全部用户（登录与鉴权立即失效）。\n");
+    f.push_str("pub async fn revoke_tenant(\n    State(db): State<Db>,\n    headers: axum::http::HeaderMap,\n    axum::extract::Path(tenant): axum::extract::Path<String>,\n) -> AppResult<Json<serde_json::Value>> {\n");
+    f.push_str("    require_tenant_admin(&headers)?;\n");
+    f.push_str("    let res = sqlx::query(\"UPDATE users SET disabled = 1 WHERE tenant = ?\")\n        .bind(&tenant)\n        .execute(db.as_ref())\n        .await\n        .map_err(AppError::Db)?;\n");
+    f.push_str("    tracing::warn!(tenant = %tenant, disabled = res.rows_affected(), \"tenant revoked\");\n");
+    f.push_str("    Ok(Json(serde_json::json!({ \"ok\": true, \"disabledUsers\": res.rows_affected() })))\n}\n\n");
+    f.push_str("/// 迁移租户：把 from 租户的全部业务行（含 users）改绑到 to。\n");
+    f.push_str("/// 数据面操作（可回滚：反向调用 transfer(to→from)）；审计日志不迁移。\n");
+    f.push_str("pub async fn transfer_tenant(\n    State(db): State<Db>,\n    headers: axum::http::HeaderMap,\n    axum::extract::Path(tenant): axum::extract::Path<String>,\n    Json(input): Json<TenantTransferInput>,\n) -> AppResult<Json<serde_json::Value>> {\n");
+    f.push_str("    require_tenant_admin(&headers)?;\n");
+    f.push_str("    if input.to.trim().is_empty() || input.to == tenant {\n        return Err(AppError::Validation(vec![crate::error::FieldError::new(\n            \"to\",\n            \"target tenant must be a non-empty value different from the source tenant\",\n        )]));\n    }\n");
+    f.push_str("    let mut moved = 0u64;\n");
+    f.push_str("    for (table, col) in TENANT_TABLES {\n");
+    f.push_str("        let sql = format!(\"UPDATE {table} SET {col} = ? WHERE {col} = ?\");\n");
+    f.push_str("        let res = sqlx::query(&sql)\n            .bind(&input.to)\n            .bind(&tenant)\n            .execute(db.as_ref())\n            .await\n            .map_err(AppError::Db)?;\n        moved += res.rows_affected();\n    }\n");
+    f.push_str(
+        "    tracing::warn!(from = %tenant, to = %input.to, moved, \"tenant transferred\");\n",
+    );
+    f.push_str("    Ok(Json(serde_json::json!({ \"ok\": true, \"movedRows\": moved })))\n}\n");
+    f
+}
+
 fn auth_rs(program: &Program, app_name: &str) -> String {
     let auth = program.auth.as_ref().unwrap();
     let first_role = auth.roles.first().cloned().unwrap_or_else(|| "user".into());
     let token_hours = auth.token_hours.to_string();
     let n_roles = auth.roles.len().to_string();
+    // 租户维度（M10 收尾）：@tenant 字段存在 → JWT claim / CurrentUser / users 表 tenant 列
+    let te = crate::dsl::tenant_enabled(program);
+    let tenant_tables: Vec<(String, String)> = crate::dsl::tenant_fields(program)
+        .iter()
+        .map(|(e, _)| {
+            (
+                crate::identity::to_snake_case(&crate::dsl::pluralize(e)),
+                crate::dsl::tenant_field_of(program, e)
+                    .map(|f| crate::identity::to_snake_case(&f))
+                    .unwrap_or_default(),
+            )
+        })
+        .collect();
+    let tenant_block = tenant_block(te);
+    let tenant_admin = tenant_admin_block(te, &tenant_tables);
     // 操作级授权守卫——只在确实有 api 授权规则时生成（否则「never used」警告）。
     let require_role_block = if has_api_auth_rules(program) {
         r#"/// 操作级授权（服务端权威执行，ADR-0004）：调用方角色必须在允许列表内。
@@ -2174,6 +3066,7 @@ pub struct RegisterInput {
     pub password: String,
     #[serde(default)]
     pub role: Option<String>,
+__TENANT_REGISTER_FIELD__
 }
 
 #[derive(Debug, Deserialize)]
@@ -2187,6 +3080,7 @@ pub struct TokenResponse {
     pub token: String,
     pub username: String,
     pub role: String,
+__TENANT_TOKEN_FIELD__
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -2196,17 +3090,19 @@ pub struct UserRow {
     pub username: String,
     pub password_hash: String,
     pub role: String,
+__TENANT_USERROW__
 }
 
 fn jwt_secret() -> String {
     std::env::var("JWT_SECRET").unwrap_or_else(|_| "__APP__-dev-secret-change-me".into())
 }
 
-fn issue_token(username: &str, role: &str) -> String {
+fn issue_token(username: &str, role: &str, tenant: Option<&str>) -> String {
     use jsonwebtoken::{encode, EncodingKey, Header};
     let claims = serde_json::json!({
         "sub": username,
         "role": role,
+__TENANT_CLAIM__
         "exp": (chrono::Utc::now() + chrono::Duration::hours(__TOKEN_HOURS__)).timestamp(),
     });
     encode(&Header::default(), &claims, &EncodingKey::from_secret(jwt_secret().as_bytes()))
@@ -2250,8 +3146,9 @@ pub async fn require_auth(
     .map_err(|_| AppError::Auth("invalid token".into()))?;
     let username = data.claims["sub"].as_str().unwrap_or("").to_string();
     let role = data.claims["role"].as_str().unwrap_or("").to_string();
+__TENANT_EXTRACT__
     let mut req = req;
-    req.extensions_mut().insert(CurrentUser { username, role });
+    req.extensions_mut().insert(CurrentUser { username, role__TENANT_FIELD_TAIL__ });
     Ok(next.run(req).await)
 }
 
@@ -2260,6 +3157,7 @@ pub async fn require_auth(
 pub struct CurrentUser {
     pub username: String,
     pub role: String,
+__TENANT_USER__
 }
 
 //REQUIRE_ROLE_BLOCK
@@ -2281,7 +3179,7 @@ pub async fn register(
             format!("role 必须是 {}", ROLES.join("/")),
         )]));
     }
-    let exists: Option<(String,)> =
+__TENANT_LET__    let exists: Option<(String,)> =
         sqlx::query_as("SELECT id FROM users WHERE username = ?")
             .bind(&input.username)
             .fetch_optional(db.as_ref())
@@ -2291,17 +3189,17 @@ pub async fn register(
         return Err(AppError::Conflict("用户名已存在".into()));
     }
     let id = uuid::Uuid::new_v4().to_string();
-    sqlx::query("INSERT INTO users (id, username, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)")
-        .bind(&id)
+    sqlx::query("INSERT INTO users (id, username, password_hash, role, created_at__TENANT_COLS__) VALUES (?, ?, ?, ?, ?__TENANT_VALS__)")        .bind(&id)
         .bind(&input.username)
         .bind(hash_password(&input.password))
         .bind(&role)
         .bind(chrono::Utc::now())
+__TENANT_INSERT_BIND__
         .execute(db.as_ref())
         .await
         .map_err(AppError::Db)?;
-    let token = issue_token(&input.username, &role);
-    Ok(Json(TokenResponse { token, username: input.username, role }))
+    let token = issue_token(&input.username, &role, tenant.as_deref());
+    Ok(Json(TokenResponse { token, username: input.username, role__TENANT_FIELD_TAIL__ }))
 }
 
 pub async fn login(
@@ -2309,7 +3207,7 @@ pub async fn login(
     Json(input): Json<LoginInput>,
 ) -> AppResult<Json<TokenResponse>> {
     let row: Option<UserRow> = sqlx::query_as(
-        "SELECT id, username, password_hash, role FROM users WHERE username = ?",
+        "SELECT id, username, password_hash, role__TENANT_SELECT__ FROM users WHERE username = ?",
     )
     .bind(&input.username)
     .fetch_optional(db.as_ref())
@@ -2321,8 +3219,8 @@ pub async fn login(
     if !verify_password(&input.password, &user.password_hash) {
         return Err(AppError::Auth("用户名或密码错误".into()));
     }
-    let token = issue_token(&user.username, &user.role);
-    Ok(Json(TokenResponse { token, username: user.username, role: user.role }))
+__DISABLED_CHECK__    let token = issue_token(&user.username, &user.role, user.tenant.as_deref());
+    Ok(Json(TokenResponse { token, username: user.username, role: user.role__TENANT_LOGIN_TAIL__ }))
 }
 
 /// 当前用户信息（要求已登录）。
@@ -2330,8 +3228,10 @@ pub async fn me(req_user: axum::Extension<CurrentUser>) -> Json<serde_json::Valu
     Json(serde_json::json!({
         "username": req_user.username,
         "role": req_user.role,
+__TENANT_ME__
     }))
 }
+//REQUIRE_TENANT_ADMIN_BLOCK
 "#;
     template
         .replace("__N_ROLES__", &n_roles)
@@ -2340,6 +3240,26 @@ pub async fn me(req_user: axum::Extension<CurrentUser>) -> Json<serde_json::Valu
         .replace("__FIRST_ROLE__", &first_role)
         .replace("__APP__", app_name)
         .replace("//REQUIRE_ROLE_BLOCK\n", &require_role_block)
+        .replace("__TENANT_TABLES__\n", &tenant_admin)
+        .replace("__TENANT_LET__", tenant_block.tenant_let.as_str())
+        .replace("__TENANT_FIELD_TAIL__", tenant_block.field_tail.as_str())
+        .replace("__TENANT_LOGIN_TAIL__", tenant_block.login_tail.as_str())
+        .replace("__TENANT_TOKEN_FIELD__", tenant_block.token_field.as_str())
+        .replace("__TENANT_USERROW__", tenant_block.userrow.as_str())
+        .replace("__TENANT_CLAIM__", tenant_block.claim.as_str())
+        .replace("__TENANT_EXTRACT__", tenant_block.extract.as_str())
+        .replace("__TENANT_USER__", tenant_block.user_field.as_str())
+        .replace(
+            "__TENANT_REGISTER_FIELD__",
+            tenant_block.register_field.as_str(),
+        )
+        .replace("__TENANT_COLS__", tenant_block.register_cols.as_str())
+        .replace("__TENANT_VALS__", tenant_block.register_vals.as_str())
+        .replace("__TENANT_INSERT_BIND__", tenant_block.insert_bind.as_str())
+        .replace("__TENANT_SELECT__", tenant_block.login_select.as_str())
+        .replace("__DISABLED_CHECK__", tenant_block.disabled_check.as_str())
+        .replace("__TENANT_ME__", tenant_block.me.as_str())
+        .replace("//REQUIRE_TENANT_ADMIN_BLOCK\n", &tenant_admin)
 }
 
 /// audit.rs：审计钩子 = 结构化日志 + audit_logs 表落库（actor 待 auth 模块接入）。
@@ -2929,7 +3849,7 @@ fn numeric_check(col: &str, ty: &str, v: f64, cmp: &str, message: &str) -> Strin
     }
 }
 
-fn rust_type(_program: &Program, field: &FieldDecl) -> String {
+pub fn rust_type(_program: &Program, field: &FieldDecl) -> String {
     let base = match field.type_name.as_str() {
         // Uuid 列在 MySQL 侧是 CHAR(36)（gen-mysql）→ sqlx 的 Uuid 解码仅支持 16 字节二进制，
         // 故 Rust 侧统一用 String 承载文本 UUID（API JSON 不变：仍是带连字符的字符串）
@@ -3003,15 +3923,17 @@ fn uses_header(program: &Program) -> String {
 
 fn validators_rs(program: &Program) -> String {
     let mut out = String::from("// @generated by Forma (gen-rust) — do not edit manually.\n");
-    out.push_str("use crate::error::FieldError;\n");
-    // validators 只用 fully-qualified 的 chrono 路径 → 不导入 DateTime/Utc/Uuid
-    let needs_decimal = program
-        .entities
+    // validators 只用 fully-qualified 的 chrono/decimal 路径（rust_decimal::Decimal::try_from），
+    // → 不导入 chrono/Uuid/Decimal 类型（否则部分工程报 unused_imports——踩过）
+    let any_validate_op = program
+        .apis
         .iter()
-        .any(|e| e.fields.iter().any(|f| f.type_name == "Decimal"));
-    if needs_decimal {
-        out.push_str("use rust_decimal::Decimal;\n");
+        .any(|a| a.operations.iter().any(|o| o == "create" || o == "update"));
+    if !any_validate_op {
+        out.push_str("// （无 create/update 操作 → 不生成校验器）\n");
+        return out;
     }
+    out.push_str("use crate::error::FieldError;\n");
     out.push_str("use crate::models::*;\n\n");
 
     for entity in &program.entities {

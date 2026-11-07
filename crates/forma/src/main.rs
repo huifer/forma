@@ -15,6 +15,7 @@ Usage:
   forma seed [dir]           生成确定性案例数据（db/seed/*.sql + fixtures/*.json）
   forma migrate [dir]        数据库迁移：status/history/verify/up/down/risk [--sql] [--apply] [--to v] [--steps N]
   forma patch [dir] <file>   Apply a semantic patch (transactional)
+  forma bench [dir]          F-008：100-case 确定性业务变更矩阵（--json / --skip-backend）
   forma docs validate [dir]   Governance docs: validate | lint | graph | check-compatibility [--base <git-ref>] | check-dependencies | check-links
   forma capability <action>   Capability registry: list | check | show <id> [dir]
   forma mcp [dir]            Start MCP stdio server (for Codex / Claude Code / Pi)
@@ -211,10 +212,30 @@ fn run(argv: &[String]) -> Result<i32> {
             if forma::engine::is_dsl_project(&dir) {
                 let check = forma::engine::dsl_check(&dir)?;
                 let summary = forma::engine::dsl_model_summary(&check.program);
+                // M3 桥接：DSL 工程同样导出语义图（稳定标识 + 依赖边 + 来源位置）
+                let graph = forma::engine::dsl_graph(&check.program);
                 if flags.contains_key("json") {
-                    println!("{}", serde_json::to_string_pretty(&summary)?);
+                    let mut out = serde_json::to_value(&summary)?;
+                    if let Some(obj) = out.as_object_mut() {
+                        obj.insert(
+                            "irVersion".to_string(),
+                            serde_json::Value::String(check.program.ir_version.clone()),
+                        );
+                        obj.insert(
+                            "graph".to_string(),
+                            serde_json::to_value(&graph).unwrap_or(serde_json::Value::Null),
+                        );
+                    }
+                    println!("{}", serde_json::to_string_pretty(&out)?);
                 } else {
                     println!("{}", render_dsl_model_text(&summary));
+                    println!();
+                    println!("{}", render_graph_text(&graph));
+                }
+                if let Some(export) = flags.get("export") {
+                    let out = PathBuf::from(export);
+                    forma::util::write_text(&out, &serde_json::to_string_pretty(&graph)?)?;
+                    println!("\n✓ graph exported to {}", out.display());
                 }
                 return Ok(if check.error_count() > 0 { 1 } else { 0 });
             }
@@ -236,14 +257,24 @@ fn run(argv: &[String]) -> Result<i32> {
             // DSL 工程（manifest 带 source）→ 新编译管线；否则走联邦原型
             let dir = project_dir(0);
             let manifest = forma::manifest::load_manifest(&dir)?;
+            let policy = forma::build::OwnershipPolicy {
+                adopt: flags.contains_key("adopt"),
+                overwrite: flags.contains_key("overwrite"),
+                strict: flags.contains_key("strict"),
+            };
             if manifest.manifest.source.is_some() {
-                return Ok(cmd_build_dsl(dir.clone(), flags.contains_key("force")));
+                return Ok(cmd_build_dsl(
+                    dir.clone(),
+                    policy,
+                    flags.contains_key("force"),
+                ));
             }
             let outcome = forma::engine::build_project(&forma::engine::BuildOptions {
                 project_dir: dir,
                 force: flags.contains_key("force"),
                 entities: None,
                 dry_run: false,
+                ownership: policy,
             })?;
             for file in &outcome.files {
                 println!("  + {} ({})", file.path, file.generator);
@@ -270,6 +301,7 @@ fn run(argv: &[String]) -> Result<i32> {
             );
             Ok(0)
         }
+        "bench" => Ok(cmd_bench(&project_dir(0), &flags)),
         "migrate" => {
             // forma migrate [status|history|verify|up|down] [dir] [--sql] [--apply] [--to v] [--steps N]
             // 子命令与项目目录顺序无关：已知子命令取一个，其余第一个当作项目目录
@@ -306,36 +338,19 @@ fn run(argv: &[String]) -> Result<i32> {
                 return Ok(2);
             };
             let text = forma::util::read_text(&PathBuf::from(patch_file))?;
-            let patch: forma::patch::PatchDocument = serde_json::from_str(&text)
-                .map_err(|e| anyhow::anyhow!("cannot parse patch file: {e}"))?;
-            let report = forma::patch::apply_patch(&project_dir(0), &patch)?;
-            for op in &report.operations {
-                println!("\n[{}] {} → {}", op.status, op.op, op.entity);
-                for edit in &op.edits {
-                    println!(
-                        "  • {}: {} — {} ({})",
-                        edit.standard, edit.action, edit.detail, edit.file
-                    );
-                }
-                if let Some(m) = &op.message {
-                    println!("  ! {m}");
-                }
-            }
-            if let Some(build) = &report.build {
-                println!("\nbuild: {} file(s) regenerated", build.files.len());
-            }
-            for d in &report.diagnostics {
-                eprintln!("{}", forma::validate::format_diagnostic(d));
-            }
-            let failed = report.operations.iter().any(|o| o.status == "failed");
-            println!(
-                "{}",
-                if failed {
-                    "\n✗ patch completed with failures"
-                } else {
-                    "\n✓ patch applied"
-                }
-            );
+            let dir = project_dir(0);
+            // RFC-0006 P2：按工程类型解析补丁文档（DSL 主线操作集 / 联邦规格操作集）
+            let input = if forma::engine::is_dsl_project(&dir) {
+                let patch: forma::dsl::DslPatchDocument = serde_json::from_str(&text)
+                    .map_err(|e| anyhow::anyhow!("cannot parse DSL patch file: {e}"))?;
+                forma::patch::PatchInput::Dsl(patch)
+            } else {
+                let patch: forma::patch::PatchDocument = serde_json::from_str(&text)
+                    .map_err(|e| anyhow::anyhow!("cannot parse patch file: {e}"))?;
+                forma::patch::PatchInput::Federal(patch)
+            };
+            let report = forma::patch::apply_patch_input(&dir, input)?;
+            let failed = print_patch_report(&report)?;
             Ok(if failed { 1 } else { 0 })
         }
         "mcp" => {
@@ -399,15 +414,77 @@ fn cmd_check(project_dir: PathBuf) -> i32 {
     }
 }
 
-fn cmd_build_dsl(project_dir: PathBuf, _force: bool) -> i32 {
-    match forma::build::run_build(&project_dir) {
+/// `forma bench [dir] [--json] [--cases N] [--skip-backend]`
+///
+/// 运行 F-008 的确定性业务变更矩阵（默认 10 场景 × 10 变体 = 100 cases）：
+/// DSL 检查 → 产物生成 → 代表性 backend `cargo check`（每场景变体 0）→ JSON / 文本报告。
+fn cmd_bench(dir: &Path, flags: &std::collections::HashMap<String, String>) -> i32 {
+    let out = forma::bench::run(dir).unwrap_or_else(|e| {
+        eprintln!("benchmark aborted: {e:#}");
+        std::process::exit(1);
+    });
+    let json = flags.contains_key("json");
+    if json {
+        println!("{}", serde_json::to_string_pretty(&out).unwrap_or_default());
+    } else {
+        println!(
+            "benchmark F-008 — {} cases in {} ms",
+            out.cases_total, out.elapsed_ms
+        );
+        for r in &out.results {
+            println!(
+                "  {id:<14} {scenario:<20} check={check} build={build} backend={backend} artifacts={artifacts} in={ms}ms tokens≈{tokens}",
+                id = r.id,
+                scenario = r.scenario,
+                check = if r.check_ok { "ok" } else { "✗" },
+                build = if r.build_ok { "ok" } else { "✗" },
+                backend = match r.backend_compile {
+                    Some(true) => "ok",
+                    Some(false) => "✗",
+                    None => "-",
+                },
+                artifacts = r.artifact_count,
+                ms = r.elapsed_ms,
+                tokens = r.input_tokens_estimated,
+            );
+        }
+        println!(
+            "\nbuilds: {builds}/{total} ({reliability:.0}%) · backend cargo check: {backend}/{total_cases} · checks: {checks}/{total}",
+            builds = out.builds_passed,
+            total = out.cases_total,
+            reliability = out.reliability * 100.0,
+            backend = out.backend_compiles_passed,
+            total_cases = out.backend_compile_cases,
+            checks = out.checks_passed,
+        );
+        println!(
+            "proxy tokens（4 chars/token，非 LLM tokenizer 实测）: ≈{}",
+            out.estimated_input_tokens
+        );
+    }
+    let ok = out.builds_passed == out.cases_total
+        && (out.backend_compile_cases == 0
+            || out.backend_compiles_passed == out.backend_compile_cases);
+    if ok {
+        0
+    } else {
+        1
+    }
+}
+
+fn cmd_build_dsl(project_dir: PathBuf, policy: forma::build::OwnershipPolicy, _force: bool) -> i32 {
+    match forma::build::run_build_with(&project_dir, policy) {
         Ok(report) => {
             for step in &report.steps {
                 for f in &step.files {
                     println!("  + {} ({})", f.path, f.generator);
                 }
             }
-            for d in &report.capability_diagnostics {
+            for d in report
+                .capability_diagnostics
+                .iter()
+                .chain(report.artifact_diagnostics.iter())
+            {
                 eprintln!("{}", forma::validate::format_diagnostic(d));
             }
             if !report.capabilities.is_empty() {
@@ -951,7 +1028,7 @@ fn cmd_validate(project_dir: &Path) -> i32 {
                 .filter(|d| d.severity == "warning")
                 .count();
             println!(
-                "{} {} — {} entities, {} enums, {} apis, {} pages ({} errors, {} warnings)",
+                "{} {} — {} entities, {} enums, {} apis, {} pages ({} errors, {} warnings) · IR {}",
                 if errors == 0 {
                     "✓ valid"
                 } else {
@@ -963,7 +1040,8 @@ fn cmd_validate(project_dir: &Path) -> i32 {
                 check.program.apis.len(),
                 check.program.pages.len(),
                 errors,
-                warnings
+                warnings,
+                check.program.ir_version
             );
             if errors > 0 {
                 1
@@ -1069,6 +1147,75 @@ fn cmd_doctor(project_dir: &Path) -> i32 {
 }
 
 /// DSL 模型摘要的文本渲染。
+/// 打印补丁报告（DSL 与联邦报告同形：operations / edits / diagnostics / build）。
+/// 返回是否存在失败操作。
+fn print_patch_report(report: &serde_json::Value) -> Result<bool> {
+    let ops = report
+        .get("operations")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    for op in &ops {
+        let status = op.get("status").and_then(|v| v.as_str()).unwrap_or("?");
+        let name = op.get("op").and_then(|v| v.as_str()).unwrap_or("?");
+        let entity = op.get("entity").and_then(|v| v.as_str()).unwrap_or("?");
+        println!("\n[{status}] {name} → {entity}");
+        if let Some(edits) = op.get("edits").and_then(|v| v.as_array()) {
+            for edit in edits {
+                let standard = edit.get("standard").and_then(|v| v.as_str()).unwrap_or("");
+                let action = edit.get("action").and_then(|v| v.as_str()).unwrap_or("");
+                let detail = edit.get("detail").and_then(|v| v.as_str()).unwrap_or("");
+                let file = edit.get("file").and_then(|v| v.as_str()).unwrap_or("");
+                println!("  • {standard}: {action} — {detail} ({file})");
+            }
+        }
+        if let Some(m) = op.get("message").and_then(|v| v.as_str()) {
+            println!("  ! {m}");
+        }
+    }
+    if let Some(build) = report.get("build") {
+        let count = build
+            .get("files")
+            .and_then(|v| v.as_array())
+            .map(|a| a.len())
+            .unwrap_or(0);
+        println!("\nbuild: {count} file(s) regenerated");
+    }
+    if let Some(diags) = report.get("diagnostics").and_then(|v| v.as_array()) {
+        for d in diags {
+            let severity = d
+                .get("severity")
+                .and_then(|v| v.as_str())
+                .unwrap_or("error");
+            let code = d.get("code").and_then(|v| v.as_str()).unwrap_or("");
+            let message = d.get("message").and_then(|v| v.as_str()).unwrap_or("");
+            let file = d.get("file").and_then(|v| v.as_str());
+            let line = d.get("line").and_then(|v| v.as_u64());
+            let loc = match (file, line) {
+                (Some(f), Some(l)) => format!("{f}:{l} "),
+                (Some(f), None) => format!("{f} "),
+                _ => String::new(),
+            };
+            eprintln!("[{severity}] {loc}{code} — {message}");
+        }
+    }
+    let failed = ops.iter().any(|o| {
+        matches!(
+            o.get("status").and_then(|v| v.as_str()),
+            Some("failed") | Some("rejected")
+        )
+    });
+    println!(
+        "{}",
+        if failed {
+            "\n✗ patch completed with failures"
+        } else {
+            "\n✓ patch applied"
+        }
+    );
+    Ok(failed)
+}
+
 fn render_dsl_model_text(summary: &serde_json::Value) -> String {
     let mut lines = vec!["Forma DSL 模型".to_string(), "==============".to_string()];
     if let Some(entities) = summary.get("entities").and_then(|v| v.as_array()) {

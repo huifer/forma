@@ -456,7 +456,7 @@ fn semantic_error_blocks_build_and_lists_diagnostics() {
     );
     let dir = tmp_dir("err");
     write_project(&dir, &fm);
-    let err = forma::build::run_build(&dir).err().expect("build 应失败");
+    let err = forma::build::run_build(&dir).expect_err("build 应失败");
     let msg = format!("{err:#}");
     assert!(msg.contains("viz-unknown-field"), "{msg}");
 }

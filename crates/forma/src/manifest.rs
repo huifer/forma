@@ -65,6 +65,10 @@ pub struct IdentityBinding {
 #[derive(Debug, Clone, Default)]
 pub struct TargetConfig {
     pub framework: Option<String>,
+    /// 后端语言（Rust 默认；typescript 用于 Node 后端 target）
+    pub language: Option<String>,
+    /// target 专用引擎（database: mysql | postgres | postgresql | sqlite）
+    pub engine: Option<String>,
     pub out: Option<String>,
 }
 
@@ -76,6 +80,8 @@ pub struct Targets {
     pub frontend: Option<TargetConfig>,
     /// 移动端（Flutter / Android + iOS 同源）
     pub mobile: Option<TargetConfig>,
+    /// API 风格 target（graphql：schema + resolvers；无则零产物）
+    pub api: Option<TargetConfig>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -294,6 +300,7 @@ fn normalize_manifest(
         for (name, slot) in [
             ("backend", &mut targets.backend),
             ("frontend", &mut targets.frontend),
+            ("api", &mut targets.api),
         ] {
             if let Some(cfg) = t
                 .get(serde_yaml::Value::String(name.into()))
@@ -339,6 +346,14 @@ fn parse_target_config(cfg: &serde_yaml::Mapping) -> TargetConfig {
     TargetConfig {
         framework: cfg
             .get(serde_yaml::Value::String("framework".into()))
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        language: cfg
+            .get(serde_yaml::Value::String("language".into()))
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        engine: cfg
+            .get(serde_yaml::Value::String("engine".into()))
             .and_then(|v| v.as_str())
             .map(String::from),
         out: cfg

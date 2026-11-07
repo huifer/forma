@@ -27,7 +27,6 @@ class _CourseListState extends State<CourseList> {
     _reload();
     _loadOptions();
   }
-
   void _reload() {
     setState(() {
       _future = CourseApi(_api).list(
@@ -45,6 +44,29 @@ class _CourseListState extends State<CourseList> {
       });
     } on ApiException {
       // 选项加载失败不阻塞列表
+    }
+  }
+
+  Future<void> _delete(String id) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除确认'),
+        content: const Text('确认删除该条记录？此操作不可恢复。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('删除')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await CourseApi(_api).remove(id);
+      if (!mounted) return;
+      _reload();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
     }
   }
 
@@ -134,10 +156,15 @@ class _CourseListState extends State<CourseList> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                           IconButton(
-                            tooltip: '编辑',
-                            icon: const Icon(Icons.edit_outlined),
-                            onPressed: () => Navigator.pushNamed(context, '/courses/${r.id}'),
-                          ),
+                              tooltip: '编辑',
+                              icon: const Icon(Icons.edit_outlined),
+                              onPressed: () => Navigator.pushNamed(context, '/courses/${r.id}'),
+                            ),
+                          IconButton(
+                              tooltip: '删除',
+                              icon: const Icon(Icons.delete_outline),
+                              onPressed: () => _delete(r.id),
+                            ),
                           ],
                         ),
                         onTap: () => Navigator.pushNamed(context, '/courses/${r.id}'),

@@ -21,13 +21,35 @@ class _CandidateListState extends State<CandidateList> {
     super.initState();
     _reload();
   }
-
   void _reload() {
     setState(() {
       _future = CandidateApi(_api).list(
         CandidateListParams(pageSize: 50),
       );
     });
+  }
+
+  Future<void> _delete(String id) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除确认'),
+        content: const Text('确认删除该条记录？此操作不可恢复。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('删除')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await CandidateApi(_api).remove(id);
+      if (!mounted) return;
+      _reload();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 
   @override
@@ -72,6 +94,16 @@ class _CandidateListState extends State<CandidateList> {
                                 padding: const EdgeInsets.only(top: 2),
                                 child: Text(line),
                               ),
+                          ],
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                          IconButton(
+                              tooltip: '删除',
+                              icon: const Icon(Icons.delete_outline),
+                              onPressed: () => _delete(r.id),
+                            ),
                           ],
                         ),
                       ),

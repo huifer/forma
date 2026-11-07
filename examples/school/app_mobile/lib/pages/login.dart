@@ -37,6 +37,7 @@ class _LoginPageState extends State<LoginPage> {
           ? await AuthApi(_api).register(_username.text, _password.text)
           : await AuthApi(_api).login(_username.text, _password.text);
       Api.authToken = res.token;
+      Api.currentRole = res.role;
       widget.onLoggedIn?.call();
     } on ApiException catch (e) {
       setState(() => _error = e.message);

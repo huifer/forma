@@ -32,7 +32,11 @@ class ApiException implements Exception {
   /// | FORMA_UNAUTHORIZED | FORMA_FORBIDDEN | FORMA_INTERNAL
   final String code;
   final List<FieldError> fields;
-  ApiException(this.status, this.message, this.fields, {this.code = 'FORMA_UNKNOWN'});
+
+  /// 请求追踪 id（§4.4；随响应头/错误体返回，便于与服务端日志对账）。
+  final String? requestId;
+  ApiException(this.status, this.message, this.fields,
+      {this.code = 'FORMA_UNKNOWN', this.requestId});
 
   @override
   String toString() => 'ApiException($status, $code): $message';
@@ -43,6 +47,9 @@ class Api {
   final String baseUrl;
   /// 认证 token（auth module 存在时）
   static String? authToken;
+  /// 当前登录用户的角色（auth module 存在时，由登录/注册响应填入）；
+  /// 未登录或加载中为 null。仅体验层用途——服务端才是安全边界（ADR-0004）。
+  static String? currentRole;
   /// 登录态失效回调（401）→ 跳登录页
   static void Function()? onUnauthorized;
   Api({http.Client? client, String? baseUrl})
@@ -76,6 +83,7 @@ class Api {
         (err['error'] as String?) ?? res.reasonPhrase ?? 'request failed',
         FieldError.fromJsonList(err['fields'] as List<dynamic>?),
         code: (err['code'] as String?) ?? 'FORMA_UNKNOWN',
+        requestId: (err['requestId'] as String?) ?? res.headers['x-request-id'],
       );
     }
     if (res.statusCode == 204 || res.body.isEmpty) return null;
@@ -90,6 +98,13 @@ class Api {
     return (data as List<dynamic>)
         .map((e) => fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  /// 原始 GET（返回已解析 JSON）——游标分页信封 `{items, nextCursor}` 用。
+  Future<dynamic> getRaw(String path, Map<String, String> query) async {
+    final uri = Uri.parse('$baseUrl$path')
+        .replace(queryParameters: query.isEmpty ? null : query);
+    return _send('GET', uri);
   }
 
   Future<T> get<T>(String path, T Function(Map<String, dynamic>) fromJson) async {
@@ -397,12 +412,18 @@ class AuthApi {
 
   Future<AuthToken> login(String username, String password) async {
     final res = await client.post('/auth/login', {'username': username, 'password': password});
-    return AuthToken.fromJson(res as Map<String, dynamic>);
+    final token = AuthToken.fromJson(res as Map<String, dynamic>);
+    Api.authToken = token.token;
+    Api.currentRole = token.role;
+    return token;
   }
 
   Future<AuthToken> register(String username, String password) async {
     final res = await client.post('/auth/register', {'username': username, 'password': password});
-    return AuthToken.fromJson(res as Map<String, dynamic>);
+    final token = AuthToken.fromJson(res as Map<String, dynamic>);
+    Api.authToken = token.token;
+    Api.currentRole = token.role;
+    return token;
   }
 
   Future<AuthUser> me() async {

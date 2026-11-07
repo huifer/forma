@@ -2,34 +2,61 @@
 
 pub mod diagram;
 pub mod diff;
+pub mod docker;
+pub mod engineering;
+pub mod expo;
+pub mod fastapi;
 pub mod flutter;
+pub mod graphql;
+pub mod hono;
 pub mod migrate;
 pub mod mysql;
+pub mod nest;
+pub mod nextjs;
 pub mod openapi;
+pub mod postgres;
 pub mod replay;
 pub mod rust_backend;
 pub mod seed;
+pub mod sqlite;
 pub mod visualization;
+pub mod vue;
 pub mod web_react;
 
 pub use diagram::emit_diagrams;
 pub use diff::{diff_programs, emit_diff, DiffReport};
+pub use docker::emit_docker;
+pub use engineering::{emit_backend_engineering, emit_web_engineering};
+pub use expo::emit_expo;
+pub use fastapi::emit_fastapi;
 pub use flutter::emit_flutter;
+pub use graphql::emit_graphql;
+pub use hono::emit_hono;
 pub use migrate::{
     classify_op, diff_down_sql, diff_ops, emit_migration, migration_down, migration_risk_lines,
     migration_status, migration_up, migration_verify, pending_migration_ops, MigrationEntry,
     MigrationLedger, MigrationOp, MigrationRisk, MigrationRiskReport,
 };
 pub use mysql::emit_mysql;
+pub use nest::emit_nestjs;
+pub use nextjs::emit_nextjs;
 pub use openapi::emit_openapi;
+pub use postgres::{emit_postgres, postgres_type};
 pub use replay::{replay_sql, schema_diff, schema_from_plans, SimSchema, SimTable};
 pub use rust_backend::emit_rust_backend;
 pub use seed::{emit_seed, render_seed_bundle, verify_seed, SeedBundle, SeedVerifyReport};
+pub use sqlite::{emit_sqlite, emit_sqlite_migration, sqlite_type};
 pub use visualization::emit_visualization;
+pub use vue::emit_vue;
 pub use web_react::emit_web_react;
 
 pub use super::identity::to_snake_case as snake;
+// 类型映射（各目标的类型实现）——供「内建类型单一权威清单」一致性测试断言
 pub use crate::dsl::{
     field_attr, find_entity, has_attr, is_enum, is_relation, load_program, pick_message, pluralize,
     BinOp, EntityDecl, Expr, FieldDecl, Program,
 };
+pub use flutter::dart_type;
+pub use mysql::mysql_type;
+pub use rust_backend::rust_type;
+pub use web_react::ts_type;

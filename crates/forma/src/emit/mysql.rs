@@ -33,6 +33,12 @@ pub struct TablePlan {
     pub primary_key: String,
     pub uniques: Vec<Vec<String>>,
     pub indexes: Vec<Vec<String>>,
+    /// FULLTEXT 索引（M10/P1：实体 `searchable [...]` 声明；渲染为
+    /// FULLTEXT KEY ft_... WITH PARSER ngram——MySQL 8 内置 ngram，中文 bigram 可用）。
+    /// `#[serde(default)]`：旧快照无该字段时反序列化为空——否则 read_snapshot 失败
+    /// 会静默回退到迁移链重放路径，产生伪 diff（踩过：users 唯一约束 DROP+ADD 同名）。
+    #[serde(default)]
+    pub fulltext: Vec<Vec<String>>,
     pub fks: Vec<FkPlan>,
 }
 
@@ -89,6 +95,7 @@ fn users_plan() -> TablePlan {
     TablePlan {
         entity: "User".into(),
         table: "users".into(),
+        fulltext: vec![],
         columns: vec![
             col("id", "CHAR(36)", false, false),
             col("username", "VARCHAR(64)", false, false),
@@ -129,6 +136,7 @@ fn audit_log_plan() -> TablePlan {
             vec!["created_at".into()],
             vec!["entity".into(), "entity_id".into()],
         ],
+        fulltext: vec![],
         fks: vec![],
     }
 }
@@ -138,13 +146,64 @@ fn audit_log_plan() -> TablePlan {
 pub fn plan_tables_with_internal(program: &Program) -> Vec<TablePlan> {
     let mut plans = plan_tables(program);
     if program.auth.is_some() && !plans.iter().any(|p| p.table == "users") {
-        plans.insert(0, users_plan());
+        let mut users = users_plan();
+        // 租户维度（C4/M10 收尾）：@tenant 字段存在 → users 表带 tenant 列（JWT claim 来源）+
+        // disabled 列（租户吊销：停用租户全部用户；nullable=true 兼容存量不加租户列的已有表，
+        // 存量行 tenant=NULL 语义上不属于任何租户——租户隔离查询只命中显式绑定的行）
+        if crate::dsl::tenant_enabled(program) {
+            users.columns.push(ColumnPlan {
+                name: "tenant".into(),
+                sql_type: "VARCHAR(64)".into(),
+                nullable: true,
+                unique: false,
+            });
+            users.indexes.push(vec!["tenant".into()]);
+            users.columns.push(ColumnPlan {
+                name: "disabled".into(),
+                sql_type: "TINYINT(1)".into(),
+                nullable: false,
+                unique: false,
+            });
+        }
+        plans.insert(0, users);
     }
     let has_audit = program.commands.iter().any(|c| c.audit.is_some());
     if has_audit && !plans.iter().any(|p| p.table == "audit_logs") {
         plans.push(audit_log_plan());
     }
+    // 定时任务（M10/P1）：jobs 非空时建 forma_jobs 内部表
+    if !program.jobs.is_empty() && !plans.iter().any(|p| p.table == "forma_jobs") {
+        plans.push(job_table_plan());
+    }
     plans
+}
+
+fn job_table_plan() -> TablePlan {
+    let col = |name: &str, sql_type: &str, nullable: bool, unique: bool| ColumnPlan {
+        name: name.into(),
+        sql_type: sql_type.into(),
+        nullable,
+        unique,
+    };
+    TablePlan {
+        entity: "FormaJob".into(),
+        table: "forma_jobs".into(),
+        fulltext: vec![],
+        columns: vec![
+            col("id", "CHAR(36)", false, false),
+            col("name", "VARCHAR(100)", false, false),
+            col("cron", "VARCHAR(50)", false, false),
+            col("label", "VARCHAR(200)", true, false),
+            col("op", "VARCHAR(100)", false, false),
+            col("status", "VARCHAR(20)", false, false),
+            col("last_run_at", "DATETIME", true, false),
+            col("next_run_at", "DATETIME", true, false),
+        ],
+        primary_key: "id".into(),
+        uniques: vec![vec!["name".into()]],
+        indexes: vec![vec!["status".into()]],
+        fks: vec![],
+    }
 }
 
 /// 语义校验/展示用：仅 DSL 声明的表。
@@ -224,7 +283,30 @@ fn plan_table(program: &Program, entity: &EntityDecl) -> TablePlan {
         to_snake_case(col)
     };
 
+    // 全文搜索（M10/P1）：searchable 声明 → FULLTEXT 索引列集合
+    // （仅 String/Text/Email——FULLTEXT 只支持 CHAR/VARCHAR/TEXT 家族）
+    let fulltext = if entity.searchable.is_empty() {
+        vec![]
+    } else {
+        let cols: Vec<String> = entity
+            .searchable
+            .iter()
+            .filter_map(|name| {
+                entity
+                    .fields
+                    .iter()
+                    .find(|f| &f.name == name)
+                    .map(|f| to_snake_case(&f.name))
+            })
+            .collect();
+        if cols.is_empty() {
+            vec![]
+        } else {
+            vec![cols]
+        }
+    };
     TablePlan {
+        fulltext,
         entity: entity.name.clone(),
         table,
         columns,
@@ -277,6 +359,14 @@ pub fn render_create_table(plan: &TablePlan) -> String {
         lines.push(format!(
             "  KEY {} ({})",
             key_name("idx", &plan.table, cols),
+            cols.join(", ")
+        ));
+    }
+    // FULLTEXT（M10/P1）：searchable 声明；ngram 分词器（MySQL 8 内置，中文 bigram 可用）
+    for cols in plan.fulltext.iter() {
+        lines.push(format!(
+            "  FULLTEXT KEY {} ({}) WITH PARSER ngram",
+            key_name("ft", &plan.table, cols),
             cols.join(", ")
         ));
     }

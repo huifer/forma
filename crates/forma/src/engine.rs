@@ -350,6 +350,8 @@ pub fn build_project(options: &BuildOptions) -> Result<BuildOutcome> {
 
     let mut files: Vec<crate::generators::GeneratedFile> = Vec::new();
     let mut skipped = 0usize;
+    // F-002：构建前快照受保护产物
+    let protected = crate::artifacts::snapshot_protected(&options.project_dir)?;
 
     if hard_errors.is_empty() {
         let ctx = GenerateContext {
@@ -396,6 +398,23 @@ pub fn build_project(options: &BuildOptions) -> Result<BuildOutcome> {
 
     let mut diagnostics = load.diagnostics.clone();
     diagnostics.extend(run_doctor(&load.graph));
+    // F-002：构建后恢复受保护产物 + 归属诊断
+    if !options.dry_run {
+        let (mut artifact_diags, _) = crate::artifacts::restore_protected(
+            &options.project_dir,
+            &protected,
+            options.ownership.adopt,
+            options.ownership.overwrite,
+            options.ownership.strict,
+            &files,
+        )?;
+        if options.ownership.strict {
+            for d in &mut artifact_diags {
+                d.severity = "error".into();
+            }
+        }
+        diagnostics.extend(artifact_diags);
+    }
     Ok(BuildOutcome {
         load,
         files,
@@ -410,6 +429,8 @@ pub struct BuildOptions {
     pub force: bool,
     pub entities: Option<Vec<String>>,
     pub dry_run: bool,
+    /// F-002 产物归属裁决（ADR-0003）：默认保留人工版本 + 警告
+    pub ownership: crate::build::OwnershipPolicy,
 }
 
 fn read_cache(path: &Path) -> BuildCache {
@@ -503,6 +524,26 @@ pub fn check_project(project_dir: &Path) -> Result<ProjectCheck> {
     } else {
         Ok(ProjectCheck::Federal(Box::new(load_project(project_dir)?)))
     }
+}
+
+/// DSL 工程的语义图（M3 桥接）：`Program → UnifiedSemanticGraph`。
+///
+/// 桥接是**单向**的（spec:ir §15 / ADR-0002）；联邦图不得反向成为规范表示。
+/// CLI `forma graph` 与 MCP `forma_graph` 共用本函数，避免两份实现漂移。
+pub fn dsl_graph(program: &crate::dsl::Program) -> crate::graph::GraphSummary {
+    match crate::dsl::lower::lower_to_graph(program) {
+        Ok(lowered) => lowered.graph.to_summary(),
+        // 桥接失败不应让「查看模型」不可用——退化为空图并由调用方报告错误。
+        Err(_) => crate::graph::UnifiedSemanticGraph::new().to_summary(),
+    }
+}
+
+/// DSL 工程的语义图（带错误信息）——返回图对象本身（影响闭包需要边集合）。
+pub fn dsl_graph_result(
+    program: &crate::dsl::Program,
+) -> anyhow::Result<(crate::graph::UnifiedSemanticGraph, String)> {
+    let lowered = crate::dsl::lower::lower_to_graph(program)?;
+    Ok((lowered.graph, lowered.ir_version))
 }
 
 /// DSL 工程的模型摘要（实体/枚举/API/页面/规则/图表）。

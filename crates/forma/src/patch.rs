@@ -143,6 +143,30 @@ pub struct BuildSummary {
 // 执行器（事务式）
 // ---------------------------------------------------------------------------
 
+/// 补丁入口分发（RFC-0006 P2）：DSL 工程 → `dsl::patch`（加字段 / 加规则 / 加页面），
+/// 联邦工程 → 适配器规格的原位编辑。两条路径共享「快照 → 编辑 → 重校验 → 重建」的事务形状。
+///
+/// 调用方（CLI `forma patch` / MCP `forma_patch`）按工程类型解析对应的补丁文档后进入本函数。
+pub enum PatchInput {
+    /// 联邦补丁文档（规格导入侧）
+    Federal(PatchDocument),
+    /// DSL 主线补丁文档（`dsl::patch` 操作集）
+    Dsl(crate::dsl::DslPatchDocument),
+}
+
+pub fn apply_patch_input(project_dir: &Path, input: PatchInput) -> Result<serde_json::Value> {
+    match input {
+        PatchInput::Federal(patch) => {
+            let report = apply_patch(project_dir, &patch)?;
+            Ok(serde_json::to_value(&report)?)
+        }
+        PatchInput::Dsl(patch) => {
+            let report = crate::dsl::patch::apply_dsl_patch(project_dir, &patch)?;
+            Ok(serde_json::to_value(&report)?)
+        }
+    }
+}
+
 pub fn apply_patch(project_dir: &Path, patch: &PatchDocument) -> Result<PatchReport> {
     let load = crate::engine::load_project(project_dir)?;
     let mut report = PatchReport {
@@ -286,6 +310,7 @@ pub fn apply_patch(project_dir: &Path, patch: &PatchDocument) -> Result<PatchRep
             force: true,
             entities: Some(affected),
             dry_run: false,
+            ownership: crate::build::OwnershipPolicy::default(),
         })?;
         report.build = Some(BuildSummary {
             files: build.files.iter().map(|f| f.path.clone()).collect(),

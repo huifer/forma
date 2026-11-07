@@ -106,6 +106,10 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npx tsc --noEmit
+      # F-004：规则一致性向量 · Web 端行为验证（与 Flutter 端同源派生）
+      - name: Behavior vector tests (vitest)
+        working-directory: examples/school/generated/web
+        run: npx vitest run
       - name: Production build
         working-directory: examples/school/generated/web
         run: npm run build

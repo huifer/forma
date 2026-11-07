@@ -4,6 +4,9 @@ use super::lexer::{TokKind, Token};
 
 #[derive(Debug, Clone)]
 pub struct Program {
+    /// IR 版本（M2）：语义契约版本，随语义演进递增；
+    /// 兼容判定依据「契约测试 + 语义规则」，**不得**仅凭版本号判断（spec:compatibility §2）。
+    pub ir_version: String,
     pub app: Option<AppDecl>,
     pub enums: Vec<EnumDecl>,
     pub entities: Vec<EntityDecl>,
@@ -13,6 +16,10 @@ pub struct Program {
     pub pages: Vec<PageDecl>,
     /// 可视化图表（Chart IR 的 DSL 载体，RFC-0001 §3.1）
     pub charts: Vec<ChartDecl>,
+    /// 定时任务（M10/P1）：cron 调度器轮询，到点调用 API 操作。
+    pub jobs: Vec<JobDecl>,
+    /// 实时推送（M10/P1）：SSE 通道声明。
+    pub lives: Vec<LiveDecl>,
     /// 认证模块（M5）；None = 纯公开应用
     pub auth: Option<AuthDecl>,
 }
@@ -28,6 +35,9 @@ pub struct AppDecl {
 pub struct EnumDecl {
     pub name: String,
     pub variants: Vec<EnumVariant>,
+    /// 声明位置（M1）：`line` 解析期确定；`file` 在多文件合并时回填。
+    pub line: usize,
+    pub file: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -41,8 +51,15 @@ pub struct EnumVariant {
 pub struct EntityDecl {
     pub name: String,
     pub fields: Vec<FieldDecl>,
+    /// 通知声明（M10/P1）：@notify 属性的聚合视图。
+    pub notify: Vec<NotifyDecl>,
+    /// 全文搜索列（M10/P1：`searchable [f1, f2]`；生成 FULLTEXT 索引，ngram 分词）
+    pub searchable: Vec<String>,
     pub indexes: Vec<Vec<String>>,
     pub uniques: Vec<Vec<String>>,
+    /// 声明位置（M1）：`line` 解析期确定；`file` 在多文件合并时回填。
+    pub line: usize,
+    pub file: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -65,6 +82,20 @@ pub struct Attr {
     pub block: Vec<(String, String)>,
 }
 
+/// 通知声明（M10/P1 能力模块）：`@notify(<channel>, <target>, <event>)`——
+/// 属性参数必须走括号形式（裸参数不被属性解析捕获）。
+///
+/// 语义：字段级事件订阅——当事件 `event` 在实体上触发时，通知通道 `channel`
+/// 以 `target` 为目标派发通知。
+#[derive(Debug, Clone)]
+pub struct NotifyDecl {
+    pub channel: String,
+    pub target: Option<String>,
+    pub event: Option<String>,
+    pub args: Vec<String>,
+    pub block: Vec<(String, String)>,
+}
+
 /// i18n 消息：Vec<(locale, text)>
 pub type Message = Vec<(String, String)>;
 
@@ -76,6 +107,9 @@ pub struct RulesDecl {
     pub guards: Vec<GuardDecl>,
     /// 实体级访问规则：`access Order { read → any; update → role in [...] }`
     pub access: Vec<AccessDecl>,
+    /// 声明位置（M1）：`line` 解析期确定；`file` 在多文件合并时回填。
+    pub line: usize,
+    pub file: Option<String>,
 }
 
 /// 实体级访问规则（RBAC + 行级条件）。
@@ -87,6 +121,18 @@ pub struct RulesDecl {
 pub struct AccessDecl {
     pub entity: String,
     pub rules: Vec<AccessRule>,
+    /// 字段级策略（P0-2 / ADR-0004 四层收口）：`fields { field → 角色表达式 }`。
+    /// 语义：仅所列角色可见；其余角色在**服务端响应序列化时裁剪**（输出裁剪，非脱敏标记）。
+    pub field_policies: Vec<FieldAccess>,
+}
+
+/// 单条字段级策略：`<字段> → <角色表达式>`。
+#[derive(Debug, Clone)]
+pub struct FieldAccess {
+    /// 字段名（DSL 名；JSON 键 = snake_case）
+    pub field: String,
+    /// 可见角色表达式（与操作级同语法：`role in [...]` / `role == "..."`）
+    pub expr: Expr,
 }
 
 /// 单条访问规则：`<操作> → <条件表达式>`。
@@ -166,6 +212,8 @@ pub struct ChartDecl {
     pub zoom: Option<bool>,
     pub appearance: AppearanceDecl,
     pub line: usize,
+    /// 声明位置（M1）：`file` 在多文件合并时回填。
+    pub file: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -271,6 +319,9 @@ pub struct ApiDecl {
     pub list: Option<ListCfg>,
     /// 操作级授权规则（服务端权威执行）。
     pub auth: Vec<ApiAuthRule>,
+    /// 声明位置（M1）：`line` 解析期确定；`file` 在多文件合并时回填。
+    pub line: usize,
+    pub file: Option<String>,
 }
 
 /// api 块内的操作级授权：`auth { update delete → role in ["admin", "ops"] }`。
@@ -287,6 +338,41 @@ pub struct ApiAuthRule {
 
 /// 命令类操作（spec §10）：状态机审批流等真实业务动作。
 /// `api OrderApprove { POST "/orders/{id}/approve" input {..} pre {..} effect { set .. } audit {..} }`
+/// 实时推送声明（M10/P1）：`live <name> { api <ApiName>.list; events [create, update, delete] }`。
+///
+/// 语义：后端为每个 live 块开一条 SSE 通道；当 events 列出的操作在目标 api 的实体上
+/// 成功执行时，向订阅者推送一条事件（前端据此刷新列表）。
+#[derive(Debug, Clone)]
+pub struct LiveDecl {
+    /// 通道名（snake_case，作为 SSE 路径段）
+    pub name: String,
+    /// 目标 api 名（必须是已声明的 api，事件载荷 = 该实体列表刷新提示）
+    pub api: String,
+    /// 触发事件（create/update/delete，空 = 全部）
+    pub events: Vec<String>,
+    /// 声明位置（M1）
+    pub line: usize,
+    pub file: Option<String>,
+}
+
+/// 定时任务声明（M10/P1）：`job <name> { cron "..." label {...} op ApiName }`。
+///
+/// 语义：后端调度器轮询 cron 表达式，到点调用 `op` 指定的 API 操作 REST 端点。
+#[derive(Debug, Clone)]
+pub struct JobDecl {
+    /// 任务标识（snake_case，作为 REST 路径段）
+    pub name: String,
+    /// cron 表达式（5 字段：minute hour day-of-month month day-of-week）
+    pub cron: String,
+    /// 任务展示名（i18n）
+    pub label: Message,
+    /// 目标 API 操作名（必须是 program.apis 中声明的 api 名）
+    pub op: String,
+    /// 声明位置（M1）
+    pub line: usize,
+    pub file: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct CommandDecl {
     pub name: String,
@@ -302,6 +388,9 @@ pub struct CommandDecl {
     pub effects: Vec<Effect>,
     /// 审计动作名（如 "order.approve"）
     pub audit: Option<String>,
+    /// 声明位置（M1）：`line` 解析期确定；`file` 在多文件合并时回填。
+    pub line: usize,
+    pub file: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -350,6 +439,9 @@ pub struct PageDecl {
     pub route: String,
     pub title: Message,
     pub body: PageBody,
+    /// 声明位置（M1）：`line` 解析期确定；`file` 在多文件合并时回填。
+    pub line: usize,
+    pub file: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -452,6 +544,7 @@ pub fn parse(tokens: &[Token]) -> ParseOutcome {
         pending_commands: Vec::new(),
     };
     let mut program = p.parse_program();
+    program.ir_version = crate::dsl::IR_VERSION.to_string();
     program.commands = std::mem::take(&mut p.pending_commands);
     ParseOutcome {
         program,
@@ -565,6 +658,9 @@ impl<'a> Parser<'a> {
 
     fn parse_program(&mut self) -> Program {
         let mut program = Program {
+            ir_version: crate::dsl::IR_VERSION.to_string(),
+            jobs: Vec::new(),
+            lives: Vec::new(),
             app: None,
             enums: Vec::new(),
             entities: Vec::new(),
@@ -620,11 +716,21 @@ impl<'a> Parser<'a> {
                         program.charts.push(c);
                     }
                 }
+                "job" if tok.kind == TokKind::Ident => {
+                    if let Some(j) = self.parse_job() {
+                        program.jobs.push(j);
+                    }
+                }
+                "live" if tok.kind == TokKind::Ident => {
+                    if let Some(l) = self.parse_live() {
+                        program.lives.push(l);
+                    }
+                }
                 _ => {
                     self.error_at(
                         &tok,
                         format!(
-                            "unexpected '{}', expected app/enum/entity/rules/api/page/chart",
+                            "unexpected '{}', expected app/enum/entity/rules/api/page/chart/job",
                             tok.value
                         ),
                     );
@@ -744,11 +850,15 @@ impl<'a> Parser<'a> {
     // ── enum ──
 
     fn parse_enum(&mut self) -> Option<EnumDecl> {
+        // M1：声明位置（行号解析期确定；文件在合并期回填）
+        let decl_line = self.peek().line;
         self.next(); // enum
         let name = self.expect_ident()?;
         let mut decl = EnumDecl {
             name,
             variants: Vec::new(),
+            line: decl_line,
+            file: None,
         };
         if !self.expect_punct("{") {
             return Some(decl);
@@ -790,13 +900,19 @@ impl<'a> Parser<'a> {
     // ── entity ──
 
     fn parse_entity(&mut self) -> Option<EntityDecl> {
+        // M1：声明位置（行号解析期确定；文件在合并期回填）
+        let decl_line = self.peek().line;
         self.next(); // entity
         let name = self.expect_ident()?;
         let mut decl = EntityDecl {
             name,
             fields: Vec::new(),
+            notify: Vec::new(),
+            searchable: Vec::new(),
             indexes: Vec::new(),
             uniques: Vec::new(),
+            line: decl_line,
+            file: None,
         };
         if !self.expect_punct("{") {
             return Some(decl);
@@ -816,10 +932,29 @@ impl<'a> Parser<'a> {
                 }
                 continue;
             }
+            // 全文搜索列（M10/P1）：`searchable [f1, f2]` → FULLTEXT 索引
+            if self.is_kw("searchable") {
+                self.next();
+                decl.searchable = self.parse_ident_list();
+                continue;
+            }
             let Some(field) = self.parse_field() else {
                 self.next();
                 continue;
             };
+            // @notify 属性聚合（M10/P1）：字段级事件订阅声明
+            for attr in field.attrs.iter().filter(|a| a.name == "notify") {
+                let channel = attr.args.first().cloned().unwrap_or_default();
+                let target = attr.args.get(1).cloned();
+                let event = attr.args.get(2).cloned();
+                decl.notify.push(NotifyDecl {
+                    channel,
+                    target,
+                    event,
+                    args: attr.args.clone(),
+                    block: attr.block.clone(),
+                });
+            }
             decl.fields.push(field);
         }
         self.expect_punct("}");
@@ -902,6 +1037,8 @@ impl<'a> Parser<'a> {
     // ── rules ──
 
     fn parse_rules(&mut self) -> Option<RulesDecl> {
+        // M1：声明位置（行号解析期确定；文件在合并期回填）
+        let decl_line = self.peek().line;
         self.next(); // rules
         let name = self.expect_ident()?;
         let mut decl = RulesDecl {
@@ -910,6 +1047,8 @@ impl<'a> Parser<'a> {
             checks: Vec::new(),
             guards: Vec::new(),
             access: Vec::new(),
+            line: decl_line,
+            file: None,
         };
         if !self.expect_punct("{") {
             return Some(decl);
@@ -1031,9 +1170,31 @@ impl<'a> Parser<'a> {
                     break;
                 };
                 let mut rules = Vec::new();
+                let mut field_policies: Vec<FieldAccess> = Vec::new();
                 if self.eat_punct("{") {
                     while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
                         if self.eat_punct(";") {
+                            continue;
+                        }
+                        // 字段级策略块（P0-2）：fields { <字段> → <角色表达式> ... }
+                        if self.is_kw("fields") {
+                            self.next();
+                            if self.eat_punct("{") {
+                                while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+                                    if self.eat_punct(";") {
+                                        continue;
+                                    }
+                                    let Some(fname) = self.expect_ident() else {
+                                        break;
+                                    };
+                                    if self.peek().kind == TokKind::Arrow {
+                                        self.next();
+                                    }
+                                    let expr = self.parse_expr();
+                                    field_policies.push(FieldAccess { field: fname, expr });
+                                }
+                                self.expect_punct("}");
+                            }
                             continue;
                         }
                         let Some(op) = self.expect_ident() else {
@@ -1050,7 +1211,11 @@ impl<'a> Parser<'a> {
                     }
                     self.expect_punct("}");
                 }
-                decl.access.push(AccessDecl { entity, rules });
+                decl.access.push(AccessDecl {
+                    entity,
+                    rules,
+                    field_policies,
+                });
             } else {
                 let t = self.peek().clone();
                 self.error_at(&t, format!("unexpected '{}' in rules", t.value));
@@ -1100,6 +1265,8 @@ impl<'a> Parser<'a> {
     // ── api ──
 
     fn parse_api(&mut self) -> Option<ApiDecl> {
+        // M1：声明位置（行号解析期确定；文件在合并期回填）
+        let decl_line = self.peek().line;
         self.next(); // api
         let name = self.expect_ident()?;
         let mut decl = ApiDecl {
@@ -1114,6 +1281,8 @@ impl<'a> Parser<'a> {
             ],
             list: None,
             auth: vec![],
+            line: decl_line,
+            file: None,
         };
         if !self.expect_punct("{") {
             return Some(decl);
@@ -1133,6 +1302,8 @@ impl<'a> Parser<'a> {
                 operations: vec![],
                 list: None,
                 auth: vec![],
+                line: decl_line,
+                file: None,
             });
         }
         while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
@@ -1315,6 +1486,8 @@ impl<'a> Parser<'a> {
     /// }
     /// ```
     fn parse_command(&mut self, name: String) -> Option<CommandDecl> {
+        // M1：声明位置（行号解析期确定；文件在合并期回填）
+        let decl_line = self.peek().line;
         let method = self.next().value.to_uppercase();
         let path = self.expect_string()?;
         let mut cmd = CommandDecl {
@@ -1327,6 +1500,8 @@ impl<'a> Parser<'a> {
             message: None,
             effects: Vec::new(),
             audit: None,
+            line: decl_line,
+            file: None,
         };
         // 条目直接跟在 POST "/path" 之后（label/input/pre/message/effect/audit），
         // 循环终止于 api 块的闭括号
@@ -1556,6 +1731,97 @@ impl<'a> Parser<'a> {
         Some(cfg)
     }
 
+    // ── job（定时任务，M10/P1）──
+
+    fn parse_job(&mut self) -> Option<JobDecl> {
+        let decl_line = self.peek().line;
+        self.next(); // job
+        let name = self.expect_ident()?;
+        let mut decl = JobDecl {
+            name,
+            cron: String::new(),
+            label: Vec::new(),
+            op: String::new(),
+            line: decl_line,
+            file: None,
+        };
+        if !self.expect_punct("{") {
+            return Some(decl);
+        }
+        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+            if self.eat_punct(";") {
+                continue;
+            }
+            if self.is_kw("cron") {
+                self.next();
+                if self.peek().kind == TokKind::Str {
+                    decl.cron = self.next().value;
+                } else {
+                    self.error_at(&self.peek().clone(), "expected cron string after 'cron'");
+                    self.next();
+                }
+            } else if self.is_kw("label") {
+                self.next();
+                decl.label = self.parse_message_block();
+            } else if self.is_kw("op") {
+                self.next();
+                decl.op = self.expect_ident().unwrap_or_default();
+            } else {
+                let tok = self.peek().clone();
+                self.error_at(
+                    &tok,
+                    format!("unknown job field '{}' (expected cron/label/op)", tok.value),
+                );
+                self.next();
+            }
+        }
+        self.expect_punct("}");
+        Some(decl)
+    }
+
+    // ── live（实时推送，M10/P1）──
+
+    fn parse_live(&mut self) -> Option<LiveDecl> {
+        let decl_line = self.peek().line;
+        self.next(); // live
+        let name = self.expect_ident()?;
+        let mut decl = LiveDecl {
+            name,
+            api: String::new(),
+            events: Vec::new(),
+            line: decl_line,
+            file: None,
+        };
+        if !self.expect_punct("{") {
+            return Some(decl);
+        }
+        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+            if self.eat_punct(";") {
+                continue;
+            }
+            if self.is_kw("api") {
+                self.next();
+                // 支持 Items.list / Items 两种写法（取 api 名）
+                decl.api = self.expect_ident().unwrap_or_default();
+                if self.eat_punct(".") {
+                    let _ = self.expect_ident();
+                }
+            } else if self.is_kw("events") {
+                self.next();
+                decl.events = self.parse_ident_list();
+            } else {
+                let tok = self.peek().clone();
+                self.error_at(
+                    &tok,
+                    format!("unknown live field '{}' (expected api/events)", tok.value),
+                );
+                self.next();
+            }
+        }
+        self.expect_punct("}");
+        Some(decl)
+    }
+
     // ── chart（可视化，RFC-0001）──
 
     /// `chart Name { type line  title {...}  source Orders.list  encoding {...} ... }`
@@ -1576,6 +1842,7 @@ impl<'a> Parser<'a> {
             zoom: None,
             appearance: AppearanceDecl::default(),
             line: name_tok.line,
+            file: None,
         };
         if !self.expect_punct("{") {
             return Some(decl);
@@ -2028,6 +2295,8 @@ impl<'a> Parser<'a> {
     // ── page ──
 
     fn parse_page(&mut self) -> Option<PageDecl> {
+        // M1：声明位置（行号解析期确定；文件在合并期回填）
+        let decl_line = self.peek().line;
         self.next(); // page
         let name = self.expect_ident()?;
         let mut decl = PageDecl {
@@ -2041,6 +2310,8 @@ impl<'a> Parser<'a> {
                 search: Vec::new(),
                 actions: None,
             }),
+            line: decl_line,
+            file: None,
         };
         if !self.expect_punct("{") {
             return Some(decl);
@@ -2195,6 +2466,9 @@ impl<'a> Parser<'a> {
                 self.next();
                 if self.eat_punct("[") {
                     while !self.is_punct("]") && self.peek().kind != TokKind::Eof {
+                        if self.eat_punct(",") || self.eat_punct(";") {
+                            continue;
+                        }
                         let Some(action) = self.expect_ident() else {
                             break;
                         };

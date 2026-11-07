@@ -130,6 +130,7 @@ fn sim_to_plans(schema: &crate::emit::replay::SimSchema) -> Vec<TablePlan> {
         .map(|t| TablePlan {
             entity: t.name.clone(),
             table: t.name.clone(),
+            fulltext: vec![],
             columns: t
                 .columns
                 .iter()
@@ -369,8 +370,10 @@ impl MigrationRisk {
 /// 未识别操作按 fail-safe 归为 High，避免静默放过破坏性变更。
 pub fn classify_op(kind: &str) -> MigrationRisk {
     match kind {
-        "create_table" | "add_column" | "add_index" | "add_unique" | "add_fk" => MigrationRisk::Low,
-        "drop_index" | "drop_unique" | "drop_fk" => MigrationRisk::Medium,
+        "create_table" | "add_column" | "add_index" | "add_unique" | "add_fk" | "add_fulltext" => {
+            MigrationRisk::Low
+        }
+        "drop_index" | "drop_unique" | "drop_fk" | "drop_fulltext" => MigrationRisk::Medium,
         "modify_column" | "drop_column" => MigrationRisk::High,
         "drop_table" => MigrationRisk::Extreme,
         _ => MigrationRisk::High,
@@ -512,7 +515,7 @@ pub fn diff_ops(old: &[TablePlan], new: &[TablePlan]) -> Vec<MigrationOp> {
         ops.extend(
             index_ops(t, old_t)
                 .into_iter()
-                .filter(|op| matches!(op.kind, "drop_index" | "drop_unique")),
+                .filter(|op| matches!(op.kind, "drop_index" | "drop_unique" | "drop_fulltext")),
         );
         ops.extend(
             fk_ops(t, old_t)
@@ -527,7 +530,7 @@ pub fn diff_ops(old: &[TablePlan], new: &[TablePlan]) -> Vec<MigrationOp> {
         ops.extend(
             index_ops(t, old_t)
                 .into_iter()
-                .filter(|op| matches!(op.kind, "add_index" | "add_unique")),
+                .filter(|op| matches!(op.kind, "add_index" | "add_unique" | "add_fulltext")),
         );
         ops.extend(
             fk_ops(t, old_t)
@@ -729,6 +732,37 @@ fn index_ops(new: &TablePlan, old: &TablePlan) -> Vec<MigrationOp> {
             });
         }
     }
+    // FULLTEXT（M10/P1：searchable 声明；ngram 分词，MySQL 8 内置）
+    for cols in new.fulltext.iter() {
+        if !old.fulltext.contains(cols) {
+            let name = super::mysql::key_name("ft", t, cols);
+            out.push(MigrationOp {
+                kind: "add_fulltext",
+                table: t.clone(),
+                summary: format!("{t}: 新增全文索引 {} ({})", name, cols.join(", ")),
+                up: vec![format!(
+                    "ALTER TABLE {t} ADD FULLTEXT INDEX {name} ({}) WITH PARSER ngram;",
+                    cols.join(", ")
+                )],
+                down: vec![format!("ALTER TABLE {t} DROP INDEX {name};")],
+            });
+        }
+    }
+    for cols in old.fulltext.iter() {
+        if !new.fulltext.contains(cols) {
+            let name = super::mysql::key_name("ft", t, cols);
+            out.push(MigrationOp {
+                kind: "drop_fulltext",
+                table: t.clone(),
+                summary: format!("{t}: 删除全文索引 {} ({})", name, cols.join(", ")),
+                up: vec![format!("ALTER TABLE {t} DROP INDEX {name};")],
+                down: vec![format!(
+                    "ALTER TABLE {t} ADD FULLTEXT INDEX {name} ({}) WITH PARSER ngram;",
+                    cols.join(", ")
+                )],
+            });
+        }
+    }
     out
 }
 
@@ -925,8 +959,26 @@ pub fn emit_migration(
         save_ledger(project_dir, &ledger)?;
     }
 
-    let old_snapshot = read_snapshot(project_dir, out_dir)
-        .or_else(|| rebuild_snapshot_from_chain(project_dir, out_dir));
+    let rs = read_snapshot(project_dir, out_dir);
+    eprintln!(
+        "DBG-SNAP path={:?} read_ok={}",
+        snapshot_path(project_dir, out_dir),
+        rs.is_some()
+    );
+    let old_snapshot = rs.or_else(|| rebuild_snapshot_from_chain(project_dir, out_dir));
+    if let Some(snap) = old_snapshot.as_ref() {
+        // 快照是从迁移链重放重建的（新克隆场景）→ 落盘持久化，
+        // 否则每次构建都要重放整条链（且 save_snapshot 分支永远不会执行——踩过）
+        let p = snapshot_path(project_dir, out_dir);
+        if !p.is_file() {
+            let snap2 = IrSnapshot {
+                version: SNAPSHOT_VERSION,
+                app_version: app_version.clone(),
+                tables: snap.tables.clone(),
+            };
+            write_text(&p, &serde_json::to_string_pretty(&snap2)?)?;
+        }
+    }
     let Some(old_snapshot) = old_snapshot else {
         // 首次：登记基线（迁移文件由 gen-mysql 的 0001_init.sql 承载）
         save_snapshot(project_dir, out_dir, &app_version, &new_plans)?;
@@ -960,6 +1012,14 @@ pub fn emit_migration(
     };
 
     let ops = diff_ops(&old_snapshot.tables, &new_plans);
+    for t in &new_plans {
+        if t.table == "users" {
+            let oldu = old_snapshot.tables.iter().find(|x| x.table == "users");
+            let old_col = oldu.and_then(|o| o.columns.iter().find(|c| c.name == "username"));
+            let new_col = t.columns.iter().find(|c| c.name == "username");
+            eprintln!("DBG users username old_unique={:?} new_unique={:?} old_uniques={:?} new_uniques={:?} ops={}", old_col.map(|c| c.unique), new_col.map(|c| c.unique), oldu.map(|o| &o.uniques), Some(&t.uniques), ops.len());
+        }
+    }
     if ops.is_empty() {
         // schema 未变：仅刷新台账文档（applied 状态可能被 CLI 更新过）
         write_migration_docs(project_dir, out_dir, &ledger)?;

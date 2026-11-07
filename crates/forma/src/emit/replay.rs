@@ -85,11 +85,21 @@ pub fn schema_from_plans(plans: &[TablePlan]) -> SimSchema {
                         (key_name("uq", &p.table, &cols), cols)
                     }))
                     .collect(),
-                indexes: p
-                    .indexes
-                    .iter()
-                    .map(|cols| (key_name("idx", &p.table, cols), cols.clone()))
-                    .collect(),
+                indexes: {
+                    let mut idx: Vec<(String, Vec<String>)> = p
+                        .indexes
+                        .iter()
+                        .map(|cols| (key_name("idx", &p.table, cols), cols.clone()))
+                        .collect();
+                    // FULLTEXT（M10/P1）：ft_ 前缀名字进同一通道——diff 按名字对比，
+                    // SQL 生成时按前缀改写为 FULLTEXT（见 migrate.rs）
+                    idx.extend(
+                        p.fulltext
+                            .iter()
+                            .map(|cols| (key_name("ft", &p.table, cols), cols.clone())),
+                    );
+                    idx
+                },
                 fks: p
                     .fks
                     .iter()
@@ -302,6 +312,15 @@ fn apply_alter(schema: &mut SimSchema, rest: &str) -> anyhow::Result<()> {
     } else if let Some(def) = action.strip_prefix("ADD UNIQUE KEY ") {
         let (name, cols) = parse_key_def(def)?;
         schema.table_mut(&table)?.uniques.push((name, cols));
+    } else if let Some(def) = action.strip_prefix("ADD FULLTEXT INDEX ") {
+        // FULLTEXT 索引：模拟器按普通索引登记（只关心名字去重）
+        let def = def.strip_suffix(" WITH PARSER ngram").unwrap_or(def);
+        let (name, cols) = parse_key_def(def)?;
+        let t = schema.table_mut(&table)?;
+        if t.uniques.iter().any(|(n, _)| *n == name) || t.indexes.iter().any(|(n, _)| *n == name) {
+            bail!("ALTER TABLE {table} ADD FULLTEXT INDEX {name}: 索引重名（Duplicate key name）");
+        }
+        t.indexes.push((name, cols));
     } else if let Some(def) = action.strip_prefix("ADD INDEX ") {
         let (name, cols) = parse_key_def(def)?;
         let t = schema.table_mut(&table)?;

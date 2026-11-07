@@ -4,8 +4,10 @@
 //! 必须携带**相同的边界字面量与比较方向**。任何一端漂移（边界写错、方向反转、
 //! 字面量类型歧义）都会让本测试变红。
 //!
-//! Rust 侧（本文件）断言三端生成物的字面量一致；Dart 端的**行为**验证在参考应用
-//! `examples/school/app_mobile/test/rule_vector_test.dart`（Flutter CI 执行）；
+//! Rust 侧（本文件）断言三端生成物的字面量一致；
+//! **行为**验证由 `validation_vectors.rs` 从 DSL 派生并生成两端测试文件——
+//! `generated/web/src/validators.test.ts`（vitest）与
+//! `app_mobile/test/rule_vector_test.dart`（flutter_test），在各自 CI 真实执行；
 //! Rust（权威）的行为验证在 e2e 冒烟（校验失败 → 400）。
 //!
 //! 并行安全：产物写入 `tmp_dir("唯一 tag")`。
@@ -39,6 +41,42 @@ fn write_project(dir: &Path, fm: &str) {
     )
     .unwrap();
     fs::write(dir.join("forma/app.fm"), fm).unwrap();
+}
+
+/// F-004：行为向量测试文件由同一派生函数（validation_vectors.rs）生成，
+/// 两端必须携带**同一组边界字面量**（同源保证）。
+#[test]
+fn generated_behavior_tests_are_same_source() {
+    let dir = tmp_dir("same-source");
+    write_project(&dir, &build_fm());
+    let (program, _) = forma::dsl::load_program(&dir, &["forma/**/*.fm".into()]).unwrap();
+    let web = forma::emit::emit_web_react(&dir, &program, "generated/web", "vectors").unwrap();
+    let mobile = forma::emit::emit_flutter(&dir, &program, "generated/mobile", "vectors").unwrap();
+
+    let web_test = web
+        .iter()
+        .find(|f| f.path.ends_with("validators.test.ts"))
+        .expect("web behavior vector test must be generated");
+    let dart_test = mobile
+        .iter()
+        .find(|f| f.path.ends_with("rule_vector_test.dart"))
+        .expect("dart behavior vector test must be generated");
+
+    // 同源：两端用例数一致（每个 test( 出现一次）
+    let web_cases = web_test.content.matches("test(").count();
+    let dart_cases = dart_test.content.matches("test('V").count();
+    assert!(
+        web_cases > 0 && web_cases == dart_cases,
+        "{web_cases} vs {dart_cases}"
+    );
+
+    // 边界字面量：派生自同一 DSL 约束（如 min 6 / max 500）
+    for literal in ["6", "500", "0.01", "1"] {
+        assert!(
+            web_test.content.contains(literal) && dart_test.content.contains(literal),
+            "boundary literal {literal} must appear in both generated tests"
+        );
+    }
 }
 
 /// 一条一致性向量：字段声明 + 三端生成物必须携带的语义片段。

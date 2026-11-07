@@ -397,7 +397,7 @@ fn error_schema() -> serde_json::Value {
                     }
                 }
             },
-            "requestId": { "type": "string", "description": "请求追踪 id（预留）" }
+            "requestId": { "type": "string", "description": "请求追踪 id（由服务端生成/透传，随 x-request-id 响应头返回）" }
         }
     })
 }

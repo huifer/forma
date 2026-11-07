@@ -67,7 +67,7 @@ const TOOLS_JSON: &str = r#"[
   },
   {
     "name": "forma_impact",
-    "description": "联邦工程（specifications 导入）：给定实体或字段名，返回受影响节点闭包。DSL 工程请改用 forma_graph。",
+    "description": "影响闭包：给定实体 / 字段 / 图表名（或 forma:// URI），返回受影响节点闭包（实体→字段→表列→API→页面→图表→迁移）。DSL 与联邦工程均可用（DSL 走 dsl::lower 桥接图）。",
     "inputSchema": {
       "type": "object",
       "properties": { "target": { "type": "string" } },
@@ -76,8 +76,57 @@ const TOOLS_JSON: &str = r#"[
     }
   },
   {
+    "name": "forma_search",
+    "description": "语义模型检索：按关键词匹配实体 / 字段 / 枚举 / API 操作 / 页面 / 图表 / 表列，返回 URI、类型与来源位置。发现阶段的入口——不需要读取 .fm 源码。",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": { "type": "string" },
+        "kind": { "type": "string", "description": "可选：entity | entity-field | type | api-operation | ui-form | chart | table | table-column | migration" }
+      },
+      "required": ["query"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "forma_get_context",
+    "description": "目标上下文收敛：给定实体 / 字段 / 页面 / 图表名（或 forma:// URI），返回声明块摘录（源码片段）、定义产物（字段 / 表列）、依赖与引用者、以及影响闭包。修改前先看这个。",
+    "inputSchema": {
+      "type": "object",
+      "properties": { "target": { "type": "string" } },
+      "required": ["target"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "forma_plan",
+    "description": "变更计划（试运行，零副作用）：校验补丁操作、返回编辑清单、影响面与迁移操作风险分级（low/medium/high/extreme + 是否需要人工审批）。verdict = agent-safe | requires-approval | blocked。DSL 工程专用；应用前必调。输出 expected = 目标实体当前声明块 sha256，请原样提交为 patch 的 expected 做冲突检测。",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "operations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "op": { "type": "string", "enum": ["add-entity-field", "set-entity-field-required", "add-access-rule", "add-table-page"] },
+              "entity": { "type": "string" }
+            }
+          }
+        }
+      },
+      "required": ["operations"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "forma_report",
+    "description": "变更与状态汇报：模型摘要、校验证据（check / lint / 迁移链重放）、待执行迁移及其风险分级、各 target 产物面。改完 .fm 之后、提交之前调用。",
+    "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+  },
+  {
     "name": "forma_patch",
-    "description": "联邦工程（specifications 导入）：应用语义补丁（add-entity-field 等）并增量重建。DSL 工程请直接编辑 .fm 后调 forma_build。",
+    "description": "应用语义补丁并重建产物（事务式：编辑→重校验→重建，新引入语义错误即整体回滚）。按工程类型分发：DSL 工程用主线操作集（add-entity-field / set-entity-field-required / add-access-rule / add-table-page），联邦工程用规格导入操作集。改前先调 forma_plan 预览；支持 baseRevision（IR 版本绑定）、patchId（同 id 重复提交幂等零变更）、expected（声明块 sha256 冲突检测）与 approval（High/Extreme 或权限变更）。",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -276,15 +325,22 @@ pub fn call_tool(
             }))
         }
         "forma_impact" => {
-            reject_dsl_only_tool(project_dir, "forma_impact")?;
-            let outcome = load_project(project_dir)?;
+            // M3 桥接：DSL 工程用 `Program → 语义图` 的投影做影响闭包，
+            // 联邦工程用导入图——两者共用同一套图 API（spec:ir §15）。
             let target = args
                 .get("target")
                 .and_then(|v| v.as_str())
                 .context("missing target")?;
-            let uri = resolve_target(&outcome.graph, target)
-                .context("cannot resolve target: {target}")?;
-            let affected = outcome.graph.affected_by(&uri);
+            let impact_graph = if is_dsl_project(project_dir) {
+                let check = crate::engine::dsl_check(project_dir)?;
+                let (g, _v) = crate::engine::dsl_graph_result(&check.program)?;
+                g
+            } else {
+                load_project(project_dir)?.graph
+            };
+            let uri =
+                resolve_target(&impact_graph, target).context("cannot resolve target: {target}")?;
+            let affected = impact_graph.affected_by(&uri);
             let nodes: Vec<serde_json::Value> = affected
                 .iter()
                 .map(|n| {
@@ -298,30 +354,54 @@ pub fn call_tool(
                     })
                 })
                 .collect();
-            Ok(
-                serde_json::json!({ "target": uri, "affectedCount": nodes.len(), "affected": nodes }),
+            Ok(serde_json::json!({
+                "target": uri,
+                "affectedCount": nodes.len(),
+                "affected": nodes,
+            }))
+        }
+        // ── Agent 会话闭环（RFC-0006 P4）────────────────────
+        "forma_search" => {
+            let query = args
+                .get("query")
+                .and_then(|v| v.as_str())
+                .context("missing argument: query")?;
+            crate::agent::search(
+                project_dir,
+                query,
+                args.get("kind").and_then(|v| v.as_str()),
             )
         }
-        "forma_patch" => {
-            reject_dsl_only_tool(project_dir, "forma_patch")?;
-            let patch: crate::patch::PatchDocument =
+        "forma_get_context" => {
+            let target = args
+                .get("target")
+                .and_then(|v| v.as_str())
+                .context("missing argument: target")?;
+            crate::agent::get_context(project_dir, target)
+        }
+        "forma_plan" => {
+            let patch: crate::dsl::DslPatchDocument =
                 serde_json::from_value(serde_json::Value::Object(args.clone()))?;
-            let report = crate::patch::apply_patch(project_dir, &patch)?;
-            Ok(serde_json::to_value(&report)?)
+            crate::agent::plan(project_dir, &patch)
+        }
+        "forma_report" => crate::agent::report(project_dir),
+
+        "forma_patch" => {
+            // RFC-0006 P2：按工程类型解析补丁文档——DSL 工程用 `dsl::patch` 操作集
+            // （加字段 / 加规则 / 加页面），联邦工程用规格导入侧操作集。
+            let input = if is_dsl_project(project_dir) {
+                crate::patch::PatchInput::Dsl(serde_json::from_value(serde_json::Value::Object(
+                    args.clone(),
+                ))?)
+            } else {
+                crate::patch::PatchInput::Federal(serde_json::from_value(
+                    serde_json::Value::Object(args.clone()),
+                )?)
+            };
+            crate::patch::apply_patch_input(project_dir, input)
         }
         other => bail!("unknown tool: {other}"),
     }
-}
-
-/// DSL 工程禁用联邦工具时给出可操作的提示。
-fn reject_dsl_only_tool(project_dir: &Path, tool: &str) -> Result<()> {
-    if is_dsl_project(project_dir) {
-        bail!(
-            "{tool} 仅适用于联邦工程（specifications 导入）。\
-             当前是 DSL 工程：请用 forma_graph（模型摘要）/ forma_check（校验）/ forma_build（重建产物）。"
-        );
-    }
-    Ok(())
 }
 
 /// DSL 工程：解析诊断 + lint + 结构摘要。
@@ -421,10 +501,17 @@ fn dsl_graph(project_dir: &Path) -> Result<serde_json::Value> {
             check.error_count()
         );
     }
+    // M3 桥接：DSL 工程同样导出语义图（稳定标识 + 依赖边 + 来源位置）
+    let (graph, ir_version) = crate::engine::dsl_graph_result(&check.program)?;
+    let graph = graph.to_summary();
     Ok(serde_json::json!({
         "project": check.project_name,
         "version": check.version,
+        "irVersion": ir_version,
         "summary": crate::engine::dsl_model_summary(&check.program),
+        "graph": graph,
+        "nodeCount": graph.nodes.len(),
+        "edgeCount": graph.edges.len(),
     }))
 }
 

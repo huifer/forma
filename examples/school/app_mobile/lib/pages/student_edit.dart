@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../api/api.dart';
 import '../models/models.dart';
 import '../validation/validators.dart';
+import '../access.dart';
 
 /// 编辑学生
 class StudentEdit extends StatefulWidget {
@@ -169,7 +170,8 @@ class _StudentEditState extends State<StudentEdit> {
                     validator: (v) => (v == null || v.isEmpty) ? '请选择 School' : null,
                   ),
                   const SizedBox(height: 24),
-                  FilledButton(onPressed: _save, child: const Text('保存')),
+                  if (can('Student', 'update'))
+                    FilledButton(onPressed: _save, child: const Text('保存')),
                 ],
               ),
             ),

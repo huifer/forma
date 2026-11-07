@@ -313,7 +313,7 @@ fn commands_require_audit_module_and_tracing() {
     assert!(audit.content.contains("INSERT INTO audit_logs"));
     let main = file_ending(&files, "main.rs");
     assert!(main.contains("mod audit;"));
-    assert!(main.contains("tracing_subscriber::fmt::init();"));
+    assert!(main.contains("tracing_subscriber::fmt()")); // M10/P1: structured logging replaces raw init()
     let cargo = files
         .iter()
         .find(|f| f.path.ends_with("Cargo.toml"))
@@ -411,4 +411,122 @@ fn audit_records_actor_from_current_user() {
     // 命令 handler 注入当前用户 → 审计 actor
     assert!(routes.contains("axum::Extension<crate::auth::CurrentUser>"));
     assert!(routes.contains("Some(req_user.username.as_str())"));
+}
+
+// ── P2-4：只有实体、没有 api 的工程不得有未使用导入 ──────────
+
+fn backend_files_for(dsl: &str, tag: &str) -> Vec<forma::generators::GeneratedFile> {
+    let program = forma::dsl::parser::parse(&forma::dsl::lexer::lex(dsl)).program;
+    let dir = std::env::temp_dir().join(format!(
+        "forma-p24-{tag}-{}-{:?}",
+        std::process::id(),
+        std::time::SystemTime::now()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    emit_rust_backend(&dir, &program, "generated/backend", "demo").unwrap()
+}
+
+#[test]
+fn entity_only_project_has_no_unused_imports() {
+    // 只有实体没有 api：routes/repo/validators 的常规导入全部落空 → unused_imports
+    let dsl = r#"
+app demo { version = "0.1.0" }
+entity Item {
+  id   Uuid      @id @default(uuid)
+  name String(50) @required
+}
+"#;
+    let files = backend_files_for(dsl, "entity-only");
+    let routes = file_ending(&files, "routes.rs");
+    assert!(!routes.contains("use axum::routing"), "{routes}");
+    assert!(!routes.contains("use axum::extract"), "{routes}");
+    assert!(routes.contains("use axum::Router;"), "{routes}");
+    assert!(!routes.contains("use crate::error"), "{routes}");
+    assert!(!routes.contains("use crate::models"), "{routes}");
+    assert!(!routes.contains("use crate::repo"), "{routes}");
+    let repo = file_ending(&files, "repo.rs");
+    assert!(!repo.contains("use serde::Deserialize"), "{repo}");
+    assert!(!repo.contains("use crate::models"), "{repo}");
+    assert!(!repo.contains("use sqlx::MySqlPool"), "{repo}");
+    assert!(!repo.contains("use uuid::Uuid"), "{repo}");
+    let validators = file_ending(&files, "validators.rs");
+    assert!(
+        !validators.contains("use crate::error::FieldError"),
+        "{validators}"
+    );
+    assert!(!validators.contains("use crate::models"), "{validators}");
+    assert!(!validators.contains("use rust_decimal"), "{validators}");
+}
+
+#[test]
+fn list_only_project_imports_are_demand_driven() {
+    // list-only：需要 Query/State，但不需要 Path（无 get/update/delete）
+    let dsl = r#"
+app demo { version = "0.1.0" }
+entity Item {
+  id     Uuid          @id @default(uuid)
+  name   String(50)    @required
+  amount Decimal(12,2) @required
+}
+api Items {
+  entity Item
+  operations [list]
+  list { filters [name] }
+}
+"#;
+    let files = backend_files_for(dsl, "list-only");
+    let routes = file_ending(&files, "routes.rs");
+    assert!(
+        routes.contains("use axum::extract::{Query, State};"),
+        "{routes}"
+    );
+    assert!(
+        !routes.contains("Path"),
+        "list-only 不需要 Path 提取器：{routes}"
+    );
+    assert!(routes.contains("use axum::routing::get;"), "{routes}");
+    assert!(!routes.contains("routing::post"), "{routes}");
+    // 无 create/update → 校验器整体不生成（含 Decimal 导入）
+    let validators = file_ending(&files, "validators.rs");
+    assert!(
+        !validators.contains("use rust_decimal::Decimal;"),
+        "{validators}"
+    );
+    assert!(!validators.contains("pub fn validate_"), "{validators}");
+    // repo：list 函数需要 Deserialize/models/MySqlPool，但不需要 uuid
+    let repo = file_ending(&files, "repo.rs");
+    assert!(repo.contains("use serde::Deserialize;"), "{repo}");
+    assert!(repo.contains("use crate::models::*;"), "{repo}");
+    assert!(!repo.contains("use uuid::Uuid;"), "{repo}");
+}
+
+#[test]
+fn auth_module_only_project_still_compiles_imports() {
+    // 只有 auth module：register/login/me 处理器需要 State/Json/error，但不需要 models/repo
+    let dsl = r#"
+app demo { version = "0.1.0" }
+entity Item {
+  id   Uuid      @id @default(uuid)
+  name String(50) @required
+}
+auth module {
+  provider jwt
+  roles [admin, user]
+}
+"#;
+    let files = backend_files_for(dsl, "auth-only");
+    let routes = file_ending(&files, "routes.rs");
+    assert!(
+        routes.contains("use axum::routing::{get, post};"),
+        "{routes}"
+    );
+    assert!(routes.contains("use axum::extract::State;"), "{routes}");
+    assert!(routes.contains("use axum::{Json, Router};"), "{routes}");
+    assert!(
+        routes.contains("use crate::error::{AppError, AppResult};"),
+        "{routes}"
+    );
+    assert!(!routes.contains("use crate::models"), "{routes}");
+    assert!(!routes.contains("use crate::repo"), "{routes}");
 }

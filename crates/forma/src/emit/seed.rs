@@ -248,6 +248,28 @@ fn render_seed_sql(
         out.push_str(&row_sqls.join(",\n"));
         out.push_str(";\n");
     }
+
+    // 定时任务（M10/P1）：jobs 非空时种子 forma_jobs 行
+    if !program.jobs.is_empty() {
+        out.push_str("\n-- ── forma_jobs ──\n");
+        out.push_str("INSERT IGNORE INTO forma_jobs (id, name, cron, label, op, status, last_run_at, next_run_at) VALUES\n");
+        let mut row_sqls = Vec::new();
+        for job in &program.jobs {
+            let job_id = det_uuid(namespace, &format!("job.{}.{}", app, job.name));
+            let label = job.label.first().map(|(_, t)| t).unwrap_or(&job.name);
+            row_sqls.push(format!(
+                "('{}', '{}', '{}', '{}', '{}', 'enabled', NULL, NULL)",
+                job_id,
+                job.name,
+                job.cron,
+                label.replace('\'', "''"),
+                job.op
+            ));
+        }
+        out.push_str(&row_sqls.join(",\n"));
+        out.push_str(";\n");
+    }
+
     out
 }
 

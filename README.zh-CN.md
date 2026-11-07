@@ -13,7 +13,7 @@
 
 **Forma 是一层 DSL 中间层：一套 DSL 描述前端、后端、数据库与规则，适配层（编译器）把它变成各平台的完整代码。**
 
-<img src="docs/og-image.png" alt="Forma 编译器工作流：AI Agent 写 app.fm → Forma Compile → MySQL / Rust / React / OpenAPI / Diagrams" width="880">
+<img src="docs/og-image.zh-CN.png" alt="Forma：面向 AI 的软件规格编译器——AI Agent 写 app.fm，Forma 编译为 MySQL / Rust / React / OpenAPI / 图表" width="880">
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org/)

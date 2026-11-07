@@ -43,6 +43,21 @@ pub fn ui_control_uri(project: &str, form_id: &str, control_id: &str) -> String 
     format!("{}/control/{control_id}", ui_form_uri(project, form_id))
 }
 
+/// 可视化图表（spec:ir §3.1 可视化域 `ChartNode`）。
+pub fn chart_uri(project: &str, chart_name: &str) -> String {
+    format!("{}/chart/{chart_name}", project_root_uri(project))
+}
+
+/// 定时任务（M10/P1：`job` 块；调度目标域）。
+pub fn job_uri(project: &str, job_name: &str) -> String {
+    format!("{}/job/{job_name}", project_root_uri(project))
+}
+
+/// 版本化迁移链（schema 变更的物化载体；spec:compatibility §6.1）。
+pub fn migration_uri(project: &str, migration_id: &str) -> String {
+    format!("{}/migration/{migration_id}", project_root_uri(project))
+}
+
 /// 内部节点 URI（SQL 列、索引等标准局部对象）。
 pub fn local_uri(standard: &str, file: &str, kind: &str, name: &str) -> String {
     format!("forma://local/{standard}/{}/{kind}/{name}", sanitize(file))

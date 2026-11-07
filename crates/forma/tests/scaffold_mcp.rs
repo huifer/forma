@@ -110,7 +110,7 @@ fn mcp_check_reports_diagnostics_and_lint() {
 fn mcp_build_matches_cli_pipeline() {
     let dir = school_dir();
     let build = call_tool(&dir, "forma_build", &args()).unwrap();
-    assert_eq!(build["totalFiles"], 93); // +auth.rs +Web Login.tsx +Flutter login.dart // +audit.rs（命令）+ 2 图表页（flutter）+ viz 模板 5 + school 图表 2? +access.ts（授权规则存在时生成的角色感知） 按实际
+    assert_eq!(build["totalFiles"], 104); // 96 + request_id.rs（Runtime Contract §4.4 请求追踪中间件）
     let steps: Vec<&str> = build["steps"]
         .as_array()
         .unwrap()
@@ -128,6 +128,9 @@ fn mcp_build_matches_cli_pipeline() {
             "diagrams",
             "migrate",
             "seed",
+            "docker",
+            "backend-engineering",
+            "web-engineering",
             "mobile-flutter"
         ]
     );
@@ -159,19 +162,35 @@ fn mcp_keeps_federated_projects_working() {
     assert_eq!(validate["ok"], true);
 }
 
+/// RFC-0006 P2 后：`forma_patch` 对 DSL 工程**不再被拒**——按工程类型解析
+/// 对应的补丁文档；非法参数（缺 operations）给出可读的参数错误。
 #[test]
-fn mcp_rejects_federated_tools_on_dsl_projects_with_guidance() {
+fn mcp_forma_patch_reports_argument_errors_on_dsl_projects() {
     let dir = school_dir();
     let err = call_tool(&dir, "forma_patch", &args()).unwrap_err();
     let msg = format!("{err:#}");
-    assert!(msg.contains("DSL 工程"), "{msg}");
-    assert!(msg.contains("forma_check"), "错误信息应给出替代工具");
+    assert!(msg.contains("operations"), "应给出参数级错误：{msg}");
+}
 
-    let err = call_tool(&dir, "forma_impact", &{
+/// M3 桥接后：DSL 工程的影响分析**不再被拒**（走 `Program → 语义图` 投影）。
+#[test]
+fn mcp_impact_works_on_dsl_projects_after_bridge() {
+    let dir = school_dir();
+    let impact = call_tool(&dir, "forma_impact", &{
         let mut m = args();
-        m.insert("target".into(), serde_json::json!("Order"));
+        m.insert("target".into(), serde_json::json!("Student"));
         m
     })
-    .unwrap_err();
-    assert!(format!("{err:#}").contains("forma_graph"));
+    .unwrap();
+    assert!(
+        impact["target"]
+            .as_str()
+            .unwrap_or_default()
+            .starts_with("forma://"),
+        "{impact}"
+    );
+    assert!(
+        impact["affectedCount"].as_u64().unwrap_or(0) > 0,
+        "影响闭包不应为空：{impact}"
+    );
 }

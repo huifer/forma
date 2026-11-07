@@ -2,13 +2,17 @@
 //! 这是 v0.3 编译器的内核前端；各适配层 emitter 消费 `Program`。
 
 pub mod lexer;
+/// DSL `Program` → 联邦语义图桥接（M3 / spec:ir §15）。
+pub mod lower;
 pub mod parser;
+/// DSL 主线补丁事务（RFC-0006 P2）。
+pub mod patch;
 
 pub use parser::{
-    ApiDecl, Attr, BinOp, ChannelDecl, ChartDecl, ChartPageCfg, CheckRule, CommandDecl,
+    AccessDecl, ApiDecl, Attr, BinOp, ChannelDecl, ChartDecl, ChartPageCfg, CheckRule, CommandDecl,
     CommandInput, DetailCfg, Effect, EffectValue, EncodingDecl, EntityDecl, EnumDecl, Expr,
-    FieldConstraint, FieldDecl, FieldRule, FormCfg, FormFieldCfg, GuardDecl, ListCfg, Message,
-    PageBody, PageDecl, Program, TableCfg, TransformDecl,
+    FieldAccess, FieldConstraint, FieldDecl, FieldRule, FormCfg, FormFieldCfg, GuardDecl, ListCfg,
+    Message, PageBody, PageDecl, Program, TableCfg, TransformDecl,
 };
 
 use crate::validate::Diagnostic;
@@ -36,6 +40,196 @@ pub const BUILTIN_TYPES: [&str; 11] = [
 /// 可比较大小的类型（min / max 约束仅对这些类型有意义）。
 pub const NUMERIC_TYPES: [&str; 3] = ["Int", "Float", "Decimal"];
 
+/// 诊断来源位置（M1）：让每条诊断都能定位到规格文件与行。
+///
+/// 约定：`file` 来自多文件合并期的回填，`line` 来自解析期记录；
+/// 字段级诊断用更精确的字段行覆盖声明行。
+#[derive(Debug, Clone, Default)]
+pub struct Origin {
+    pub file: Option<String>,
+    pub line: Option<usize>,
+}
+
+impl Origin {
+    /// 声明级来源（实体 / api / 页面 / 规则 / 命令）。
+    pub fn decl(file: &Option<String>, line: usize) -> Self {
+        Self {
+            file: file.clone(),
+            line: Some(line),
+        }
+    }
+
+    /// 构造 error 诊断（自动带上来源位置）。
+    pub fn err(&self, code: &str, message: impl Into<String>) -> Diagnostic {
+        Diagnostic {
+            severity: "error".into(),
+            code: code.into(),
+            message: message.into(),
+            file: self.file.clone(),
+            line: self.line,
+            nodes: None,
+        }
+    }
+
+    /// 构造 warning 诊断（自动带上来源位置）。
+    pub fn warn(&self, code: &str, message: impl Into<String>) -> Diagnostic {
+        Diagnostic {
+            severity: "warning".into(),
+            code: code.into(),
+            message: message.into(),
+            file: self.file.clone(),
+            line: self.line,
+            nodes: None,
+        }
+    }
+}
+
+// ── DSL 补丁文档（RFC-0006 P2：加字段 + 加规则 + 加页面）──────────────
+
+/// 补丁字段规格（DSL 侧：类型名直接用 DSL 词汇——内建 / 枚举 / 实体引用）。
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct DslPatchField {
+    pub name: String,
+    /// DSL 类型名：`String(50)` / `Int` / `Bool` / `Timestamp` / 枚举名 / 实体名
+    pub r#type: String,
+}
+
+/// DSL 主线补丁操作集。
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(tag = "op", rename_all = "kebab-case")]
+pub enum DslPatchOperation {
+    /// 加字段：向实体块插入字段行
+    AddEntityField {
+        entity: String,
+        field: DslPatchField,
+        #[serde(default)]
+        required: bool,
+    },
+    /// 切换字段必填（`@required`）
+    SetEntityFieldRequired {
+        entity: String,
+        field: String,
+        required: bool,
+    },
+    /// 加规则：追加实体级访问规则（优先并入既有 `access {Entity}` 块）
+    AddAccessRule {
+        entity: String,
+        /// 受约束的操作：`read` / `list` / `get` / `create` / `update` / `delete`
+        ///（JSON 键 `accessOp`——`op` 已被 serde 内部 tag 占用）
+        #[serde(rename = "accessOp")]
+        access_op: String,
+        roles: Vec<String>,
+    },
+    /// 加页面：追加表格页（绑定某 api 的 list 操作）
+    AddTablePage {
+        name: String,
+        title: String,
+        /// api 块名（须声明 `list` 操作）
+        #[serde(rename = "queryApi")]
+        query_api: String,
+        /// 展示列（实体字段名，至少 1 个）
+        columns: Vec<String>,
+    },
+    /// 加实体：新增 `entity E { ... }` 声明（RFC-0006 §17：加字段 + 加校验的载体）
+    AddEntity {
+        entity: String,
+        fields: Vec<DslPatchFieldSpec>,
+    },
+    /// 加字段约束：向 `rules { field E.f { ... } }` 追加 min / max / required
+    AddFieldRule {
+        entity: String,
+        field: String,
+        /// min | max | required
+        constraint: String,
+        /// 数值（min / max 用）
+        #[serde(default)]
+        value: Option<f64>,
+        /// 提示文案（可选）
+        #[serde(default)]
+        message: Option<String>,
+    },
+    /// 加表单字段：向页面的 form layout 追加一行控件（RFC-0006 §17）
+    AddFormField {
+        page: String,
+        /// 实体字段名（须已存在于表单实体上）
+        field: String,
+        /// 控件类型：Input | Input email | Input money | Input datetime | Textarea
+        #[serde(default)]
+        widget: Option<String>,
+    },
+    /// 改字段约束：替换已有 min / max 值（RFC-0006 §16 余项收口）
+    SetFieldRule {
+        entity: String,
+        field: String,
+        /// min | max
+        constraint: String,
+        /// 新数值
+        value: f64,
+        /// 提示文案（可选；缺省保留原值）
+        #[serde(default)]
+        message: Option<String>,
+    },
+}
+
+/// 补丁里的字段规格（`add-entity` 用）。
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct DslPatchFieldSpec {
+    pub name: String,
+    /// DSL 类型名：`String(50)` / `Int` / `Uuid` / 枚举名 / 实体名
+    pub r#type: String,
+    /// 属性白名单：`@id` `@default(uuid)` `@default(now)` `@required` `@readonly`
+    #[serde(default)]
+    pub attrs: Vec<String>,
+}
+
+/// 人工审批凭据（RFC-0006 §8.7 / §10）：
+/// 高风险补丁（High/Extreme 迁移、权限规则变更）**必须**携带，否则 `forma_patch` 拒绝执行。
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct PatchApproval {
+    /// 审批人（人名 / 工单号 / CI 门标识）
+    pub by: String,
+    /// 审批理由（进审计记录）
+    pub reason: String,
+}
+
+/// 期望的声明块状态（RFC-0006 §16 冲突检测）：
+/// `sha256` 是目标实体声明块（decl 行 → 闭括号行）经 `util::sha256_hex` 的哈希。
+/// 应用时重算比对——不匹配即拒绝（`patch-conflict`），防止按过期认知改规格。
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct DslPatchExpectation {
+    pub entity: String,
+    pub sha256: String,
+}
+
+/// DSL 补丁文档。
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct DslPatchDocument {
+    pub operations: Vec<DslPatchOperation>,
+    /// 审批凭据——风险门判定需要审批时缺失即拒绝（P5）
+    #[serde(default)]
+    pub approval: Option<PatchApproval>,
+    /// 补丁幂等键（RFC-0006 §16）：同一 patchId 重复提交不产生二次变更。
+    #[serde(default, rename = "patchId")]
+    pub patch_id: Option<String>,
+    /// 基线版本绑定（RFC-0006 §9 / §16）：`<project>@<IR_VERSION>`，例如 `school@1.2.0`。
+    /// 也接受裸 IR 版本（`1.2.0`）；应用前必须与当前 Program.ir_version 匹配。
+    #[serde(default, rename = "baseRevision")]
+    pub base_revision: Option<String>,
+    /// 期望的声明块状态（冲突检测）：缺省 = 不检测
+    #[serde(default)]
+    pub expected: Option<Vec<DslPatchExpectation>>,
+}
+
+/// IR 版本（M2 / spec:ir §7）：语义契约的版本号。
+///
+/// 兼容性**不得**仅凭版本号判断——判定依据是契约测试 + 语义规则
+/// （[spec:compatibility §2](../specifications/compatibility/compatibility-rules.zh-CN.md)）。
+/// 语义变更（节点结构 / 标识规则 / 依赖边 / 类型集合）**MUST** 递增 minor 并附迁移说明。
+///
+/// 版本历史：1.0.0（M2 引入）→ 1.1.0 语义预留（M1–M3 落地期）→
+/// 1.2.0（P3：NodeKind 增加 `chart` / `migration`，影响闭包含五类目标）。
+pub const IR_VERSION: &str = "1.2.0";
+
 // ── 加载 ────────────────────────────────────────────────
 
 /// 收集 `source` glob 下的全部 .fm 并解析合并为一个 Program。
@@ -51,6 +245,9 @@ pub fn load_program(
     files.dedup();
 
     let mut program = Program {
+        ir_version: IR_VERSION.to_string(),
+        jobs: Vec::new(),
+        lives: Vec::new(),
         app: None,
         enums: Vec::new(),
         entities: Vec::new(),
@@ -115,7 +312,8 @@ fn merge_program(
             program.app = part.app;
         }
     }
-    for e in part.enums {
+    for mut e in part.enums {
+        e.file = Some(file.to_string());
         if program.enums.iter().any(|x| x.name == e.name) {
             diagnostics.push(Diagnostic {
                 severity: "error".into(),
@@ -129,7 +327,8 @@ fn merge_program(
             program.enums.push(e);
         }
     }
-    for e in part.entities {
+    for mut e in part.entities {
+        e.file = Some(file.to_string());
         if program.entities.iter().any(|x| x.name == e.name) {
             diagnostics.push(Diagnostic {
                 severity: "error".into(),
@@ -143,7 +342,10 @@ fn merge_program(
             program.entities.push(e);
         }
     }
-    program.rules.extend(part.rules);
+    for mut r in part.rules {
+        r.file = Some(file.to_string());
+        program.rules.push(r);
+    }
     // 认证模块（单例）
     if let Some(auth) = part.auth {
         if program.auth.is_some() {
@@ -159,7 +361,8 @@ fn merge_program(
             program.auth = Some(auth);
         }
     }
-    for c in part.commands {
+    for mut c in part.commands {
+        c.file = Some(file.to_string());
         if program.commands.iter().any(|x| x.name == c.name) {
             diagnostics.push(Diagnostic {
                 severity: "error".into(),
@@ -173,7 +376,8 @@ fn merge_program(
             program.commands.push(c);
         }
     }
-    for a in part.apis {
+    for mut a in part.apis {
+        a.file = Some(file.to_string());
         if program.apis.iter().any(|x| x.name == a.name) {
             diagnostics.push(Diagnostic {
                 severity: "error".into(),
@@ -187,7 +391,8 @@ fn merge_program(
             program.apis.push(a);
         }
     }
-    for p in part.pages {
+    for mut p in part.pages {
+        p.file = Some(file.to_string());
         if program.pages.iter().any(|x| x.name == p.name) {
             diagnostics.push(Diagnostic {
                 severity: "error".into(),
@@ -201,7 +406,8 @@ fn merge_program(
             program.pages.push(p);
         }
     }
-    for c in part.charts {
+    for mut c in part.charts {
+        c.file = Some(file.to_string());
         if program.charts.iter().any(|x| x.name == c.name) {
             diagnostics.push(Diagnostic {
                 severity: "error".into(),
@@ -213,6 +419,36 @@ fn merge_program(
             });
         } else {
             program.charts.push(c);
+        }
+    }
+    for mut j in part.jobs {
+        j.file = Some(file.to_string());
+        if program.jobs.iter().any(|x| x.name == j.name) {
+            diagnostics.push(Diagnostic {
+                severity: "error".into(),
+                code: "dsl-duplicate".into(),
+                message: format!("duplicate job '{}'", j.name),
+                file: Some(file.into()),
+                line: Some(j.line),
+                nodes: None,
+            });
+        } else {
+            program.jobs.push(j);
+        }
+    }
+    for mut l in part.lives {
+        l.file = Some(file.to_string());
+        if program.lives.iter().any(|x| x.name == l.name) {
+            diagnostics.push(Diagnostic {
+                severity: "error".into(),
+                code: "dsl-duplicate".into(),
+                message: format!("duplicate live '{}'", l.name),
+                file: Some(file.into()),
+                line: Some(l.line),
+                nodes: None,
+            });
+        } else {
+            program.lives.push(l);
         }
     }
 }
@@ -273,6 +509,7 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
 
     // 实体字段类型
     for entity in &program.entities {
+        let ctx = Origin::decl(&entity.file, entity.line);
         for field in &entity.fields {
             let known = BUILTIN_TYPES.contains(&field.type_name.as_str())
                 || enum_names.contains(&field.type_name.as_str())
@@ -285,7 +522,7 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                         "field {}.{} has unknown type '{}' (expected builtin, enum or entity)",
                         entity.name, field.name, field.type_name
                     ),
-                    file: None,
+                    file: ctx.file.clone(),
                     line: Some(field.line),
                     nodes: None,
                 });
@@ -298,6 +535,7 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                 &field.type_name,
                 &field.type_args,
                 field.line,
+                &ctx,
             ));
             // 属性形式的 min/max（P2-5）：仅数值类型，且必须有且仅有 1 个数值参数
             for attr in &field.attrs {
@@ -314,7 +552,7 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                                 field.type_name,
                                 NUMERIC_TYPES.join(", ")
                             ),
-                            file: None,
+                            file: ctx.file.clone(),
                             line: Some(field.line),
                             nodes: None,
                         });
@@ -327,7 +565,7 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                                 "field {}.{}: @{} requires exactly 1 numeric argument",
                                 entity.name, field.name, attr.name
                             ),
-                            file: None,
+                            file: ctx.file.clone(),
                             line: Some(field.line),
                             nodes: None,
                         });
@@ -351,7 +589,7 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                                 "relation {}.{} → '{}' has no @id primary key",
                                 entity.name, field.name, field.type_name
                             ),
-                            file: None,
+                            file: ctx.file.clone(),
                             line: Some(field.line),
                             nodes: None,
                         });
@@ -369,7 +607,7 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                         "field {}.{} is @readonly but has no @default",
                         entity.name, field.name
                     ),
-                    file: None,
+                    file: ctx.file.clone(),
                     line: Some(field.line),
                     nodes: None,
                 });
@@ -382,7 +620,7 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                     severity: "error".into(),
                     code: "dsl-duplicate".into(),
                     message: format!("duplicate field {}.{}", entity.name, f.name),
-                    file: None,
+                    file: ctx.file.clone(),
                     line: Some(f.line),
                     nodes: None,
                 });
@@ -399,8 +637,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                             "index/unique references unknown field {}.{}",
                             entity.name, c
                         ),
-                        file: None,
-                        line: None,
+                        file: ctx.file.clone(),
+                        line: ctx.line,
                         nodes: None,
                     });
                 }
@@ -410,14 +648,15 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
 
     // 规则
     for rules in &program.rules {
+        let ctx = Origin::decl(&rules.file, rules.line);
         for fr in &rules.field_rules {
             let Some(entity) = program.entities.iter().find(|e| e.name == fr.entity) else {
                 d.push(Diagnostic {
                     severity: "error".into(),
                     code: "dsl-unknown-entity".into(),
                     message: format!("field rule references unknown entity '{}'", fr.entity),
-                    file: None,
-                    line: None,
+                    file: ctx.file.clone(),
+                    line: ctx.line,
                     nodes: None,
                 });
                 continue;
@@ -430,8 +669,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                         "field rule references unknown field {}.{}",
                         fr.entity, fr.field
                     ),
-                    file: None,
-                    line: None,
+                    file: ctx.file.clone(),
+                    line: ctx.line,
                     nodes: None,
                 });
                 continue;
@@ -456,15 +695,21 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                             field_type,
                             NUMERIC_TYPES.join(", ")
                         ),
-                        file: None,
-                        line: None,
+                        file: ctx.file.clone(),
+                        line: ctx.line,
                         nodes: None,
                     });
                 }
             }
         }
         for check in &rules.checks {
-            d.extend(check_expr_paths(program, &check.entity, &check.expr, &[]));
+            d.extend(check_expr_paths(
+                program,
+                &check.entity,
+                &check.expr,
+                &[],
+                &ctx,
+            ));
         }
         for guard in &rules.guards {
             if !["create", "update", "delete"].contains(&guard.op.as_str()) {
@@ -472,8 +717,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                     severity: "error".into(),
                     code: "dsl-unknown-guard-op".into(),
                     message: format!("guard op '{}' must be create|update|delete", guard.op),
-                    file: None,
-                    line: None,
+                    file: ctx.file.clone(),
+                    line: ctx.line,
                     nodes: None,
                 });
             }
@@ -482,14 +727,20 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                     severity: "error".into(),
                     code: "dsl-unknown-entity".into(),
                     message: format!("guard references unknown entity '{}'", guard.entity),
-                    file: None,
-                    line: None,
+                    file: ctx.file.clone(),
+                    line: ctx.line,
                     nodes: None,
                 });
                 continue;
             }
             for deny in &guard.denies {
-                d.extend(check_expr_paths(program, &guard.entity, &deny.expr, &[]));
+                d.extend(check_expr_paths(
+                    program,
+                    &guard.entity,
+                    &deny.expr,
+                    &[],
+                    &ctx,
+                ));
             }
         }
         // 实体级访问规则（access）：操作名 / 实体 / 角色 / auth module 必须自洽
@@ -499,11 +750,132 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                     severity: "error".into(),
                     code: "dsl-unknown-entity".into(),
                     message: format!("access rule references unknown entity '{}'", access.entity),
-                    file: None,
-                    line: None,
+                    file: ctx.file.clone(),
+                    line: ctx.line,
                     nodes: None,
                 });
                 continue;
+            }
+            // 租户维度（C4）：字段存在、必填、String、auth module 存在、单实体单租户列
+            {
+                let tenant_fields_here: Vec<_> = program
+                    .entities
+                    .iter()
+                    .find(|e| e.name == access.entity)
+                    .map(|e| {
+                        e.fields
+                            .iter()
+                            .filter(|f| has_attr(f, "tenant"))
+                            .cloned()
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                if tenant_fields_here.len() > 1 {
+                    d.push(ctx.err(
+                        "dsl-tenant-multiple",
+                        format!(
+                            "entity {} declares {} @tenant fields; at most one is allowed",
+                            access.entity,
+                            tenant_fields_here.len()
+                        ),
+                    ));
+                }
+                for tf in &tenant_fields_here {
+                    if tf.optional {
+                        d.push(ctx.err(
+                            "dsl-tenant-optional",
+                            format!(
+                                "@tenant field {}.{} must be required (every row belongs to exactly one tenant)",
+                                access.entity, tf.name
+                            ),
+                        ));
+                    }
+                    if tf.type_name != "String" && tf.type_name != "Uuid" {
+                        d.push(ctx.err(
+                            "dsl-tenant-type",
+                            format!(
+                                "@tenant field {}.{} must be String (tenant identifier is a string claim)",
+                                access.entity, tf.name
+                            ),
+                        ));
+                    }
+                }
+                if !tenant_fields_here.is_empty() && program.auth.is_none() {
+                    d.push(ctx.err(
+                        "dsl-tenant-no-auth",
+                        format!(
+                            "@tenant field on {} requires an `auth module` (tenant comes from the JWT claim)",
+                            access.entity
+                        ),
+                    ));
+                }
+            }
+            // 字段级策略（P0-2）：字段存在、非关联、角色合法、provider 存在、表达式受限
+            for fp in &access.field_policies {
+                let Some(entity_decl) = program.entities.iter().find(|e| e.name == access.entity)
+                else {
+                    continue; // dsl-unknown-entity 已由操作级检查报告
+                };
+                let Some(field_decl) = entity_decl.fields.iter().find(|f| f.name == fp.field)
+                else {
+                    d.push(ctx.err(
+                        "dsl-field-policy-unknown-field",
+                        format!(
+                            "field policy references unknown field {}.{}",
+                            access.entity, fp.field
+                        ),
+                    ));
+                    continue;
+                };
+                if is_relation(program, &field_decl.type_name) {
+                    d.push(ctx.err(
+                        "dsl-field-policy-relation-unsupported",
+                        format!(
+                            "field policy on relation {}.{} is not supported (v1: scalar fields only)",
+                            access.entity, fp.field
+                        ),
+                    ));
+                    continue;
+                }
+                let roles = access_rule_roles(&fp.expr);
+                if roles.is_empty() {
+                    let is_any = matches!(&fp.expr, Expr::Ref { path, .. } if path.len() == 1 && path[0] == "any");
+                    if !is_any {
+                        d.push(ctx.err(
+                            "dsl-field-policy-expression-unsupported",
+                            format!(
+                                "field policy {}.{} must be `any` or a role expression (role in [...] / role == \"...\")",
+                                access.entity, fp.field
+                            ),
+                        ));
+                    }
+                    continue;
+                }
+                match &program.auth {
+                    None => d.push(ctx.err(
+                        "dsl-field-policy-no-provider",
+                        format!(
+                            "field policy for '{}.{}' references roles but no `auth module` is declared",
+                            access.entity, fp.field
+                        ),
+                    )),
+                    Some(auth) => {
+                        for role in &roles {
+                            if !auth.roles.iter().any(|r| r == role) {
+                                d.push(ctx.err(
+                                    "dsl-field-policy-unknown-role",
+                                    format!(
+                                        "field policy for '{}.{}' references unknown role '{}' (auth module roles: {})",
+                                        access.entity,
+                                        fp.field,
+                                        role,
+                                        auth.roles.join(", ")
+                                    ),
+                                ));
+                            }
+                        }
+                    }
+                }
             }
             for rule in &access.rules {
                 if !ACCESS_OPS.contains(&rule.op.as_str()) {
@@ -515,8 +887,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                             rule.op,
                             ACCESS_OPS.join("|")
                         ),
-                        file: None,
-                        line: None,
+                        file: ctx.file.clone(),
+                        line: ctx.line,
                         nodes: None,
                     });
                 }
@@ -531,8 +903,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                                 "access rule for '{}' references roles but no `auth module` is declared (permissions cannot be enforced)",
                                 access.entity
                             ),
-                            file: None,
-                            line: None,
+                            file: ctx.file.clone(),
+                            line: ctx.line,
                             nodes: None,
                         }),
                         Some(auth) => {
@@ -547,8 +919,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                                             role,
                                             auth.roles.join(", ")
                                         ),
-                                        file: None,
-                                        line: None,
+                                        file: ctx.file.clone(),
+                                        line: ctx.line,
                                         nodes: None,
                                     });
                                 }
@@ -562,6 +934,7 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                     &access.entity,
                     &rule.expr,
                     ACCESS_VARS,
+                    &ctx,
                 ));
                 // 时间 / 日期比较仅支持同类型字段对字段（不解析字符串时间字面量）。
                 d.extend(check_access_temporal_comparisons(
@@ -569,12 +942,14 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                     &access.entity,
                     &rule.expr,
                     &rule.op,
+                    &ctx,
                 ));
                 d.extend(check_access_json_comparisons(
                     program,
                     &access.entity,
                     &rule.expr,
                     &rule.op,
+                    &ctx,
                 ));
                 // 行级条件：只有**能取到实体行**的操作（get / update / delete）才可能成立
                 let row_capable = matches!(rule.op.as_str(), "get" | "update" | "delete");
@@ -591,8 +966,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                                 "access rule for '{}' op '{}' references field '{}' — operation '{}' has no entity row (row-level conditions apply to get/update/delete)",
                                 access.entity, rule.op, path[0], rule.op
                             ),
-                            file: None,
-                            line: None,
+                            file: ctx.file.clone(),
+                            line: ctx.line,
                             nodes: None,
                         });
                         continue;
@@ -605,8 +980,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                                 "access rule for '{}' op '{}' traverses more than one relation (`{}`); maximum supported path is relation.field",
                                 access.entity, rule.op, path.join(".")
                             ),
-                            file: None,
-                            line: None,
+                            file: ctx.file.clone(),
+                            line: ctx.line,
                             nodes: None,
                         });
                         continue;
@@ -632,8 +1007,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                                     path.join("."),
                                     path[0]
                                 ),
-                                file: None,
-                                line: None,
+                                file: ctx.file.clone(),
+                                line: ctx.line,
                                 nodes: None,
                             });
                             continue;
@@ -643,8 +1018,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                                 severity: "error".into(),
                                 code: "dsl-access-relation-optional-unsupported".into(),
                                 message: format!("access path '{}' traverses optional relation '{}'; optional relation access is not supported", path.join("."), path[0]),
-                                file: None,
-                                line: None,
+                                file: ctx.file.clone(),
+                                line: ctx.line,
                                 nodes: None,
                             });
                             continue;
@@ -663,8 +1038,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                                 "access rule for '{}' op '{}' compares field '{}' of type '{}' — comparable types are string/enum/number/JSON or same-type Timestamp/Date fields",
                                 access.entity, rule.op, path.join("."), type_name
                             ),
-                            file: None,
-                            line: None,
+                            file: ctx.file.clone(),
+                            line: ctx.line,
                             nodes: None,
                         });
                     }
@@ -675,6 +1050,7 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
 
     // api
     for api in &program.apis {
+        let ctx = Origin::decl(&api.file, api.line);
         if !entity_names.contains(&api.entity.as_str()) {
             d.push(Diagnostic {
                 severity: "error".into(),
@@ -683,8 +1059,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                     "api '{}' references unknown entity '{}'",
                     api.name, api.entity
                 ),
-                file: None,
-                line: None,
+                file: ctx.file.clone(),
+                line: ctx.line,
                 nodes: None,
             });
             continue;
@@ -703,6 +1079,7 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                     &input.type_name,
                     &input.type_args,
                     0,
+                    &ctx,
                 ));
             }
         }
@@ -720,8 +1097,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                         "api '{}' declares auth rules but no `auth module` is declared (permissions cannot be enforced)",
                         api.name
                     ),
-                    file: None,
-                    line: None,
+                    file: ctx.file.clone(),
+                    line: ctx.line,
                     nodes: None,
                 }),
                 Some(auth) => {
@@ -737,8 +1114,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                                         op,
                                         api.operations.join(", ")
                                     ),
-                                    file: None,
-                                    line: None,
+                                    file: ctx.file.clone(),
+                                    line: ctx.line,
                                     nodes: None,
                                 });
                             }
@@ -754,8 +1131,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                                         role,
                                         auth.roles.join(", ")
                                     ),
-                                    file: None,
-                                    line: None,
+                                    file: ctx.file.clone(),
+                                    line: ctx.line,
                                     nodes: None,
                                 });
                             }
@@ -775,8 +1152,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                             "api '{}'.list filter '{}' not on entity '{}'",
                             api.name, f, api.entity
                         ),
-                        file: None,
-                        line: None,
+                        file: ctx.file.clone(),
+                        line: ctx.line,
                         nodes: None,
                     });
                 }
@@ -790,8 +1167,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                             "api '{}'.list search '{}' not on entity '{}'",
                             api.name, s, api.entity
                         ),
-                        file: None,
-                        line: None,
+                        file: ctx.file.clone(),
+                        line: ctx.line,
                         nodes: None,
                     });
                 }
@@ -805,8 +1182,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                             "api '{}'.sort '{}' not on entity '{}'",
                             api.name, s, api.entity
                         ),
-                        file: None,
-                        line: None,
+                        file: ctx.file.clone(),
+                        line: ctx.line,
                         nodes: None,
                     });
                 }
@@ -820,8 +1197,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                             "api '{}'.list paginate mode '{}' must be offset|cursor",
                             api.name, mode
                         ),
-                        file: None,
-                        line: None,
+                        file: ctx.file.clone(),
+                        line: ctx.line,
                         nodes: None,
                     });
                 }
@@ -834,8 +1211,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                                 "api '{}'.list paginate cursor requires at least one sort field (a unique id tie-breaker is appended automatically)",
                                 api.name
                             ),
-                            file: None,
-                            line: None,
+                            file: ctx.file.clone(),
+                            line: ctx.line,
                             nodes: None,
                         });
                     }
@@ -849,8 +1226,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                                     "api '{}'.list cursor sort field '{}' is duplicated",
                                     api.name, sort_name
                                 ),
-                                file: None,
-                                line: None,
+                                file: ctx.file.clone(),
+                                line: ctx.line,
                                 nodes: None,
                             });
                         }
@@ -863,8 +1240,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                                         "api '{}'.list cursor sort field '{}' is nullable; keyset pagination requires non-null sort keys",
                                         api.name, field.name
                                     ),
-                                    file: None,
-                                    line: None,
+                                    file: ctx.file.clone(),
+                                    line: ctx.line,
                                     nodes: None,
                                 });
                             }
@@ -888,8 +1265,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                                         "api '{}'.list cursor sort field '{}' has unsupported type '{}'",
                                         api.name, field.name, field.type_name
                                     ),
-                                    file: None,
-                                    line: None,
+                                    file: ctx.file.clone(),
+                                    line: ctx.line,
                                     nodes: None,
                                 });
                             }
@@ -902,6 +1279,7 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
 
     // page
     for page in &program.pages {
+        let ctx = Origin::decl(&page.file, page.line);
         let api_names: Vec<&str> = program.apis.iter().map(|a| a.name.as_str()).collect();
         let rule_names: Vec<&str> = program.rules.iter().map(|r| r.name.as_str()).collect();
         match &page.body {
@@ -914,8 +1292,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                             "page '{}'.table query '{}' is not a known api",
                             page.name, t.query_api
                         ),
-                        file: None,
-                        line: None,
+                        file: ctx.file.clone(),
+                        line: ctx.line,
                         nodes: None,
                     });
                 }
@@ -929,8 +1307,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                             "page '{}'.form references unknown entity '{}'",
                             page.name, f.entity
                         ),
-                        file: None,
-                        line: None,
+                        file: ctx.file.clone(),
+                        line: ctx.line,
                         nodes: None,
                     });
                     continue;
@@ -950,8 +1328,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                                 "page '{}'.form field '{}' not on entity '{}'",
                                 page.name, ff.path, f.entity
                             ),
-                            file: None,
-                            line: None,
+                            file: ctx.file.clone(),
+                            line: ctx.line,
                             nodes: None,
                         });
                     }
@@ -966,8 +1344,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                                     "page '{}'.form select 'from {}' is not an entity or enum",
                                     page.name, from
                                 ),
-                                file: None,
-                                line: None,
+                                file: ctx.file.clone(),
+                                line: ctx.line,
                                 nodes: None,
                             });
                         }
@@ -982,8 +1360,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                                 "page '{}'.validation '{}' is not a known rules block",
                                 page.name, v
                             ),
-                            file: None,
-                            line: None,
+                            file: ctx.file.clone(),
+                            line: ctx.line,
                             nodes: None,
                         });
                     }
@@ -997,8 +1375,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                                 "page '{}'.submit '{}' must be Api.operation",
                                 page.name, s.api_op
                             ),
-                            file: None,
-                            line: None,
+                            file: ctx.file.clone(),
+                            line: ctx.line,
                             nodes: None,
                         });
                         continue;
@@ -1011,8 +1389,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                                 "page '{}'.submit references unknown api '{}'",
                                 page.name, api_name
                             ),
-                            file: None,
-                            line: None,
+                            file: ctx.file.clone(),
+                            line: ctx.line,
                             nodes: None,
                         });
                         continue;
@@ -1025,8 +1403,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                                 "page '{}'.submit references '{}.{}' which is not in operations",
                                 page.name, api_name, op
                             ),
-                            file: None,
-                            line: None,
+                            file: ctx.file.clone(),
+                            line: ctx.line,
                             nodes: None,
                         });
                     }
@@ -1041,8 +1419,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                             "page '{}'.detail references unknown entity '{}'",
                             page.name, det.entity
                         ),
-                        file: None,
-                        line: None,
+                        file: ctx.file.clone(),
+                        line: ctx.line,
                         nodes: None,
                     });
                 }
@@ -1056,8 +1434,8 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                             "page '{}' references unknown chart '{}'",
                             page.name, c.chart
                         ),
-                        file: None,
-                        line: None,
+                        file: ctx.file.clone(),
+                        line: ctx.line,
                         nodes: None,
                     });
                 }
@@ -1072,6 +1450,297 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
         }
     }
 
+    // 全文搜索（M10/P1）：字段存在性 + 类型约束（FULLTEXT 仅 CHAR/VARCHAR/TEXT 家族）
+    for entity in &program.entities {
+        let ctx = Origin::decl(&entity.file, entity.line);
+        for name in &entity.searchable {
+            let Some(field) = entity.fields.iter().find(|f| &f.name == name) else {
+                d.push(Diagnostic {
+                    severity: "error".into(),
+                    code: "dsl-searchable-unknown-field".into(),
+                    message: format!(
+                        "entity {} searchable: unknown field '{}' (fields: {})",
+                        entity.name,
+                        name,
+                        entity
+                            .fields
+                            .iter()
+                            .map(|f| f.name.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
+                    file: ctx.file.clone(),
+                    line: ctx.line,
+                    nodes: None,
+                });
+                continue;
+            };
+            if !matches!(field.type_name.as_str(), "String" | "Text" | "Email") {
+                d.push(Diagnostic {
+                    severity: "error".into(),
+                    code: "dsl-searchable-field-type".into(),
+                    message: format!(
+                        "entity {} searchable: field '{}' has type '{}' (FULLTEXT requires String/Text/Email)",
+                        entity.name, name, field.type_name
+                    ),
+                    file: ctx.file.clone(),
+                    line: ctx.line,
+                    nodes: None,
+                });
+            }
+        }
+    }
+
+    // 实时推送（M10/P1）：api 引用 + 事件合法性
+    for live in &program.lives {
+        let ctx = Origin::decl(&live.file, live.line);
+        let api_names: Vec<&str> = program.apis.iter().map(|a| a.name.as_str()).collect();
+        if !api_names.contains(&live.api.as_str()) {
+            d.push(Diagnostic {
+                severity: "error".into(),
+                code: "dsl-live-unknown-api".into(),
+                message: format!(
+                    "live '{}' references unknown api '{}' (available: {})",
+                    live.name,
+                    live.api,
+                    api_names.join(", ")
+                ),
+                file: ctx.file.clone(),
+                line: Some(live.line),
+                nodes: None,
+            });
+        }
+        for ev in &live.events {
+            if !matches!(ev.as_str(), "create" | "update" | "delete") {
+                d.push(Diagnostic {
+                    severity: "error".into(),
+                    code: "dsl-live-unknown-event".into(),
+                    message: format!(
+                        "live '{}': unknown event '{}' (allowed: create, update, delete)",
+                        live.name, ev
+                    ),
+                    file: ctx.file.clone(),
+                    line: Some(live.line),
+                    nodes: None,
+                });
+            }
+        }
+    }
+
+    // 通知声明（M10/P1）：渠道合法性 / target 必填 / 事件引用
+    let command_names: Vec<&str> = program.commands.iter().map(|c| c.name.as_str()).collect();
+    for entity in &program.entities {
+        let ctx = Origin::decl(&entity.file, entity.line);
+        for n in &entity.notify {
+            if !matches!(n.channel.as_str(), "email" | "sms" | "webhook" | "log") {
+                d.push(Diagnostic {
+                    severity: "error".into(),
+                    code: "dsl-notify-unknown-channel".into(),
+                    message: format!(
+                        "entity {}.@notify: unknown channel '{}' (allowed: email, sms, webhook, log)",
+                        entity.name, n.channel
+                    ),
+                    file: ctx.file.clone(),
+                    line: ctx.line,
+                    nodes: None,
+                });
+            }
+            if n.channel == "webhook" && n.target.is_none() {
+                d.push(Diagnostic {
+                    severity: "error".into(),
+                    code: "dsl-notify-missing-target".into(),
+                    message: format!(
+                        "entity {}.@notify webhook: target URL is required",
+                        entity.name
+                    ),
+                    file: ctx.file.clone(),
+                    line: ctx.line,
+                    nodes: None,
+                });
+            }
+            if matches!(n.channel.as_str(), "email" | "sms") && n.target.is_none() {
+                d.push(Diagnostic {
+                    severity: "error".into(),
+                    code: "dsl-notify-missing-target".into(),
+                    message: format!(
+                        "entity {}.@notify {}: recipient target is required",
+                        entity.name, n.channel
+                    ),
+                    file: ctx.file.clone(),
+                    line: ctx.line,
+                    nodes: None,
+                });
+            }
+            if let Some(event) = &n.event {
+                if !command_names.contains(&event.as_str()) {
+                    d.push(Diagnostic {
+                        severity: "error".into(),
+                        code: "dsl-notify-unknown-event".into(),
+                        message: format!(
+                            "entity {}.@notify: unknown event '{}' (events reference declared commands; available: {})",
+                            entity.name, event, command_names.join(", ")
+                        ),
+                        file: ctx.file.clone(),
+                        line: ctx.line,
+                        nodes: None,
+                    });
+                }
+            }
+        }
+    }
+
+    // 定时任务（M10/P1）：cron 格式 + op 引用
+    for job in &program.jobs {
+        let ctx = Origin::decl(&job.file, job.line);
+        let fields: Vec<&str> = job.cron.split(' ').filter(|f| !f.is_empty()).collect();
+        if fields.len() != 5 {
+            d.push(Diagnostic {
+                severity: "error".into(),
+                code: "dsl-job-cron-format".into(),
+                message: format!(
+                    "job '{}': cron must have exactly 5 fields (minute hour day-of-month month day-of-week), got {}",
+                    job.name, fields.len()
+                ),
+                file: ctx.file.clone(),
+                line: Some(job.line),
+                nodes: None,
+            });
+        } else {
+            let ranges = [
+                ("minute", 0i64..60),
+                ("hour", 0i64..24),
+                ("day-of-month", 1i64..32),
+                ("month", 1i64..13),
+                ("day-of-week", 0i64..7),
+            ];
+            for (i, (name, range)) in ranges.iter().enumerate() {
+                let raw = fields[i];
+                if raw == "*" {
+                    continue;
+                }
+                for part in raw.split(',') {
+                    if part.contains('-') {
+                        let bounds: Vec<&str> = part.split('-').collect();
+                        if bounds.len() != 2 {
+                            d.push(Diagnostic {
+                                severity: "error".into(),
+                                code: "dsl-job-cron-format".into(),
+                                message: format!(
+                                    "job '{}': invalid cron range '{}' (field {})",
+                                    job.name, part, name
+                                ),
+                                file: ctx.file.clone(),
+                                line: Some(job.line),
+                                nodes: None,
+                            });
+                        }
+                    } else if let Ok(v) = part.parse::<i64>() {
+                        if !(range.contains(&v)) {
+                            let allowed = format!("{}..{}", range.start, range.end);
+                            d.push(Diagnostic {
+                                severity: "error".into(),
+                                code: "dsl-job-cron-format".into(),
+                                message: format!(
+                                    "job '{}': value {} out of range for field {} (allowed {})",
+                                    job.name, v, name, allowed
+                                ),
+                                file: ctx.file.clone(),
+                                line: Some(job.line),
+                                nodes: None,
+                            });
+                        }
+                    } else {
+                        d.push(Diagnostic {
+                            severity: "error".into(),
+                            code: "dsl-job-cron-format".into(),
+                            message: format!(
+                                "job '{}': invalid cron value '{}' (field {})",
+                                job.name, part, name
+                            ),
+                            file: ctx.file.clone(),
+                            line: Some(job.line),
+                            nodes: None,
+                        });
+                    }
+                }
+            }
+        }
+        // op 是 command 时：effects 不得引用 input.*（调度器无输入来源）
+        if let Some(cmd) = program.commands.iter().find(|c| c.name == job.op) {
+            for eff in &cmd.effects {
+                if matches!(eff.value, crate::dsl::parser::EffectValue::InputRef(_)) {
+                    d.push(Diagnostic {
+                        severity: "error".into(),
+                        code: "dsl-job-input-effect".into(),
+                        message: format!(
+                            "job '{}': target command '{}' has input-dependent effect on '{}' (scheduled jobs cannot supply input)",
+                            job.name, job.op, eff.field
+                        ),
+                        file: ctx.file.clone(),
+                        line: Some(job.line),
+                        nodes: None,
+                    });
+                }
+            }
+        }
+        // op 是 command 时：pre 必须是单字段比较（调度器按其生成 WHERE，静态可表达）。
+        // 复杂 pre 无法安全转 SQL → 显式拒绝（fail-safe，不做全表 UPDATE 的静默降级）。
+        if let Some(cmd) = program.commands.iter().find(|c| c.name == job.op) {
+            if let Some(pre) = &cmd.pre {
+                let simple = match pre {
+                    crate::dsl::Expr::Bin(
+                        crate::dsl::BinOp::Eq
+                        | crate::dsl::BinOp::Ne
+                        | crate::dsl::BinOp::Lt
+                        | crate::dsl::BinOp::Le
+                        | crate::dsl::BinOp::Gt
+                        | crate::dsl::BinOp::Ge,
+                        a,
+                        b,
+                    ) => {
+                        matches!(
+                            (a.as_ref(), b.as_ref()),
+                            (crate::dsl::Expr::Ref { path, old: false, .. }, _)
+                                if path.len() == 1
+                        )
+                    }
+                    _ => false,
+                };
+                if !simple {
+                    d.push(Diagnostic {
+                        severity: "error".into(),
+                        code: "dsl-job-pre-unsupported".into(),
+                        message: format!(
+                            "job '{}': target command '{}' has a complex pre condition (scheduled jobs require a single field comparison like `status == \"pending\"`)",
+                            job.name, job.op
+                        ),
+                        file: ctx.file.clone(),
+                        line: Some(job.line),
+                        nodes: None,
+                    });
+                }
+            }
+        }
+        // op 引用：可以是 api 名（CRUD 端点）或 command 名（POST 命令端点）
+        let mut known_ops: Vec<&str> = program.apis.iter().map(|a| a.name.as_str()).collect();
+        known_ops.extend(program.commands.iter().map(|c| c.name.as_str()));
+        if !known_ops.contains(&job.op.as_str()) {
+            d.push(Diagnostic {
+                severity: "error".into(),
+                code: "dsl-job-unknown-op".into(),
+                message: format!(
+                    "job '{}' references unknown api/command '{}' (available: {})",
+                    job.name,
+                    job.op,
+                    known_ops.join(", ")
+                ),
+                file: ctx.file.clone(),
+                line: Some(job.line),
+                nodes: None,
+            });
+        }
+    }
+
     d
 }
 
@@ -1081,6 +1750,7 @@ fn check_expr_paths(
     entity_name: &str,
     expr: &Expr,
     vars: &[&str],
+    ctx: &Origin,
 ) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     let Some(entity) = program.entities.iter().find(|e| e.name == entity_name) else {
@@ -1100,8 +1770,8 @@ fn check_expr_paths(
                     severity: "error".into(),
                     code: "dsl-unknown-field".into(),
                     message: format!("rule references unknown field {}.{}", entity.name, path[0]),
-                    file: None,
-                    line: None,
+                    file: ctx.file.clone(),
+                    line: ctx.line,
                     nodes: None,
                 });
                 return out;
@@ -1117,8 +1787,8 @@ fn check_expr_paths(
                             "'{}.{}' is not a relation, cannot traverse '{}'",
                             entity.name, path[0], path[1]
                         ),
-                        file: None,
-                        line: None,
+                        file: ctx.file.clone(),
+                        line: ctx.line,
                         nodes: None,
                     });
                 } else if let Some(target) =
@@ -1129,8 +1799,8 @@ fn check_expr_paths(
                             severity: "error".into(),
                             code: "dsl-unknown-field".into(),
                             message: format!("'{}' has no field '{}'", field.type_name, path[1]),
-                            file: None,
-                            line: None,
+                            file: ctx.file.clone(),
+                            line: ctx.line,
                             nodes: None,
                         });
                     }
@@ -1139,18 +1809,18 @@ fn check_expr_paths(
             let _ = old;
         }
         Expr::Bin(_, a, b) => {
-            out.extend(check_expr_paths(program, entity_name, a, vars));
-            out.extend(check_expr_paths(program, entity_name, b, vars));
+            out.extend(check_expr_paths(program, entity_name, a, vars, ctx));
+            out.extend(check_expr_paths(program, entity_name, b, vars, ctx));
         }
-        Expr::Not(a) => out.extend(check_expr_paths(program, entity_name, a, vars)),
+        Expr::Not(a) => out.extend(check_expr_paths(program, entity_name, a, vars, ctx)),
         Expr::Call(_, args) => {
             for a in args {
-                out.extend(check_expr_paths(program, entity_name, a, vars));
+                out.extend(check_expr_paths(program, entity_name, a, vars, ctx));
             }
         }
         Expr::List(items) => {
             for a in items {
-                out.extend(check_expr_paths(program, entity_name, a, vars));
+                out.extend(check_expr_paths(program, entity_name, a, vars, ctx));
             }
         }
         _ => {}
@@ -1210,6 +1880,79 @@ pub fn pluralize(name: &str) -> String {
     } else {
         format!("{name}s")
     }
+}
+
+/// 租户维度（RFC-0008 C4 / 多租户）：
+/// 返回 (实体名, 租户字段名) 列表——字段带 `@tenant` 属性即声明为租户列。
+///
+/// **单一来源**：Check 诊断、auth.rs（claims/CurrentUser/users 表）、repo 的
+/// WHERE 注入与 create 绑定共用本函数。
+pub fn tenant_fields(program: &Program) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for entity in &program.entities {
+        let mut seen = Vec::new();
+        for f in &entity.fields {
+            if has_attr(f, "tenant") {
+                seen.push(f.name.clone());
+            }
+        }
+        for f in seen {
+            out.push((entity.name.clone(), f));
+        }
+    }
+    out
+}
+
+/// 某实体的租户字段名（无租户维度 → None）。
+pub fn tenant_field_of(program: &Program, entity_name: &str) -> Option<String> {
+    tenant_fields(program)
+        .iter()
+        .find(|(e, _)| e == entity_name)
+        .map(|(_, f)| f.clone())
+}
+
+/// 工程是否启用租户维度（存在 @tenant 字段且声明了 auth module）。
+pub fn tenant_enabled(program: &Program) -> bool {
+    program.auth.is_some() && !tenant_fields(program).is_empty()
+}
+
+/// 字段级策略的规范化视图：(实体, 字段, 允许角色)。
+///
+/// **单一来源**——服务端裁剪（gen-rust）、Web 显隐（gen-web）、Flutter 显隐（gen-flutter）
+/// 共用本函数，避免三端口径漂移。`any`（无角色约束）不产生条目。
+pub fn field_policy_roles(program: &Program) -> Vec<(String, String, Vec<String>)> {
+    let mut out: Vec<(String, String, Vec<String>)> = Vec::new();
+    for rules in &program.rules {
+        for access in &rules.access {
+            let Some(entity) = find_entity(program, &access.entity) else {
+                continue;
+            };
+            for fp in &access.field_policies {
+                let Some(field) = entity.fields.iter().find(|f| f.name == fp.field) else {
+                    continue;
+                };
+                let roles = access_rule_roles(&fp.expr);
+                if roles.is_empty() {
+                    continue; // `any` → 全员可见
+                }
+                match out
+                    .iter_mut()
+                    .find(|(e, f, _)| e == &access.entity && f == &field.name)
+                {
+                    // 同字段多条策略 → 角色并集（任何一条允许即可见）
+                    Some(entry) => {
+                        for r in roles {
+                            if !entry.2.contains(&r) {
+                                entry.2.push(r);
+                            }
+                        }
+                    }
+                    None => out.push((access.entity.clone(), field.name.clone(), roles)),
+                }
+            }
+        }
+    }
+    out
 }
 
 /// 访问规则支持的操作名。
@@ -1351,6 +2094,7 @@ fn check_access_temporal_comparisons(
     entity_name: &str,
     expr: &Expr,
     op_name: &str,
+    ctx: &Origin,
 ) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     let Some(entity) = program.entities.iter().find(|e| e.name == entity_name) else {
@@ -1362,6 +2106,7 @@ fn check_access_temporal_comparisons(
         entity: &EntityDecl,
         entity_name: &str,
         op_name: &str,
+        ctx: &Origin,
         out: &mut Vec<Diagnostic>,
     ) {
         match expr {
@@ -1379,31 +2124,31 @@ fn check_access_temporal_comparisons(
                                     "access rule for '{}' op '{}' compares incompatible temporal types '{}' and '{}'; only same-type Timestamp/Date field comparisons are supported",
                                     entity_name, op_name, l, r
                                 ),
-                                file: None,
-                                line: None,
+                                file: ctx.file.clone(),
+                                line: ctx.line,
                                 nodes: None,
                             });
                         }
                     }
                 }
-                walk(program, a, entity, entity_name, op_name, out);
-                walk(program, b, entity, entity_name, op_name, out);
+                walk(program, a, entity, entity_name, op_name, ctx, out);
+                walk(program, b, entity, entity_name, op_name, ctx, out);
             }
-            Expr::Not(a) => walk(program, a, entity, entity_name, op_name, out),
+            Expr::Not(a) => walk(program, a, entity, entity_name, op_name, ctx, out),
             Expr::Call(_, args) => {
                 for arg in args {
-                    walk(program, arg, entity, entity_name, op_name, out);
+                    walk(program, arg, entity, entity_name, op_name, ctx, out);
                 }
             }
             Expr::List(items) => {
                 for item in items {
-                    walk(program, item, entity, entity_name, op_name, out);
+                    walk(program, item, entity, entity_name, op_name, ctx, out);
                 }
             }
             _ => {}
         }
     }
-    walk(program, expr, entity, entity_name, op_name, &mut out);
+    walk(program, expr, entity, entity_name, op_name, ctx, &mut out);
     out
 }
 
@@ -1414,6 +2159,7 @@ fn check_access_json_comparisons(
     entity_name: &str,
     expr: &Expr,
     op_name: &str,
+    ctx: &Origin,
 ) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     let Some(entity) = program.entities.iter().find(|e| e.name == entity_name) else {
@@ -1424,6 +2170,7 @@ fn check_access_json_comparisons(
         entity: &EntityDecl,
         entity_name: &str,
         op_name: &str,
+        ctx: &Origin,
         expr: &Expr,
         out: &mut Vec<Diagnostic>,
     ) {
@@ -1444,30 +2191,30 @@ fn check_access_json_comparisons(
                             severity: "error".into(),
                             code: "dsl-access-json-comparison-unsupported".into(),
                             message: format!("access rule for '{}' op '{}' uses unsupported Json comparison; Json supports only ==/!= with another Json field or null", entity_name, op_name),
-                            file: None,
-                            line: None,
+                            file: ctx.file.clone(),
+                            line: ctx.line,
                             nodes: None,
                         });
                     }
                 }
-                walk(program, entity, entity_name, op_name, a, out);
-                walk(program, entity, entity_name, op_name, b, out);
+                walk(program, entity, entity_name, op_name, ctx, a, out);
+                walk(program, entity, entity_name, op_name, ctx, b, out);
             }
-            Expr::Not(a) => walk(program, entity, entity_name, op_name, a, out),
+            Expr::Not(a) => walk(program, entity, entity_name, op_name, ctx, a, out),
             Expr::Call(_, args) => {
                 for arg in args {
-                    walk(program, entity, entity_name, op_name, arg, out);
+                    walk(program, entity, entity_name, op_name, ctx, arg, out);
                 }
             }
             Expr::List(items) => {
                 for item in items {
-                    walk(program, entity, entity_name, op_name, item, out);
+                    walk(program, entity, entity_name, op_name, ctx, item, out);
                 }
             }
             _ => {}
         }
     }
-    walk(program, entity, entity_name, op_name, expr, &mut out);
+    walk(program, entity, entity_name, op_name, ctx, expr, &mut out);
     out
 }
 
@@ -1482,6 +2229,7 @@ pub fn check_type_args(
     type_name: &str,
     type_args: &[String],
     line: usize,
+    ctx: &Origin,
 ) -> Vec<Diagnostic> {
     let mut d = Vec::new();
     let mut bad = |msg: String| {
@@ -1495,7 +2243,7 @@ pub fn check_type_args(
                     format!(".{field_name}")
                 }
             }),
-            file: None,
+            file: ctx.file.clone(),
             line: Some(line),
             nodes: None,
         });

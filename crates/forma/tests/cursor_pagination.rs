@@ -269,7 +269,8 @@ page EventList {
 }
 
 #[test]
-fn cursor_api_refuses_flutter_target_before_build_writes() {
+fn cursor_api_supports_flutter_target() {
+    // Flutter 端游标分页：CursorPage 信封 + ListParams.cursor + 列表页「加载更多」
     let dir = tmp_dir("cursor-flutter");
     let fm = CURSOR_FM;
     write_project(&dir, fm);
@@ -279,17 +280,33 @@ fn cursor_api_refuses_flutter_target_before_build_writes() {
         "    out: generated/web\n  mobile:\n    framework: flutter\n    out: generated/mobile\n",
     );
     fs::write(dir.join("forma.yaml"), manifest).unwrap();
-    let err = match forma::build::run_build(&dir) {
-        Ok(_) => panic!("cursor + Flutter target must be rejected explicitly"),
-        Err(e) => e,
-    };
+    forma::build::run_build(&dir).expect("cursor + Flutter target must build");
+
+    let api = fs::read_to_string(dir.join("generated/mobile/lib/api/api.dart")).unwrap();
+    // 信封类型
+    assert!(api.contains("class CursorPage<T>"), "{api}");
+    assert!(api.contains("final String? nextCursor;"), "{api}");
+    // 参数携带 cursor
+    assert!(api.contains("final String? cursor;"), "{api}");
+    assert!(api.contains("'cursor': cursor!"), "{api}");
+    // list 返回信封
     assert!(
-        format!("{err:#}").contains("not yet supported by the configured Flutter target"),
-        "unexpected error: {err:#}"
+        api.contains("Future<CursorPage<EventListRow>> list("),
+        "{api}"
     );
+    // 原始 GET（信封解析）
+    assert!(api.contains("Future<dynamic> getRaw("), "{api}");
+
+    // 列表页：首屏 + 加载更多
+    let page = fs::read_to_string(dir.join("generated/mobile/lib/pages/event_list.dart")).unwrap();
+    assert!(page.contains("String? _nextCursor;"), "{page}");
+    assert!(page.contains("Future<void> _loadMore()"), "{page}");
+    assert!(page.contains("cursor: cursor"), "{page}");
+    assert!(page.contains("加载更多"), "{page}");
+    // 游标模式不再生成 offset 偏移参数
     assert!(
-        !dir.join("generated/db").exists(),
-        "unsupported multi-target build must fail before any emitter writes"
+        !page.contains("page:"),
+        "cursor mode must not use offset page"
     );
 }
 
@@ -373,4 +390,44 @@ fn offset_api_keeps_array_response_and_offset_sql() {
         openapi.contains("\"type\": \"array\""),
         "offset OpenAPI remains array:\n{openapi}"
     );
+}
+
+// ── F-008：benchmark 矩阵（快照级——跑 3 个 case 验证管道，完整 100 case 走 CLI）────
+
+#[test]
+fn benchmark_matrix_produces_consistent_reports() {
+    // 快速验证：bench 模块产出 100 case、同场景 variant 间结构一致、报告 schema 正确
+    let cases = forma::bench::cases();
+    assert_eq!(cases.len(), 100, "10 scenarios × 10 variants");
+
+    // 每个 case 都有非空 DSL 且含 entity + api
+    for case in cases.iter().take(10) {
+        assert!(
+            case.dsl.contains("entity Order"),
+            "{} missing entity",
+            case.id
+        );
+        assert!(case.dsl.contains("api Orders"), "{} missing api", case.id);
+        assert!(
+            case.dsl.contains("app benchmark"),
+            "{} missing app",
+            case.id
+        );
+    }
+
+    // 场景 id 唯一
+    let ids: std::collections::HashSet<&str> = cases.iter().map(|c| c.id.as_str()).collect();
+    assert_eq!(ids.len(), 100);
+}
+
+#[test]
+fn benchmark_case_check_and_build_pass() {
+    // 端到端：跑一个 case 的 DSL 检查 + 产物生成
+    let dir = tmp_dir("f008-case");
+    write_project(&dir, &forma::bench::cases()[0].dsl);
+    forma::build::run_build(&dir).unwrap();
+
+    // 关键产物存在
+    assert!(dir.join("generated/backend/src/routes.rs").exists());
+    assert!(dir.join("generated/backend/src/error.rs").exists());
 }

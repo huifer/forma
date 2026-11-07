@@ -259,3 +259,103 @@ fn openapi_declares_error_schema_and_responses() {
         "operations must declare the unified error responses"
     );
 }
+
+// ── requestId（§4.4 · spec:protocols §7 缺口 8 收口）────────────────
+
+#[test]
+fn backend_generates_request_id_middleware_and_fills_body() {
+    let dir = tmp_dir("request-id");
+    write_project(&dir, FM);
+    let (out, _) = generate(&dir);
+
+    // 中间件模块：透传/生成 + 响应头回写 + task-local 作用域
+    let module = fs::read_to_string(out.join("backend/src/request_id.rs")).unwrap();
+    assert!(
+        module.contains("pub const HEADER: &str = \"x-request-id\""),
+        "{module}"
+    );
+    assert!(module.contains("attach_request_id"), "{module}");
+    assert!(module.contains("REQUEST_ID"), "{module}");
+    assert!(module.contains("uuid::Uuid::new_v4()"), "{module}");
+    // 响应头回写
+    assert!(module.contains("headers_mut().insert(HEADER"), "{module}");
+
+    // error.rs：task-local 声明 + 错误体从作用域取 id
+    let error = fs::read_to_string(out.join("backend/src/error.rs")).unwrap();
+    assert!(error.contains("pub static REQUEST_ID: String;"), "{error}");
+    assert!(
+        error.contains("REQUEST_ID.try_with(|id| id.clone()).ok()"),
+        "{error}"
+    );
+    // 不再是无条件 None
+    assert!(!error.contains("request_id: None"), "{error}");
+
+    // 路由汇总：中间件挂载在最外层（覆盖 auth 层与所有错误响应）
+    let routes = fs::read_to_string(out.join("backend/src/routes.rs")).unwrap();
+    assert!(
+        routes.contains("axum::middleware::from_fn(crate::request_id::attach_request_id)"),
+        "{routes}"
+    );
+
+    // main.rs 声明模块
+    let main = fs::read_to_string(out.join("backend/src/main.rs")).unwrap();
+    assert!(main.contains("mod request_id;"), "{main}");
+
+    // OpenAPI：requestId 不再是「预留」
+    let spec = fs::read_to_string(out.join("api-docs/openapi.json")).unwrap();
+    assert!(spec.contains("requestId"), "{spec}");
+    assert!(
+        !spec.contains("预留"),
+        "requestId must no longer be reserved-only:\n{spec}"
+    );
+}
+
+#[test]
+fn clients_surface_request_id() {
+    let dir = tmp_dir("request-id-clients");
+    write_project(&dir, FM);
+    let (out, _) = generate(&dir);
+
+    let web = fs::read_to_string(out.join("web/src/api.ts")).unwrap();
+    assert!(web.contains("err.requestId = body.requestId"), "{web}");
+
+    let api = fs::read_to_string(out.join("backend/src/request_id.rs")).unwrap();
+    assert!(api.contains("x-request-id"), "{api}");
+}
+
+#[test]
+fn flutter_client_surfaces_request_id() {
+    let dir = tmp_dir("request-id-flutter");
+    fs::create_dir_all(dir.join("forma")).unwrap();
+    fs::write(
+        dir.join("forma.yaml"),
+        "project:\n  name: errc\n  version: 0.1.0\n\nsource: [\"forma/**/*.fm\"]\n\ntargets:\n  mobile:\n    framework: flutter\n    out: generated/mobile\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app errc {
+  version = "0.1.0"
+}
+
+entity Order {
+  id    Uuid      @id @default(uuid)
+  title String(50) @required
+}
+
+api Orders {
+  entity Order
+  operations [list get create update delete]
+}
+"#,
+    )
+    .unwrap();
+    forma::build::run_build(&dir).unwrap();
+    let api = fs::read_to_string(dir.join("generated/mobile/lib/api/api.dart")).unwrap();
+    assert!(api.contains("final String? requestId;"), "{api}");
+    assert!(
+        api.contains("requestId: (err['requestId'] as String?) ?? res.headers['x-request-id']"),
+        "{api}"
+    );
+}
