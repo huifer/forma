@@ -23,7 +23,7 @@ use std::path::Path;
 /// 新增类型**必须**同时：① 加进本清单；② 在各 emitter 里给出映射；
 /// ③ 在 `docs/architecture/specifications/types/type-system.zh-CN.md` 记录。
 /// 只改生成层而不改本清单 = 用户写了类型却被 `dsl-unknown-type` 拒绝（空承诺）。
-pub const BUILTIN_TYPES: [&str; 11] = [
+pub const BUILTIN_TYPES: [&str; 12] = [
     "Uuid",
     "String",
     "Email",
@@ -35,6 +35,7 @@ pub const BUILTIN_TYPES: [&str; 11] = [
     "Timestamp",
     "Date",
     "Json",
+    "Attachment",
 ];
 
 /// 可比较大小的类型（min / max 约束仅对这些类型有意义）。
@@ -570,6 +571,50 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                             nodes: None,
                         });
                     }
+                }
+            }
+            // @storage（M9/P1）：仅 Attachment 字段；provider 白名单；s3/oss 必须带 bucket
+            if let Some(attr) = field.attrs.iter().find(|a| a.name == "storage") {
+                if field.type_name != "Attachment" {
+                    d.push(Diagnostic {
+                        severity: "error".into(),
+                        code: "dsl-storage-non-attachment".into(),
+                        message: format!(
+                            "field {}.{}: @storage applies only to Attachment fields (found '{}')",
+                            entity.name, field.name, field.type_name
+                        ),
+                        file: ctx.file.clone(),
+                        line: Some(field.line),
+                        nodes: None,
+                    });
+                }
+                let provider = attr.args.first().map(|s| s.as_str()).unwrap_or("");
+                if !matches!(provider, "local" | "s3" | "oss") {
+                    d.push(Diagnostic {
+                        severity: "error".into(),
+                        code: "dsl-storage-unknown-provider".into(),
+                        message: format!(
+                            "field {}.{}: @storage provider '{}' not supported (allowed: local, s3, oss)",
+                            entity.name, field.name, provider
+                        ),
+                        file: ctx.file.clone(),
+                        line: Some(field.line),
+                        nodes: None,
+                    });
+                } else if matches!(provider, "s3" | "oss")
+                    && attr.args.get(1).map(|s| s.is_empty()).unwrap_or(true)
+                {
+                    d.push(Diagnostic {
+                        severity: "error".into(),
+                        code: "dsl-storage-missing-bucket".into(),
+                        message: format!(
+                            "field {}.{}: @storage {} requires a bucket argument, e.g. @storage({}, \"my-bucket\")",
+                            entity.name, field.name, provider, provider
+                        ),
+                        file: ctx.file.clone(),
+                        line: Some(field.line),
+                        nodes: None,
+                    });
                 }
             }
 

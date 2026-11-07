@@ -74,6 +74,7 @@ pub fn mysql_type(program: &Program, field: &FieldDecl) -> String {
         "Timestamp" => "DATETIME(3)".into(),
         "Date" => "DATE".into(),
         "Json" => "JSON".into(),
+        "Attachment" => "VARCHAR(500)".into(),
         other => {
             if super::is_enum(program, other) {
                 "VARCHAR(64)".into()

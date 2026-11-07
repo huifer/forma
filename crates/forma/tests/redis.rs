@@ -108,7 +108,7 @@ fn redis_target_derives_key_design() {
     assert!(
         report.steps.iter().any(|s| s.name == "db-redis"),
         "build must include db-redis step: {:?}",
-        report.steps.iter().map(|s| s.name.clone()).collect::<Vec<_>>()
+        report.steps.iter().map(|s| s.name).collect::<Vec<_>>()
     );
 
     let md = fs::read_to_string(dir.join("db/redis/key-design.md")).unwrap();
@@ -146,7 +146,10 @@ fn default_and_relational_engines_produce_no_redis_artifacts() {
     write_manifest(&dir, "mysql", "db");
     write_app(&dir);
     let _ = forma::build::run_build(&dir).unwrap();
-    assert!(!dir.join("db/redis").exists(), "mysql project must have no redis artifacts");
+    assert!(
+        !dir.join("db/redis").exists(),
+        "mysql project must have no redis artifacts"
+    );
 
     // postgres / sqlite 同样零 redis 产物
     for engine in ["postgres", "sqlite"] {

@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **文件上传（M9 / P1）**：
+  - 内建字段类型 `Attachment`（存储文件 URL 引用；MySQL→VARCHAR(500)、Rust/TS/Dart→String），
+    四目标映射齐备（`BUILTIN_TYPES` 11→12，一致性回归更新）；
+  - 字段属性 `@storage(provider, bucket?)`（provider 白名单 local/s3/oss），检查层 3 条诊断：
+    `dsl-storage-non-attachment` / `dsl-storage-unknown-provider` / `dsl-storage-missing-bucket`（s3/oss 必填 bucket）；
+  - Rust 后端：`src/storage.rs`（@storage 静态展开 STORAGE_FIELDS 表 + `POST /api/uploads`
+    multipart 上传 + `GET /api/uploads/:name` 下载，含路径穿越防护）；local 真实落盘
+    `./uploads/<uuid>.<ext>`，s3/oss 显式 501（`FORMA_STORAGE_DRIVER`，外部驱动集成点，
+    不静默降级）；存在 Attachment 时 Cargo.toml 启用 axum `multipart` feature；
+  - OpenAPI：`/api/uploads`（POST multipart）+ `/api/uploads/{name}`（GET binary）；
+  - Web：`uploadFile(file, field?)` 助手（FormData + Bearer）+ 表单文件输入（选文件即上传、
+    字段值存返回 URL、回显可点击链接）；
+  - 无 Attachment 的工程全链路零产物（storage.rs / multipart / uploadFile 均不生成）；
+  - 验证：回归 `tests/storage.rs`（3 项）+ 生成端真实 `cargo check`（0 错误）+
+    `npx tsc --noEmit`（0 错误）。
+
+### Added
 - **Redis 键设计派生（M9 / P1）**：
   - 新增 `targets.db.engine: redis` → `db-redis` 构建步骤，从 DSL 实体/索引/唯一约束/auth/jobs/live **纯函数派生** Redis 键设计；
   - 产出 `redis/key-design.md`（人读）+ `redis/key-design.json`（机读），键名统一带 `forma:{project}:{version}` 边界前缀；

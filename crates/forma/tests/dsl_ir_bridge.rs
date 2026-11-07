@@ -179,6 +179,7 @@ fn builtin_types_have_mappings_in_all_targets() {
             "Timestamp" => "DATETIME(3)",
             "Date" => "DATE",
             "Json" => "JSON",
+            "Attachment" => "VARCHAR(500)",
             other => panic!("unhandled builtin type {other}"),
         };
         assert_eq!(
