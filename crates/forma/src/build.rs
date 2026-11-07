@@ -201,6 +201,11 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
             "sqlite-migrate",
             crate::emit::sqlite::emit_sqlite_migration(&dir, &program, &db_out),
         )?;
+    } else if db_engine == "redis" {
+        push(
+            "db-redis",
+            crate::emit::redis::emit_redis(&dir, &program, &db_out),
+        )?;
     } else {
         push("db-mysql", crate::emit::emit_mysql(&dir, &program, &db_out))?;
     }

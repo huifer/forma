@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Redis 键设计派生（M9 / P1）**：
+  - 新增 `targets.db.engine: redis` → `db-redis` 构建步骤，从 DSL 实体/索引/唯一约束/auth/jobs/live **纯函数派生** Redis 键设计；
+  - 产出 `redis/key-design.md`（人读）+ `redis/key-design.json`（机读），键名统一带 `forma:{project}:{version}` 边界前缀；
+  - 覆盖：单实体/列表缓存（Hash+TTL）、索引（ZSET）、唯一约束（SET 存在性反查）、会话（STRING+TTL=tokenHours）、任务锁、SSE 订阅集合、限流计数器；
+  - Redis 非关系存储——不做 DDL/迁移，只做键设计派生（零新增依赖、确定性输出）；
+  - 默认 mysql 与 postgres/sqlite 工程**零 Redis 产物**（回归锁定）。
+  - 回归 `tests/redis.rs`（2 项：键设计派生正确 + 默认/关系型 engine 零产物）。
+
 - **OpenAPI 3.x 导入 → Forma DSL（M7 / P1）**：
   - 新增 `forma import openapi <spec.yaml> [--out <path>]`，将 OpenAPI 规范逆向工程为 `.fm` 骨架；
   - 实体来自 `components.schemas`，API 来自 `paths`（操作按 HTTP method 推导 list/get/create/update/delete，无路径的实体默认全量 CRUD）；
