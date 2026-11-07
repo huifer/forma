@@ -156,6 +156,10 @@ export function shapeData(spec: ChartSpec, rows: Row[]): ChartData {
       return shapeRadial(spec, rows);
     case "heatmap":
       return shapeHeatmap(spec, rows);
+    default:
+      // V0.2：metric/table 由 React 组件直接消费行数据，不经 shapeData；
+      // 类型层面保持全覆盖（ChartData 的合法空值）。
+      return { kind: "pairs", items: [] };
   }
 }
 

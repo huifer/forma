@@ -18,7 +18,9 @@ export type ShapeFamily =
   | "part-to-whole"
   | "radial"
   | "gauge"
-  | "heatmap";
+  | "heatmap"
+  | "metric"
+  | "table";
 
 export interface Channel {
   field: string;

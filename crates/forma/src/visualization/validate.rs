@@ -149,6 +149,73 @@ pub fn validate_chart(spec: &mut ChartSpec, errors: &mut Vec<Diagnostic>) {
                 "numeric",
             );
         }
+        ShapeFamily::Metric => {
+            // V0.2 指标卡：无编码通道；恰一个 aggregate 变换
+            if enc.x.is_some() || enc.y.is_some() || enc.series.is_some() || enc.color.is_some() {
+                errors.push(diag(
+                    "viz-metric-encoding",
+                    format!(
+                        "chart '{}' of type metric takes no encoding channels (metric = single aggregate value)",
+                        spec.id
+                    ),
+                    line,
+                ));
+            }
+            let agg_count = spec
+                .transform
+                .ops
+                .iter()
+                .filter(|op| matches!(op, super::TransformOp::Aggregate { .. }))
+                .count();
+            if agg_count == 0 {
+                errors.push(diag(
+                    "viz-metric-no-aggregate",
+                    format!(
+                        "chart '{}' of type metric requires exactly one aggregate transform",
+                        spec.id
+                    ),
+                    line,
+                ));
+            } else if agg_count > 1 {
+                errors.push(diag(
+                    "viz-metric-multi-aggregate",
+                    format!(
+                        "chart '{}' of type metric has {} aggregate transforms (exactly one required)",
+                        spec.id, agg_count
+                    ),
+                    line,
+                ));
+            }
+        }
+        ShapeFamily::Table => {
+            // V0.2 数据表：无编码通道；仅允许 filter/sort/limit（行级变换）
+            if enc.x.is_some() || enc.y.is_some() || enc.series.is_some() || enc.color.is_some() {
+                errors.push(diag(
+                    "viz-table-encoding",
+                    format!(
+                        "chart '{}' of type table takes no encoding channels (table renders raw rows)",
+                        spec.id
+                    ),
+                    line,
+                ));
+            }
+            for op in &spec.transform.ops {
+                if matches!(
+                    op,
+                    super::TransformOp::Aggregate { .. } | super::TransformOp::Bucket { .. }
+                ) {
+                    errors.push(diag(
+                        "viz-table-transform",
+                        format!(
+                            "chart '{}' of type table only allows filter/sort/limit transforms",
+                            spec.id
+                        ),
+                        line,
+                    ));
+                    break;
+                }
+            }
+        }
     }
 
     // color 通道目前只有热力图使用；series 通道只对笛卡尔形状有意义
@@ -197,7 +264,7 @@ pub fn catalog() -> serde_json::Value {
         "aggregateOps": ["sum", "avg", "count", "min", "max"],
         "bucketUnits": ["hour", "day", "week", "month", "year"],
         "compareOps": ["eq", "ne", "gt", "gte", "lt", "lte", "in"],
-        "shapes": ["cartesian", "xy", "part-to-whole", "radial", "gauge", "heatmap"],
+        "shapes": ["cartesian", "xy", "part-to-whole", "radial", "gauge", "heatmap", "metric", "table"],
         "adapters": ["echarts"],
     })
 }
@@ -212,6 +279,8 @@ pub fn describe(chart_type: &str) -> Option<serde_json::Value> {
         ShapeFamily::Radial => (vec!["x", "y"], vec![]),
         ShapeFamily::Gauge => (vec!["y"], vec![]),
         ShapeFamily::Heatmap => (vec!["x", "y", "color"], vec![]),
+        ShapeFamily::Metric => (vec![], vec![]),
+        ShapeFamily::Table => (vec![], vec![]),
     };
     Some(serde_json::json!({
         "type": t.as_str(),
@@ -220,7 +289,8 @@ pub fn describe(chart_type: &str) -> Option<serde_json::Value> {
         "optionalChannels": optional,
         "defaultFormat": match t.shape() {
             ShapeFamily::Cartesian | ShapeFamily::Xy | ShapeFamily::PartToWhole
-            | ShapeFamily::Radial | ShapeFamily::Gauge | ShapeFamily::Heatmap => DataFormat::None.as_str(),
+            | ShapeFamily::Radial | ShapeFamily::Gauge | ShapeFamily::Heatmap
+            | ShapeFamily::Metric | ShapeFamily::Table => DataFormat::None.as_str(),
         },
     }))
 }

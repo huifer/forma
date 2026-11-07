@@ -54,6 +54,8 @@ pub fn chart_option(spec: &ChartSpec) -> Value {
         ShapeFamily::Radial => radial(spec, &mut option),
         ShapeFamily::Gauge => gauge(spec, &mut option),
         ShapeFamily::Heatmap => heatmap(spec, &mut option),
+        // V0.2：metric/table 由 React 组件直接渲染，不经过 ECharts
+        ShapeFamily::Metric | ShapeFamily::Table => {}
     }
 
     option

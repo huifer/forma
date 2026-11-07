@@ -122,26 +122,8 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
     let (capabilities, capability_diagnostics) = resolve_capabilities(&dir, &loaded.manifest)?;
 
     // 游标响应是 `{items,nextCursor}` envelope：Web 已支持 useInfiniteQuery；
-    // Flutter / visualization runtime 仍消费裸列表，必须在任何 emitter 写盘前显式拒绝，
-    // 避免同一工程的多目标产物语义不一致。
-    let cursor_apis: Vec<&str> = program
-        .apis
-        .iter()
-        .filter(|api| api.list.as_ref().and_then(|l| l.paginate.as_deref()) == Some("cursor"))
-        .map(|api| api.name.as_str())
-        .collect();
-    // 游标分页：Flutter 端已支持（CursorPage 信封 + 「加载更多」）；仅可视化运行时
-    // 仍要求裸列表响应（下方 chart 检查）。
-    for chart in &program.charts {
-        if let Some((source_api, _)) = &chart.source {
-            if cursor_apis.iter().any(|name| name == &source_api.as_str()) {
-                bail!(
-                    "chart `{}` consumes cursor-paginated api `{}` but the visualization runtime currently requires a list response; use offset pagination",
-                    chart.name, source_api
-                );
-            }
-        }
-    }
+    // V0.2 数据绑定完整化：可视化运行时支持 cursor 分页源（解包 {items, nextCursor}
+    // 信封取第 0 页）。Flutter 端游标已支持（CursorPage 信封 + 加载更多）。
 
     let db_out = targets
         .database

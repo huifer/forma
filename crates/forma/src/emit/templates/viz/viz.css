@@ -22,3 +22,37 @@
   font-size: 12px;
   color: var(--destructive, #dc2626);
 }
+
+.forma-viz__metric {
+  padding: 20px 24px;
+}
+
+.forma-viz__metric-title {
+  font-size: 14px;
+  color: var(--muted-fg, #71717a);
+}
+
+.forma-viz__metric-value {
+  font-size: 2.25rem;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.forma-viz__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.forma-viz__table th,
+.forma-viz__table td {
+  border: 1px solid var(--border, #e4e4e7);
+  padding: 6px 10px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.forma-viz__table th {
+  background: var(--muted, #f4f4f5);
+  font-weight: 600;
+}

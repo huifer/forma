@@ -500,8 +500,11 @@ fn mcp_viz_catalog_and_describe() {
         .iter()
         .map(|t| t["type"].as_str().unwrap().to_string())
         .collect();
-    assert_eq!(types.len(), 10);
+    assert_eq!(types.len(), 12);
     assert!(types.contains(&"line".to_string()));
+    // V0.2：metric / table 已在目录中
+    assert!(types.contains(&"metric".to_string()));
+    assert!(types.contains(&"table".to_string()));
 
     let mut args = serde_json::Map::new();
     args.insert("chartType".into(), serde_json::json!("radar"));

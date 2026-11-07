@@ -26,7 +26,7 @@ pub fn emit_web_react(
     files.push(file(
         out_dir,
         "package.json",
-        package_json(app_name, !program.charts.is_empty(), uses_rhf, uses_zustand),
+        package_json(app_name, needs_echarts(program), uses_rhf, uses_zustand),
         "gen-web",
     ));
     files.push(file(out_dir, "vite.config.ts", vite_config(), "gen-web"));
@@ -144,6 +144,14 @@ fn file(
         content,
         generator: generator.into(),
     }
+}
+
+/// 工程是否需要 ECharts（V0.2：metric/table widget 由 React 组件渲染，不需要 echarts）。
+fn needs_echarts(program: &Program) -> bool {
+    program
+        .charts
+        .iter()
+        .any(|c| !matches!(c.chart_type.as_str(), "metric" | "table"))
 }
 
 fn package_json(app: &str, has_charts: bool, uses_rhf: bool, uses_zustand: bool) -> String {
@@ -1461,7 +1469,7 @@ fn chart_page(
          \x20 return (\n\
          \x20   <div>\n\
          \x20     <div className=\"page-header\">\n\
-         \x20       <h1>__TITLE__</h1>\n\
+         \x20       <h1>{title}</h1>\n\
          \x20     </div>\n\
          \x20     <FormaChart spec={{{chart}Spec}} option={{{chart}Option}} source={{{chart}Source}} />\n\
          \x20   </div>\n\

@@ -31,10 +31,14 @@ pub enum ChartType {
     Radar,
     Heatmap,
     Treemap,
+    /// 指标卡（V0.2）：单个聚合值 + 格式化（KPI）
+    Metric,
+    /// 数据表（V0.2）：原始行以 <table> 渲染（真实数据回退）
+    Table,
 }
 
 impl ChartType {
-    pub const ALL: [ChartType; 10] = [
+    pub const ALL: [ChartType; 12] = [
         ChartType::Line,
         ChartType::Bar,
         ChartType::Area,
@@ -45,6 +49,8 @@ impl ChartType {
         ChartType::Radar,
         ChartType::Heatmap,
         ChartType::Treemap,
+        ChartType::Metric,
+        ChartType::Table,
     ];
 
     pub fn parse(s: &str) -> Option<Self> {
@@ -59,6 +65,8 @@ impl ChartType {
             "radar" => Some(ChartType::Radar),
             "heatmap" => Some(ChartType::Heatmap),
             "treemap" => Some(ChartType::Treemap),
+            "metric" => Some(ChartType::Metric),
+            "table" => Some(ChartType::Table),
             _ => None,
         }
     }
@@ -75,6 +83,8 @@ impl ChartType {
             ChartType::Radar => "radar",
             ChartType::Heatmap => "heatmap",
             ChartType::Treemap => "treemap",
+            ChartType::Metric => "metric",
+            ChartType::Table => "table",
         }
     }
 
@@ -87,6 +97,8 @@ impl ChartType {
             ChartType::Gauge => ShapeFamily::Gauge,
             ChartType::Radar => ShapeFamily::Radial,
             ChartType::Heatmap => ShapeFamily::Heatmap,
+            ChartType::Metric => ShapeFamily::Metric,
+            ChartType::Table => ShapeFamily::Table,
         }
     }
 }
@@ -106,6 +118,10 @@ pub enum ShapeFamily {
     Gauge,
     /// 热力：x 分类 + y 分类 + 数值
     Heatmap,
+    /// 指标卡：单个聚合值（V0.2）
+    Metric,
+    /// 数据表：原始行渲染（V0.2）
+    Table,
 }
 
 impl ShapeFamily {
@@ -117,6 +133,8 @@ impl ShapeFamily {
             ShapeFamily::Radial => "radial",
             ShapeFamily::Gauge => "gauge",
             ShapeFamily::Heatmap => "heatmap",
+            ShapeFamily::Metric => "metric",
+            ShapeFamily::Table => "table",
         }
     }
 }

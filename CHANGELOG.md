@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **可视化 V0.2：Data Binding 完整化 + Metric Card + Table widget（RFC-0010 / P1）**：
+  - `type metric`（指标卡）与 `type table`（数据表）加入 Chart 类型词表（10→12）；
+  - metric：无编码通道，恰一个 aggregate 变换；`axis.y { field value format ... }` 携带
+    显示格式；运行时 MetricCard 取数 → 聚合 → `formatValue` 单值渲染；
+  - table：无编码通道，仅允许 filter/sort/limit；产物携带列定义（实体字段 → key/label/format，
+    关系列取 `{rel}_name`）；运行时 TableCard 以 `<table>` 渲染（图表真实数据回退）；
+  - **Data Binding 完整化**：cursor 分页 api 可作为图表源（运行时解包 `{items, nextCursor}`
+    取第 0 页，build 不再拒绝）；metric/table-only 工程不引入 echarts（适配层生成为 stub，
+    package.json 按需判断 needs_echarts）；
+  - 诊断：`viz-metric-encoding` / `viz-metric-no-aggregate` / `viz-metric-multi-aggregate` /
+    `viz-table-encoding` / `viz-table-transform`；
+  - 回归 `tests/visualization_v02.rs`（3 项）+ charts 页标题 `__TITLE__` 字面输出顺带修复；
+  - 验证：生成端 `tsc --noEmit` 0 错 + `vite build` + **浏览器渲染断言**（metric 求和
+    ¥2,233.00、table filter/sort 后 2 行）通过。
+
+### Added
 - **状态管理生成 · Zustand（M9 / P1）**：
   - manifest opt-in：`targets.frontend.usesZustand: true`（缺省 = 局部 useState，零变化）；
   - `src/store.ts`：**从列表页数据依赖派生**——每个列表页一个 store（filters 键取自
