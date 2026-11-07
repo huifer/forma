@@ -6,7 +6,6 @@
 //! 并行安全：产物写入独立的 tmp 目录。
 
 use std::fs;
-use std::path::Path;
 
 fn tmp() -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("forma-oaimp-{}", std::process::id()));
@@ -92,8 +91,7 @@ fn openapi_import_generates_valid_dsl() {
     let (program, parse_diags) = forma::dsl::load_program(&dir, &["*.fm".to_string()]).unwrap();
     let parse_err = parse_diags.iter().filter(|d| d.severity == "error").count();
     assert_eq!(
-        parse_err,
-        0,
+        parse_err, 0,
         "generated .fm must parse: {:?}\n---\n{dsl}",
         parse_diags
     );
@@ -101,8 +99,7 @@ fn openapi_import_generates_valid_dsl() {
     let sem = forma::dsl::check_program(&program);
     let sem_err = sem.iter().filter(|d| d.severity == "error").count();
     assert_eq!(
-        sem_err,
-        0,
+        sem_err, 0,
         "generated .fm must pass check_program: {:?}\n---\n{dsl}",
         sem
     );

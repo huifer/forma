@@ -425,7 +425,10 @@ fn cmd_check(project_dir: PathBuf) -> i32 {
     }
 }
 
-fn cmd_import_openapi(positional: &[String], flags: &std::collections::HashMap<String, String>) -> i32 {
+fn cmd_import_openapi(
+    positional: &[String],
+    flags: &std::collections::HashMap<String, String>,
+) -> i32 {
     let spec_path = match positional.first() {
         Some(p) => p.clone(),
         None => {

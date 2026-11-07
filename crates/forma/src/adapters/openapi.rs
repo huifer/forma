@@ -305,7 +305,11 @@ pub fn openapi_to_dsl(spec_text: &str, file: &str) -> Result<String> {
         let required: Vec<String> = schema
             .get("required")
             .and_then(|v| v.as_sequence())
-            .map(|s| s.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+            .map(|s| {
+                s.iter()
+                    .filter_map(|x| x.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
         let mut fields: Vec<Field> = Vec::new();
         if let Some(props) = schema.get("properties").and_then(|v| v.as_mapping()) {
@@ -328,15 +332,16 @@ pub fn openapi_to_dsl(spec_text: &str, file: &str) -> Result<String> {
                             attrs.push("@default(uuid)".to_string());
                         }
                     }
-                    fields.push(Field { name: fname, ty, attrs });
+                    fields.push(Field {
+                        name: fname,
+                        ty,
+                        attrs,
+                    });
                 }
             }
         }
         // 保证实体有且仅有一个 @id 主键（关系目标必须满足）
-        if !fields
-            .iter()
-            .any(|f| f.attrs.iter().any(|a| a == "@id"))
-        {
+        if !fields.iter().any(|f| f.attrs.iter().any(|a| a == "@id")) {
             fields.insert(
                 0,
                 Field {
@@ -438,7 +443,12 @@ fn sanitize_ident(s: &str, pascal: bool) -> String {
     base = base.trim_matches('_').to_string();
     if base.is_empty() {
         base = "Field".to_string();
-    } else if base.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+    } else if base
+        .chars()
+        .next()
+        .map(|c| c.is_ascii_digit())
+        .unwrap_or(false)
+    {
         base = format!("_{base}");
     }
     if pascal {
@@ -605,11 +615,12 @@ fn op_token(method: &str, path: &str) -> String {
         "put" | "patch" => "update",
         "delete" => "delete",
         "get" => {
-            if path.trim_end_matches('/').ends_with('}') {
+            let token = if path.trim_end_matches('/').ends_with('}') {
                 "get"
             } else {
                 "list"
-            }
+            };
+            token
         }
         _ => "list",
     };

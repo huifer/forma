@@ -162,16 +162,18 @@ fn render_md(prefix: &str, keys: &[KeySpec]) -> String {
 }
 
 fn render_json(prefix: &str, keys: &[KeySpec]) -> String {
-    let list: Vec<serde_json::Value> = keys.iter().map(|k| {
-        serde_json::json!({
-            "kind": k.kind,
-            "key": k.key,
-            "purpose": k.purpose,
-            "datatype": k.datatype,
-            "ttlSecs": k.ttl_secs,
+    let list: Vec<serde_json::Value> = keys
+        .iter()
+        .map(|k| {
+            serde_json::json!({
+                "kind": k.kind,
+                "key": k.key,
+                "purpose": k.purpose,
+                "datatype": k.datatype,
+                "ttlSecs": k.ttl_secs,
+            })
         })
-    })
-    .collect();
+        .collect();
     serde_json::to_string_pretty(&serde_json::json!({
         "prefix": prefix,
         "generatedBy": "gen-redis",
