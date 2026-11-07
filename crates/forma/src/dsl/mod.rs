@@ -249,6 +249,7 @@ pub fn load_program(
         ir_version: IR_VERSION.to_string(),
         jobs: Vec::new(),
         lives: Vec::new(),
+        exports: Vec::new(),
         app: None,
         enums: Vec::new(),
         entities: Vec::new(),
@@ -450,6 +451,25 @@ fn merge_program(
             });
         } else {
             program.lives.push(l);
+        }
+    }
+    for mut e in part.exports {
+        e.file = Some(file.to_string());
+        if program
+            .exports
+            .iter()
+            .any(|x| x.api == e.api && x.format == e.format)
+        {
+            diagnostics.push(Diagnostic {
+                severity: "error".into(),
+                code: "dsl-duplicate".into(),
+                message: format!("duplicate export of api '{}' as {}", e.api, e.format),
+                file: Some(file.into()),
+                line: Some(e.line),
+                nodes: None,
+            });
+        } else {
+            program.exports.push(e);
         }
     }
 }
@@ -1569,6 +1589,54 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                     nodes: None,
                 });
             }
+        }
+    }
+
+    // 数据导出（M9/P1）：api 存在性 / list 操作 / 格式白名单
+    for e in &program.exports {
+        let ctx = Origin::decl(&e.file, e.line);
+        let api_names: Vec<&str> = program.apis.iter().map(|a| a.name.as_str()).collect();
+        let Some(api) = program.apis.iter().find(|a| a.name == e.api) else {
+            d.push(Diagnostic {
+                severity: "error".into(),
+                code: "dsl-export-unknown-api".into(),
+                message: format!(
+                    "export '{}' references unknown api '{}' (available: {})",
+                    e.name,
+                    e.api,
+                    api_names.join(", ")
+                ),
+                file: ctx.file.clone(),
+                line: Some(e.line),
+                nodes: None,
+            });
+            continue;
+        };
+        if !api.operations.iter().any(|op| op == "list") {
+            d.push(Diagnostic {
+                severity: "error".into(),
+                code: "dsl-export-no-list".into(),
+                message: format!(
+                    "export '{}' requires api '{}' to declare a list operation",
+                    e.name, e.api
+                ),
+                file: ctx.file.clone(),
+                line: Some(e.line),
+                nodes: None,
+            });
+        }
+        if !matches!(e.format.as_str(), "csv" | "xlsx") {
+            d.push(Diagnostic {
+                severity: "error".into(),
+                code: "dsl-export-unknown-format".into(),
+                message: format!(
+                    "export '{}': unknown format '{}' (allowed: csv, xlsx)",
+                    e.name, e.format
+                ),
+                file: ctx.file.clone(),
+                line: Some(e.line),
+                nodes: None,
+            });
         }
     }
 

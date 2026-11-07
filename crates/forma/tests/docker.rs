@@ -140,6 +140,7 @@ fn no_entities_means_no_docker_artifacts() {
         charts: vec![],
         jobs: Vec::new(),
         lives: Vec::new(),
+        exports: Vec::new(),
         auth: None,
     };
     assert!(emit_docker(&dir, &program, ".", "empty")

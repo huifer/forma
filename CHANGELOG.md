@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **导入导出（M9 / P1）**：
+  - DSL `export <Api> as csv|xlsx`（引用已声明 api；检查层 `dsl-export-unknown-api` /
+    `dsl-export-no-list` / `dsl-export-unknown-format` + merge 期 (api,format) 去重）；
+  - Rust 后端：`src/export.rs`（EXPORT_TARGETS 静态展开，列名取自 plan_tables 与 DDL 一致）
+    + `GET /api/{plural}/export.csv` 全量 `SELECT *` 流式 CSV（try_get 类型降级解码 +
+    RFC4180 转义）+ `export.xlsx` 显式 501（FORMA_EXPORT_DRIVER，外部驱动集成点）；
+  - OpenAPI：`/api/{plural}/export.csv`（text/csv）+ `.xlsx`（501）；Web 列表页「导出 CSV」按钮；
+  - 无 export 声明的工程全链路零产物；
+  - 验证：回归 `tests/export.rs`（3 项）+ 生成端真实 `cargo check`（0 错误）+
+    `npx tsc --noEmit`（0 错误）。
+
+### Added
 - **文件上传（M9 / P1）**：
   - 内建字段类型 `Attachment`（存储文件 URL 引用；MySQL→VARCHAR(500)、Rust/TS/Dart→String），
     四目标映射齐备（`BUILTIN_TYPES` 11→12，一致性回归更新）；

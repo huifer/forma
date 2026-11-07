@@ -20,6 +20,8 @@ pub struct Program {
     pub jobs: Vec<JobDecl>,
     /// 实时推送（M10/P1）：SSE 通道声明。
     pub lives: Vec<LiveDecl>,
+    /// 数据导出（M9/P1）：`export <Api> as csv|xlsx`（从 api 的 list 读取全量行）。
+    pub exports: Vec<ExportDecl>,
     /// 认证模块（M5）；None = 纯公开应用
     pub auth: Option<AuthDecl>,
 }
@@ -373,6 +375,19 @@ pub struct JobDecl {
     pub file: Option<String>,
 }
 
+/// 数据导出声明（M9/P1）：`export <Api> as csv|xlsx`。
+///
+/// 语义：从所引用 api 的 list 读取**全量**行输出 CSV；xlsx 在 v1 显式 501
+/// （外部驱动集成点，零新增依赖宪法）。名称由 (api, format) 自动派生。
+#[derive(Debug, Clone)]
+pub struct ExportDecl {
+    pub name: String,
+    pub api: String,
+    pub format: String,
+    pub line: usize,
+    pub file: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct CommandDecl {
     pub name: String,
@@ -661,6 +676,7 @@ impl<'a> Parser<'a> {
             ir_version: crate::dsl::IR_VERSION.to_string(),
             jobs: Vec::new(),
             lives: Vec::new(),
+            exports: Vec::new(),
             app: None,
             enums: Vec::new(),
             entities: Vec::new(),
@@ -724,6 +740,11 @@ impl<'a> Parser<'a> {
                 "live" if tok.kind == TokKind::Ident => {
                     if let Some(l) = self.parse_live() {
                         program.lives.push(l);
+                    }
+                }
+                "export" if tok.kind == TokKind::Ident => {
+                    if let Some(e) = self.parse_export() {
+                        program.exports.push(e);
                     }
                 }
                 _ => {
@@ -1819,6 +1840,41 @@ impl<'a> Parser<'a> {
             }
         }
         self.expect_punct("}");
+        Some(decl)
+    }
+
+    // ── export（数据导出，M9/P1）──
+
+    /// `export Orders as csv` —— 从 api 的 list 读取全量行输出 CSV。
+    fn parse_export(&mut self) -> Option<ExportDecl> {
+        let decl_line = self.peek().line;
+        self.next(); // export
+        let api = self.expect_ident()?;
+        let mut decl = ExportDecl {
+            name: String::new(),
+            api,
+            format: String::new(),
+            line: decl_line,
+            file: None,
+        };
+        if !self.is_kw("as") {
+            self.error_at(
+                &self.peek().clone(),
+                "expected 'as' after api name in export declaration",
+            );
+            self.next();
+            return Some(decl);
+        }
+        self.next(); // as
+        if self.peek().kind == TokKind::Ident {
+            decl.format = self.next().value;
+        } else {
+            self.error_at(
+                &self.peek().clone(),
+                "expected format (csv|xlsx) after 'as' in export declaration",
+            );
+        }
+        decl.name = format!("{}-export", decl.api);
         Some(decl)
     }
 
