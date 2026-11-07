@@ -50,7 +50,8 @@ fn generated_behavior_tests_are_same_source() {
     let dir = tmp_dir("same-source");
     write_project(&dir, &build_fm());
     let (program, _) = forma::dsl::load_program(&dir, &["forma/**/*.fm".into()]).unwrap();
-    let web = forma::emit::emit_web_react(&dir, &program, "generated/web", "vectors").unwrap();
+    let web =
+        forma::emit::emit_web_react(&dir, &program, "generated/web", "vectors", false).unwrap();
     let mobile = forma::emit::emit_flutter(&dir, &program, "generated/mobile", "vectors").unwrap();
 
     let web_test = web
@@ -208,6 +209,7 @@ fn rule_boundaries_are_consistent_across_targets() {
         &program,
         &out.join("web").to_string_lossy(),
         "vectors",
+        false,
     )
     .unwrap();
     forma::emit::emit_flutter(

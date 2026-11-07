@@ -70,6 +70,8 @@ pub struct TargetConfig {
     /// target 专用引擎（database: mysql | postgres | postgresql | sqlite）
     pub engine: Option<String>,
     pub out: Option<String>,
+    /// M9/P1：前端表单库（react-hook-form）；缺省 = 受控 state 表单（零变化）
+    pub uses_rhf: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -360,6 +362,11 @@ fn parse_target_config(cfg: &serde_yaml::Mapping) -> TargetConfig {
             .get(serde_yaml::Value::String("out".into()))
             .and_then(|v| v.as_str())
             .map(String::from),
+        uses_rhf: cfg
+            .get(serde_yaml::Value::String("usesRhf".into()))
+            .or_else(|| cfg.get(serde_yaml::Value::String("uses_rhf".into())))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
     }
 }
 

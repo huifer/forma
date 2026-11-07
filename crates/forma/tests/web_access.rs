@@ -127,8 +127,14 @@ fn generate_web(dir: &Path) -> String {
     let source = loaded.manifest.source.clone().unwrap();
     let (program, _) = forma::dsl::load_program(&loaded.dir, &source).unwrap();
     let out = dir.join("generated/web");
-    forma::emit::emit_web_react(&loaded.dir, &program, &out.to_string_lossy(), "webaccess")
-        .unwrap();
+    forma::emit::emit_web_react(
+        &loaded.dir,
+        &program,
+        &out.to_string_lossy(),
+        "webaccess",
+        false,
+    )
+    .unwrap();
     fs::read_to_string(out.join("src/pages/StudentList.tsx")).unwrap()
 }
 
@@ -142,8 +148,14 @@ fn access_rules_produce_access_ts() {
     let source = loaded.manifest.source.clone().unwrap();
     let (program, _) = forma::dsl::load_program(&loaded.dir, &source).unwrap();
     let out = dir.join("generated/web");
-    forma::emit::emit_web_react(&loaded.dir, &program, &out.to_string_lossy(), "webaccess")
-        .unwrap();
+    forma::emit::emit_web_react(
+        &loaded.dir,
+        &program,
+        &out.to_string_lossy(),
+        "webaccess",
+        false,
+    )
+    .unwrap();
 
     let access = fs::read_to_string(out.join("src/access.ts")).unwrap();
     // 规则内容：实体 → 受约束操作 + 允许角色
@@ -205,8 +217,14 @@ fn unrestricted_entity_is_untouched() {
     let source = loaded.manifest.source.clone().unwrap();
     let (program, _) = forma::dsl::load_program(&loaded.dir, &source).unwrap();
     let out = dir.join("generated/web");
-    forma::emit::emit_web_react(&loaded.dir, &program, &out.to_string_lossy(), "webaccess")
-        .unwrap();
+    forma::emit::emit_web_react(
+        &loaded.dir,
+        &program,
+        &out.to_string_lossy(),
+        "webaccess",
+        false,
+    )
+    .unwrap();
     let school = fs::read_to_string(out.join("src/pages/SchoolList.tsx")).unwrap();
 
     // 无规则的实体：不得引入 useCan / 不得包裹按钮
@@ -275,8 +293,14 @@ page StudentEdit {
     let source = loaded.manifest.source.clone().unwrap();
     let (program, _) = forma::dsl::load_program(&loaded.dir, &source).unwrap();
     let out = dir.join("generated/web");
-    forma::emit::emit_web_react(&loaded.dir, &program, &out.to_string_lossy(), "webaccess")
-        .unwrap();
+    forma::emit::emit_web_react(
+        &loaded.dir,
+        &program,
+        &out.to_string_lossy(),
+        "webaccess",
+        false,
+    )
+    .unwrap();
 
     assert!(
         !out.join("src/access.ts").exists(),
@@ -354,8 +378,14 @@ auth module {
     let source = loaded.manifest.source.clone().unwrap();
     let (program, _) = forma::dsl::load_program(&loaded.dir, &source).unwrap();
     let out = dir.join("generated/web");
-    forma::emit::emit_web_react(&loaded.dir, &program, &out.to_string_lossy(), "webaccess")
-        .unwrap();
+    forma::emit::emit_web_react(
+        &loaded.dir,
+        &program,
+        &out.to_string_lossy(),
+        "webaccess",
+        false,
+    )
+    .unwrap();
     let access = fs::read_to_string(out.join("src/access.ts")).unwrap();
 
     // 交集：{admin, teacher} ∩ {teacher, student} = {teacher}

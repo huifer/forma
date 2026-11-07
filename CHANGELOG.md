@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **React Hook Form 适配（M9 / P1）**：
+  - manifest opt-in：`targets.frontend.usesRhf: true`（缺省 = 受控 state 表单，产物零变化）；
+  - 表单页改用 `useForm` + `register`（文本）/ `useController`（Select 关系与枚举）/ `setValue`
+    （Attachment 上传回填）；`handleSubmit` 内仍调用 validators.ts 的 validateCreate/Update
+    并手动 `setError`——**校验单一来源不变，不引入第二套 zod schema**；
+  - package.json 按需引入 `react-hook-form`（无 opt-in 零依赖）；
+  - 回归 `tests/web_rhf.rs`（2 项：opt-in 生成 RHF 页面 + 缺省零变化）；
+  - 生成端验证：`npx tsc --noEmit` 0 错 + `npm run build`（vite）通过。
+
+### Added
 - **导入导出（M9 / P1）**：
   - DSL `export <Api> as csv|xlsx`（引用已声明 api；检查层 `dsl-export-unknown-api` /
     `dsl-export-no-list` / `dsl-export-unknown-format` + merge 期 (api,format) 去重）；

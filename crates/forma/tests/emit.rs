@@ -89,7 +89,7 @@ fn rust_backend_emits_compilable_shape() {
 #[test]
 fn web_emits_pages_and_validators() {
     let (dir, program) = school_program();
-    let files = emit_web_react(&dir, &program, "generated/web", "school").unwrap();
+    let files = emit_web_react(&dir, &program, "generated/web", "school", false).unwrap();
     let pages: Vec<&str> = files
         .iter()
         .filter_map(|f| f.path.split('/').next_back())

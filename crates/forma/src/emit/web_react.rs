@@ -10,6 +10,7 @@ pub fn emit_web_react(
     program: &Program,
     out_dir: &str,
     app_name: &str,
+    uses_rhf: bool,
 ) -> Result<Vec<crate::generators::GeneratedFile>> {
     if program.entities.is_empty() || program.pages.is_empty() {
         return Ok(vec![]);
@@ -24,7 +25,7 @@ pub fn emit_web_react(
     files.push(file(
         out_dir,
         "package.json",
-        package_json(app_name, !program.charts.is_empty()),
+        package_json(app_name, !program.charts.is_empty(), uses_rhf),
         "gen-web",
     ));
     files.push(file(out_dir, "vite.config.ts", vite_config(), "gen-web"));
@@ -76,7 +77,7 @@ pub fn emit_web_react(
     for page in &program.pages {
         let content = match &page.body {
             crate::dsl::PageBody::Table(t) => list_page(program, page, t),
-            crate::dsl::PageBody::Form(f) => edit_page(program, page, f),
+            crate::dsl::PageBody::Form(f) => edit_page(program, page, f, uses_rhf),
             crate::dsl::PageBody::Detail(d) => detail_page(program, page, d),
             crate::dsl::PageBody::Chart(c) => chart_page(program, page, c),
         };
@@ -138,7 +139,7 @@ fn file(
     }
 }
 
-fn package_json(app: &str, has_charts: bool) -> String {
+fn package_json(app: &str, has_charts: bool, uses_rhf: bool) -> String {
     let mut s = String::from("{\n");
     s.push_str(&format!("  \"name\": \"{}-web\",\n", app.to_lowercase()));
     s.push_str(
@@ -160,6 +161,10 @@ fn package_json(app: &str, has_charts: bool) -> String {
     // 有 chart 时引入 echarts（可视化适配层）
     if has_charts {
         s.push_str(",\n    \"echarts\": \"^5.5.1\"");
+    }
+    // M9/P1：React Hook Form（opt-in：targets.frontend.usesRhf）
+    if uses_rhf {
+        s.push_str(",\n    \"react-hook-form\": \"^7.53.0\"");
     }
     s.push_str(
         r#"
@@ -1933,7 +1938,15 @@ pub fn display_field_of(program: &Program, entity_name: &str) -> String {
     "id".to_string()
 }
 
-fn edit_page(program: &Program, page: &crate::dsl::PageDecl, cfg: &crate::dsl::FormCfg) -> String {
+fn edit_page(
+    program: &Program,
+    page: &crate::dsl::PageDecl,
+    cfg: &crate::dsl::FormCfg,
+    uses_rhf: bool,
+) -> String {
+    if uses_rhf {
+        return edit_page_rhf(program, page, cfg);
+    }
     let Some(entity) = super::find_entity(program, &cfg.entity) else {
         return "// unknown entity".to_string();
     };
@@ -2313,5 +2326,248 @@ export function Layout() {{
 }}
 "#,
         nav = nav
+    )
+}
+
+/// RHF 变体表单页（M9/P1）：`useForm` + `register`/`useController`，
+/// 校验复用 validators.ts（手动 `setError`，保持校验单一来源，不引入第二套 zod schema）。
+/// 仅 `targets.frontend.usesRhf: true` 时生成；缺省受控 state 表单零变化。
+fn edit_page_rhf(
+    program: &Program,
+    page: &crate::dsl::PageDecl,
+    cfg: &crate::dsl::FormCfg,
+) -> String {
+    let Some(entity) = super::find_entity(program, &cfg.entity) else {
+        return "// unknown entity".to_string();
+    };
+    let entity_name = entity.name.clone();
+    let snake_e = crate::identity::to_snake_case(&entity_name);
+    let title = super::pick_message(&page.title, &page.name);
+
+    // 字段级策略（体验层）：当前角色不可见的字段隐藏
+    let field_gated = crate::dsl::field_policy_roles(program)
+        .iter()
+        .any(|(e, _, _)| e == &entity_name);
+    let access_import = if field_gated {
+        "import { canSeeField, useCurrentRole } from \"../access\";\n".to_string()
+    } else {
+        String::new()
+    };
+    let needs_upload = entity.fields.iter().any(|f| f.type_name == "Attachment");
+    let upload_import = if needs_upload {
+        "import { uploadFile } from \"../api\";\n".to_string()
+    } else {
+        String::new()
+    };
+    let role_hook = if field_gated {
+        "  const role = useCurrentRole();\n".to_string()
+    } else {
+        String::new()
+    };
+
+    let main_api = cfg
+        .submits
+        .first()
+        .map(|s| s.api_op.split('.').next().unwrap_or("").to_string())
+        .unwrap_or_default();
+    let create_redirect = cfg
+        .submits
+        .iter()
+        .find(|s| s.is_create)
+        .map(|s| s.redirect.clone())
+        .unwrap_or_default();
+    let update_redirect = cfg
+        .submits
+        .iter()
+        .find(|s| !s.is_create)
+        .map(|s| s.redirect.clone())
+        .unwrap_or_default();
+
+    let mut field_inputs = String::new();
+    let mut option_codes = String::new();
+    let mut seen_sources: Vec<String> = Vec::new();
+    for f in &cfg.fields {
+        let col = crate::identity::to_snake_case(&f.path);
+        let field_decl = entity.fields.iter().find(|x| x.name == f.path);
+        let label = humanize(&f.path);
+        let is_relation = field_decl
+            .map(|d| super::is_relation(program, &d.type_name))
+            .unwrap_or(false);
+        let input: String;
+        let is_enum_widget = (is_relation || f.widget == "Select")
+            && f.from
+                .clone()
+                .or_else(|| field_decl.map(|d| d.type_name.clone()))
+                .map(|from| super::is_enum(program, &from))
+                .unwrap_or(false);
+        if is_relation || f.widget == "Select" {
+            let from = f
+                .from
+                .clone()
+                .or_else(|| field_decl.map(|d| d.type_name.clone()))
+                .unwrap_or_default();
+            // Select 走 useController（受控 value/onChange）
+            let ctl = format!("useController({{ name: \"{col}\", control: form.control }})");
+            if is_enum_widget {
+                input = format!(
+                    "{{(({{field}}) => (<Select value={{String(field.value ?? \"\")}} onChange={{field.onChange}} options={{enumOptions(\"{from}\")}} />))({ctl})}}"
+                );
+            } else {
+                if !seen_sources.contains(&from) {
+                    seen_sources.push(from.clone());
+                }
+                let display = display_field_of(program, &from);
+                input = format!(
+                    "{{(({{field}}) => (<Select value={{String(field.value ?? \"\")}} onChange={{field.onChange}} options={{({from}OptionsQuery.data ?? []).map((o: any) => ({{ value: o.id, label: o.{display} }}))}} />))({ctl})}}"
+                );
+            }
+        } else if f.widget == "Textarea" {
+            input = format!("<Textarea {{...form.register(\"{col}\")}} />");
+        } else if field_decl
+            .map(|d| d.type_name == "Attachment")
+            .unwrap_or(false)
+        {
+            let selector = format!("{}.{}", entity_name, f.path);
+            input = format!(
+                "<div className=\"upload-field\"><Input type=\"file\" onChange={{async (e) => {{ const f = e.target.files?.[0]; if (!f) return; try {{ const res = await uploadFile(f, \"{selector}\"); form.setValue(\"{col}\", res.url); }} catch (err) {{ console.error(err); }} }}}} />{{form.getValues(\"{col}\") ? <a href={{String(form.getValues(\"{col}\"))}} target=\"_blank\" rel=\"noreferrer\">{{String(form.getValues(\"{col}\"))}}</a> : null}}</div>"
+            );
+        } else {
+            let input_type = match f.widget.as_str() {
+                "Input email" => "email",
+                "Input money" => "number",
+                "Input datetime" => "datetime-local",
+                _ => "text",
+            };
+            input = format!("<Input type=\"{input_type}\" {{...form.register(\"{col}\")}} />");
+        }
+        // 字段级策略（体验层）：当前角色不可见的字段整块隐藏
+        let gated_field = crate::dsl::field_policy_roles(program)
+            .iter()
+            .any(|(e, ff, _)| e == &entity_name && ff == &f.path);
+        let field_block = format!(
+            "        <Field label=\"{label}\" error={{String(form.formState.errors[\"{col}\"]?.message ?? \"\")}}>\n          {input}\n        </Field>\n"
+        );
+        if gated_field {
+            field_inputs.push_str(&format!(
+                "        {{canSeeField(\"{entity_name}\", \"{field}\", role) && (\n{field_block}        )}}\n",
+                field = f.path
+            ));
+        } else {
+            field_inputs.push_str(&field_block);
+        }
+    }
+    for src_entity in &seen_sources {
+        let src_lower = crate::identity::to_snake_case(src_entity);
+        option_codes.push_str(&format!(
+            "  const {src_entity}OptionsQuery = useQuery({{ queryKey: [\"{src_lower}-options\"], queryFn: () => {src_entity}Api.list({{ pageSize: 200 }}) }});\n"
+        ));
+    }
+
+    let mut api_imports: Vec<String> = Vec::new();
+    for s in &cfg.submits {
+        let api_name = s.api_op.split('.').next().unwrap_or("").to_string();
+        let import_name = format!("{}Api", api_name);
+        if !api_imports.contains(&import_name) {
+            api_imports.push(import_name);
+        }
+    }
+    for src in &seen_sources {
+        let import_name = format!("{}Api", src);
+        if !api_imports.contains(&import_name) {
+            api_imports.push(import_name);
+        }
+    }
+    let list_imports_str = api_imports.join(", ");
+
+    format!(
+        r#"// @generated by Forma (gen-web) — do not edit manually.
+import {{ useEffect }} from "react";
+import {{ useMutation, useQuery, useQueryClient }} from "@tanstack/react-query";
+import {{ useNavigate, useParams }} from "@tanstack/react-router";
+import {{ useForm, useController }} from "react-hook-form";
+import {{ Button, Card, Field, Input, Select, Textarea }} from "../ui";
+import {{ {list_imports_str} }} from "../api";
+import {{ enumOptions, fmtDateTime, fmtMoney }} from "../format";
+import {{ validateCreate{entity_name}, validateUpdate{entity_name} }} from "../validators";
+import {{ Create{entity_name}, Update{entity_name} }} from "../types";
+{access_import}{upload_import}
+const title = "{title}";
+
+export function {page_name}() {{
+  const params = useParams({{ strict: false }}) as {{ id?: string }};
+  const id = params.id;
+  const isCreate = !id || id === "new";
+  const qc = useQueryClient();
+{role_hook}  const navigate = useNavigate();
+  const form = useForm<Record<string, any>>();
+  const existing = useQuery({{
+    queryKey: ["{snake_e}", id],
+    queryFn: () => {main_api}Api.get(id!),
+    enabled: !!id && !isCreate,
+  }});
+{option_codes}  useEffect(() => {{
+    if (existing.data) form.reset(existing.data as Record<string, any>);
+  }}, [existing.data]);
+
+  const mut = useMutation({{
+    mutationFn: (redirect: string) =>
+      isCreate ? {main_api}Api.create(form.getValues() as any) : {main_api}Api.update(id!, form.getValues() as any),
+    onSuccess: (_data, redirect) => {{
+      qc.invalidateQueries({{ queryKey: ["{snake_e}"] }});
+      if (redirect) navigate({{ to: redirect }});
+    }},
+    onError: (err: any) => {{
+      const map: Record<string, string> = {{}};
+      for (const f of err.fields ?? []) map[f.field] = f.message;
+      for (const [field, message] of Object.entries(map)) form.setError(field, {{ message }});
+    }},
+  }});
+
+  function submit(e: React.FormEvent) {{
+    e.preventDefault();
+    form.handleSubmit((values: Record<string, any>) => {{
+      const errs = isCreate
+        ? validateCreate{entity_name}(values)
+        : validateUpdate{entity_name}(values);
+      if (errs.length > 0) {{
+        for (const er of errs) form.setError(er.field, {{ message: er.message }});
+        return;
+      }}
+      form.clearErrors();
+      const redirect = isCreate ? "{create_redirect}" : "{update_redirect}";
+      mut.mutate(redirect);
+    }})(e);
+  }}
+
+  return (
+    <div>
+      <div className="page-header"><h1>{{title}}</h1></div>
+      <Card>
+        <form onSubmit={{submit}}>
+          <div className="form-grid">
+{field_inputs}          </div>
+          {{form.formState.errors.__check ? <p className="form-error">{{String(form.formState.errors.__check.message ?? "")}}</p> : null}}
+          <div className="form-actions">
+            <Button type="submit" disabled={{mut.isPending}}>{{mut.isPending ? "保存中…" : "保存"}}</Button>
+            <Button variant="secondary" onClick={{() => history.back()}}>取消</Button>
+          </div>
+        </form>
+      </Card>    </div>
+  );
+}}
+"#,
+        access_import = access_import,
+        upload_import = upload_import,
+        role_hook = role_hook,
+        title = escape_ts(&title),
+        page_name = page.name,
+        snake_e = snake_e,
+        main_api = main_api,
+        option_codes = option_codes,
+        entity_name = entity_name,
+        create_redirect = create_redirect,
+        update_redirect = update_redirect,
+        list_imports_str = list_imports_str,
+        field_inputs = field_inputs,
     )
 }

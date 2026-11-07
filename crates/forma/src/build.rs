@@ -266,7 +266,17 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
     } else {
         push(
             "web-react",
-            crate::emit::emit_web_react(&dir, &program, &web_out, &app_name),
+            crate::emit::emit_web_react(
+                &dir,
+                &program,
+                &web_out,
+                &app_name,
+                targets
+                    .frontend
+                    .as_ref()
+                    .map(|t| t.uses_rhf)
+                    .unwrap_or(false),
+            ),
         )?;
     }
     // viz runtime 面向 web-react（echarts 依赖 + client 组件）；Next.js 暂不接图表（后续增强）

@@ -98,6 +98,7 @@ fn emit_all(dir: &Path, fm: &str) -> (String, String, String, String) {
         &program,
         &out.join("web").to_string_lossy(),
         "cursordemo",
+        false,
     )
     .unwrap();
     forma::emit::emit_openapi(
@@ -259,8 +260,14 @@ page EventList {
         "fixture must be valid: {diagnostics:?}"
     );
     let out = dir.join("generated/web");
-    forma::emit::emit_web_react(&loaded.dir, &program, &out.to_string_lossy(), "cursordemo")
-        .unwrap();
+    forma::emit::emit_web_react(
+        &loaded.dir,
+        &program,
+        &out.to_string_lossy(),
+        "cursordemo",
+        false,
+    )
+    .unwrap();
     let page = fs::read_to_string(out.join("src/pages/EventList.tsx")).unwrap();
     assert!(
         page.contains("async () => (await SchoolApi.list({ pageSize: 200 })).items"),
@@ -321,8 +328,14 @@ fn cursor_api_types_include_cursor_page_envelope() {
     let source = loaded.manifest.source.clone().unwrap();
     let (program, _) = forma::dsl::load_program(&loaded.dir, &source).unwrap();
     let out = dir.join("generated/web");
-    forma::emit::emit_web_react(&loaded.dir, &program, &out.to_string_lossy(), "cursordemo")
-        .unwrap();
+    forma::emit::emit_web_react(
+        &loaded.dir,
+        &program,
+        &out.to_string_lossy(),
+        "cursordemo",
+        false,
+    )
+    .unwrap();
     let types = fs::read_to_string(out.join("src/types.ts")).unwrap();
     let api = fs::read_to_string(out.join("src/api.ts")).unwrap();
     assert!(types.contains("export interface CursorPage<T>"), "{types}");
