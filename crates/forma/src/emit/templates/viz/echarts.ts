@@ -154,6 +154,8 @@ export function createChart(
         series: params?.seriesName,
         dataIndex: params?.dataIndex ?? -1,
         value: params?.value,
+        // V0.4 联动：类目名（x 维度值）——dashboard 据此设置筛选器
+        name: params?.name,
       });
     });
     chart.on("legendselectchanged", (params: any) => {

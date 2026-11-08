@@ -2891,11 +2891,27 @@ fn dashboard_page(
             chart = it.chart,
             fetch = fetch,
         ));
+        // V0.4 联动事件模型：点击图表元素（x 维度值）→ 设置 dashboard 筛选器
+        // （仅当该 x 字段在 cfg.filters 中声明，保证 ListParams 类型一致）
+        let x_filter = program
+            .charts
+            .iter()
+            .find(|c| c.name == it.chart)
+            .and_then(|c| c.encoding.x.as_ref().map(|ch| ch.field.clone()))
+            .map(|f| crate::identity::to_snake_case(&f))
+            .filter(|f| cfg.filters.iter().any(|fl| crate::identity::to_snake_case(fl) == *f));
+        let on_event = match x_filter {
+            Some(field) => format!(
+                " onEvent={{(e) => {{ if (e.type === \"select\" && e.name !== undefined) setFilters((p) => ({{ ...p, {field}: e.name as string }})); }}}}"
+            ),
+            None => String::new(),
+        };
         grid_items.push_str(&format!(
-            "          <div style={{{{ gridColumn: \"span {w}\", minHeight: {h} }}}}>\n            <FormaChart spec={{{c}Spec}} option={{{c}Option}} source={{{src}Source}} />\n          </div>\n",
+            "          <div style={{{{ gridColumn: \"span {w}\", minHeight: {h} }}}}>\n            <FormaChart spec={{{c}Spec}} option={{{c}Option}} source={{{src}Source}}{on_event} />\n          </div>\n",
             w = it.w,
             h = it.h,
             c = it.chart,
+            on_event = on_event,
             src = chart_lower,
         ));
     }

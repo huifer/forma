@@ -98,7 +98,7 @@ export type ChartData =
 
 /** 统一事件模型（不绑定任何图表库事件名，RFC-0001 §8.4）。 */
 export type VizEventPayload =
-  | { type: "select"; series?: string; dataIndex: number; value: unknown }
+  | { type: "select"; series?: string; dataIndex: number; value: unknown; name?: string }
   | { type: "legend-toggle"; series: string; visible: boolean }
   | { type: "range-change"; start: number; end: number }
   | { type: "row-click"; rowIndex: number; row: Row };

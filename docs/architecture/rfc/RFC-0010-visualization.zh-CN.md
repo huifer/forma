@@ -819,7 +819,7 @@ V0.5（theme + preview + 浏览器渲染门）已落地；V0.4 / V0.6 待排期�
 | V0.1 | Chart IR、十种图表类型词表、ECharts Adapter（确定性投影 + 按需注册）、React Runtime、页面挂载、MCP 三工具、23 条验收测试 | **已落地** |
 | V0.2 | Data Binding 完整化（分页/服务端聚合）、Metric Card、Table widget | **已落地**（metric/table + cursor 源解包；服务端聚合阈值见 §16 未决） |
 | V0.3 | Dashboard IR、Grid/Flex 布局、响应式断点 | **已落地**（dashboard grid + 筛选联动；Flex / 响应式断点未做，见 §16 未决） |
-| V0.4 | Tooltip/Legend/Filter/Drill-down/联动事件模型 | 规划 |
+| V0.4 | Tooltip/Legend/Filter/Drill-down/联动事件模型 | **部分落地**（2026-11-08）：Tooltip/Legend 已有；**联动事件模型**——图表点击（`select` 事件带类目名）→ dashboard 筛选器 → 其他图表重取（x 字段在 `filters` 中声明时接线）；Drill-down 评估见 §16 |
 | V0.5 | Theme、Preview、Runtime Verification（浏览器渲染门） | **已落地**（theme dark/data-screen + preview + 浏览器渲染门，回归 `tests/visualization_v05.rs`） |
 | V0.6 | AntV Adapter、领域图表扩展（GIS / 金融 / 工业监控）、移动端图表 | 规划（BI 语义建模单独立项；目标扩栈已撤销，不排期） |
 
@@ -882,6 +882,11 @@ V0.5（theme + preview + 浏览器渲染门）已落地；V0.4 / V0.6 待排期�
    - 依赖：仅当存在可支持图表时 `pubspec.yaml` 引入 `fl_chart`（零变化原则）；
    - 验证：`flutter analyze` 零 issue（school 的 CourseCapacity bar 页）。
    **未支持**：pie/gauge/radar 等复杂类型与 transform 聚合——留待真实需求。
+
+5. **Drill-down（下钻明细）评估（2026-11-08）**：联动筛选已覆盖主要场景（点击图表
+   → 全页筛选）；**明细下钻**（点击 → 跳转列表页/展开明细面板）需要页面路由传参 +
+   列表页初始筛选，工作量中等且移动端无收益。**结论：v1 不做**，留待真实需求；
+   若做，推荐形态为「跳转列表页 + URL query 初始筛选」（TanStack Router useSearch）。
 
 ## 17. 架构上下文与边界（Architectural Context）
 
