@@ -130,8 +130,10 @@ fn default_project_keeps_local_usestate_zero_change() {
     let pkg = fs::read_to_string(dir.join("generated/web/package.json")).unwrap();
     assert!(!pkg.contains("zustand"), "{pkg}");
     let page = fs::read_to_string(dir.join("generated/web/src/pages/Tasks.tsx")).unwrap();
+    // V0.4 drill-down：初始筛选从 URL query 读取（dashboard 跳转携带）
     assert!(
-        page.contains("const [filters, setFilters] = useState<Record<string, string | null>>({});")
+        page.contains("new URLSearchParams(window.location.search)"),
+        "{page}"
     );
     assert!(!page.contains("useTaskListStore"));
 }

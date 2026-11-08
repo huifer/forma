@@ -1549,6 +1549,25 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                         })
                     })
                     .collect();
+                // V0.4 drill-down：目标路由必须是已声明页面（否则跳转 404）
+                for item in &dash.items {
+                    if let Some(route) = &item.drilldown {
+                        let known = program.pages.iter().any(|p| &p.route == route);
+                        if !known {
+                            d.push(Diagnostic {
+                                severity: "error".into(),
+                                code: "dsl-dashboard-unknown-drilldown".into(),
+                                message: format!(
+                                    "page '{}' dashboard item '{}' drilldown target '{}' is not a declared page route",
+                                    page.name, item.chart, route
+                                ),
+                                file: ctx.file.clone(),
+                                line: ctx.line,
+                                nodes: None,
+                            });
+                        }
+                    }
+                }
                 for filter in &dash.filters {
                     let known = bound_api_filters
                         .iter()

@@ -132,7 +132,10 @@ fn chart_without_declared_filter_is_not_wired() {
     fs::write(
         dir.join("forma/app.fm"),
         FM.replace("filters [status]", "filters [customer]")
-            .replace("x { field customer type nominal }", "x { field customer type nominal }"),
+            .replace(
+                "x { field customer type nominal }",
+                "x { field customer type nominal }",
+            ),
     )
     .unwrap();
     // 只保留 ByCustomer（x=customer 在 filters）→ 1 处接线；移除 ByStatus 避免干扰
@@ -144,4 +147,100 @@ fn chart_without_declared_filter_is_not_wired() {
     let page = fs::read_to_string(dir.join("generated/web/src/pages/Dashboard.tsx")).unwrap();
     assert!(page.contains("customer: e.name"), "{page}");
     assert_eq!(page.matches("onEvent=").count(), 1, "{page}");
+}
+
+#[test]
+fn drilldown_generates_navigate_and_list_reads_url() {
+    let dir = tmp("drilldown");
+    fs::write(
+        dir.join("forma.yaml"),
+        "project:\n  name: viz04\n  version: 0.1.0\nsource: [\"forma/**/*.fm\"]\ntargets:\n  web:\n    framework: react\n    out: generated/web\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app viz04 { version = "0.1.0" }
+entity Order {
+  id     Uuid @id @default(uuid)
+  status String(20)
+  amount Decimal(12,2)
+}
+api Orders { entity Order operations [list get create update delete] list { filters [status] } }
+chart ByStatus {
+  type bar
+  title { en "By status" }
+  source Orders.list
+  encoding { x { field status type nominal } y { field amount type quantitative } }
+}
+page Dashboard {
+  route "/dashboard"
+  title { en "Dashboard" }
+  dashboard {
+    grid { ByStatus w 12 h 300 drilldown "/orders" }
+    filters [status]
+  }
+}
+page OrderList {
+  route "/orders"
+  title { en "Orders" }
+  table {
+    query   Orders.list
+    columns [status]
+    actions { row [delete → Orders.delete confirm] }
+  }
+}
+"#,
+    )
+    .unwrap();
+    forma::build::run_build(&dir).unwrap();
+    let dash = fs::read_to_string(dir.join("generated/web/src/pages/Dashboard.tsx")).unwrap();
+    assert!(dash.contains("navigate({ to: \"/orders\""), "{dash}");
+    assert!(
+        dash.contains("search: { status: e.name as string }"),
+        "{dash}"
+    );
+    assert!(dash.contains("useNavigate"), "{dash}");
+    let list = fs::read_to_string(dir.join("generated/web/src/pages/OrderList.tsx")).unwrap();
+    assert!(list.contains("URLSearchParams"), "{list}");
+}
+
+#[test]
+fn drilldown_target_must_be_declared_page() {
+    let dir = tmp("drilldown-bad");
+    fs::write(
+        dir.join("forma.yaml"),
+        "project:\n  name: viz04\n  version: 0.1.0\nsource: [\"forma/**/*.fm\"]\ntargets:\n  web:\n    framework: react\n    out: generated/web\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app viz04 { version = "0.1.0" }
+entity Order { id Uuid @id @default(uuid) status String(20) amount Decimal(12,2) }
+api Orders { entity Order operations [list get] list { filters [status] } }
+chart ByStatus {
+  type bar
+  title { en "By status" }
+  source Orders.list
+  encoding { x { field status type nominal } y { field amount type quantitative } }
+}
+page Dashboard {
+  route "/dashboard"
+  title { en "Dashboard" }
+  dashboard {
+    grid { ByStatus w 12 h 300 drilldown "/nope" }
+    filters [status]
+  }
+}
+"#,
+    )
+    .unwrap();
+    let (program, _) = forma::dsl::load_program(&dir, &["forma/**/*.fm".into()]).unwrap();
+    let sem = forma::dsl::check_program(&program);
+    let codes: Vec<String> = sem.iter().map(|d| d.code.clone()).collect();
+    assert!(
+        codes.iter().any(|c| c == "dsl-dashboard-unknown-drilldown"),
+        "{codes:?}"
+    );
 }

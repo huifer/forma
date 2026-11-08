@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **可视化 V0.4：联动事件模型 + drill-down（RFC-0010 §13/§16）**：
+  - `select` 事件载荷带类目名；dashboard 页把图表点击接到筛选器（x 字段在 `filters`
+    中声明时）→ 其他图表经既有 filters-dependent source 重取；
+  - `drilldown "/route"` 声明（dashboard 条目）→ 点击跳转列表页 + URL query 初始筛选
+    （列表页读 URLSearchParams）；目标路由必须已声明（`dsl-dashboard-unknown-drilldown`）；
+  - 回归 `tests/visualization_v04.rs` 5 项；生成工程 `tsc --noEmit` 通过。
+
+### Changed
 - **RFC/spec 保留项全部推进（用户指令「都要做」）**：
   - **Secret Provider（RFC-0005 §18 / G-4）**：生成 `src/secret.rs`（`resolve` / `require`
     fail-closed，v1 不缓存避免密钥驻留）；`JWT_SECRET` / `TENANT_ADMIN_TOKEN` 走 Provider；

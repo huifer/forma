@@ -488,6 +488,8 @@ pub struct DashboardItemCfg {
     pub chart: String,
     pub w: Option<u32>,
     pub h: Option<u32>,
+    /// V0.4 drill-down：点击图表元素跳转到该页面（携带 x 维度筛选参数）
+    pub drilldown: Option<String>,
 }
 
 /// 页面挂载的图表：引用顶层 `chart` 块名。
@@ -2501,11 +2503,25 @@ impl<'a> Parser<'a> {
                             chart,
                             w: None,
                             h: None,
+                            drilldown: None,
                         };
                         while self.peek().kind == TokKind::Ident
-                            && matches!(self.peek().value.as_str(), "w" | "h")
+                            && matches!(self.peek().value.as_str(), "w" | "h" | "drilldown")
                         {
                             let key = self.next().value;
+                            if key == "drilldown" {
+                                // drilldown "/orders" 或 drilldown /orders：点击跳转该路由
+                                if self.peek().kind == TokKind::Str {
+                                    item.drilldown = Some(self.next().value.clone());
+                                } else if self.eat_punct("/") {
+                                    let mut route = String::from("/");
+                                    if let Some(seg) = self.expect_ident() {
+                                        route.push_str(&seg);
+                                    }
+                                    item.drilldown = Some(route);
+                                }
+                                continue;
+                            }
                             let n = self.parse_number().max(0.0) as u32;
                             if key == "w" {
                                 item.w = Some(n);

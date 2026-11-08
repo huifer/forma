@@ -1543,7 +1543,8 @@ fn list_page(
             "  const filters = {store}((s) => s.filters);\n  const setFilters = {store}((s) => s.setFilters);\n  const search = {store}((s) => s.search);\n  const setSearch = {store}((s) => s.setSearch);\n"
         )
     } else {
-        "  const [filters, setFilters] = useState<Record<string, string | null>>({});\n  const [search, setSearch] = useState(\"\");\n".to_string()
+        // V0.4 drill-down：URL query 作为初始筛选（dashboard 跳转携带）
+        "  const [filters, setFilters] = useState<Record<string, string | null>>(() => {\n    const q = new URLSearchParams(window.location.search);\n    return Object.fromEntries(q.entries());\n  });\n  const [search, setSearch] = useState(\"\");\n".to_string()
     };
     let store_import = if uses_zustand {
         format!(
@@ -2828,6 +2829,18 @@ fn dashboard_page(
         })
         .collect();
     let api_imports_str = api_imports.join(", ");
+    // V0.4 drill-down：有条目声明 drilldown 时注入 useNavigate
+    let has_drilldown = cfg.items.iter().any(|it| it.drilldown.is_some());
+    let navigate_import = if has_drilldown {
+        "import { useNavigate } from \"@tanstack/react-router\";\n"
+    } else {
+        ""
+    };
+    let navigate_hook = if has_drilldown {
+        "  const navigate = useNavigate();\n"
+    } else {
+        ""
+    };
 
     let mut filter_inputs = String::new();
     for f in &cfg.filters {
@@ -2899,12 +2912,24 @@ fn dashboard_page(
             .find(|c| c.name == it.chart)
             .and_then(|c| c.encoding.x.as_ref().map(|ch| ch.field.clone()))
             .map(|f| crate::identity::to_snake_case(&f))
-            .filter(|f| cfg.filters.iter().any(|fl| crate::identity::to_snake_case(fl) == *f));
-        let on_event = match x_filter {
-            Some(field) => format!(
+            .filter(|f| {
+                cfg.filters
+                    .iter()
+                    .any(|fl| crate::identity::to_snake_case(fl) == *f)
+            });
+        let drilldown = cfg
+            .items
+            .iter()
+            .find(|i| i.chart == it.chart)
+            .and_then(|i| i.drilldown.clone());
+        let on_event = match (&x_filter, &drilldown) {
+            (Some(field), Some(route)) => format!(
+                " onEvent={{(e) => {{ if (e.type === \"select\" && e.name !== undefined) navigate({{ to: \"{route}\", search: {{ {field}: e.name as string }} }}); }}}}"
+            ),
+            (Some(field), None) => format!(
                 " onEvent={{(e) => {{ if (e.type === \"select\" && e.name !== undefined) setFilters((p) => ({{ ...p, {field}: e.name as string }})); }}}}"
             ),
-            None => String::new(),
+            (None, _) => String::new(),
         };
         grid_items.push_str(&format!(
             "          <div style={{{{ gridColumn: \"span {w}\", minHeight: {h} }}}}>\n            <FormaChart spec={{{c}Spec}} option={{{c}Option}} source={{{src}Source}}{on_event} />\n          </div>\n",
@@ -2922,7 +2947,7 @@ import React from "react";
 import type {{ Row }} from "../viz/spec";
 import {{ Button, Card, Input }} from "../ui";
 import {{ {api_imports_str} }} from "../api";
-import {{ FormaChart }} from "../viz/runtime";
+import {{ FormaChart }} from "../viz/runtime";{navigate_import}
 {chart_imports}
 const title = "{title}";
 
@@ -2930,7 +2955,7 @@ const GRID_COLS = 12;
 const GRID_GAP = {gap};
 
 export function {page_name}() {{
-  const [filters, setFilters] = React.useState<Record<string, string>>({{}});
+  const [filters, setFilters] = React.useState<Record<string, string>>({{}});{navigate_hook}
 {sources}
   return (
     <div>
