@@ -1,0 +1,2 @@
+# gen-docker 产物写在工程根目录（不在 generated/ 下），CI/本地构建可重复生成
+docker-compose.yml

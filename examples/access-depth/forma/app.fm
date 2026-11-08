@@ -1,0 +1,62 @@
+// P3/C-3 CI reference app: arbitrary-depth row-level access traversal.
+// Covers generated-backend compilation for chained repo::find_{E} guards,
+// auth without @tenant, and command handlers (the combination that P2/A-2 found broken).
+
+app accessDepth {
+  version = "0.1.0"
+  locale = ["en"]
+}
+
+auth module {
+  provider jwt
+  roles [admin, viewer]
+  tokenHours 12
+}
+
+entity District {
+  id   Uuid       @id @default(uuid)
+  name String(50) @required
+  code String(20) @required
+}
+
+entity School {
+  id       Uuid       @id @default(uuid)
+  district District   @required
+  name     String(80) @required
+}
+
+entity Student {
+  id     Uuid       @id @default(uuid)
+  school School     @required
+  name   String(50) @required
+  note   Text?
+}
+
+api Students {
+  entity Student
+  operations [list get create update delete]
+}
+
+api Schools {
+  entity School
+  operations [list get]
+}
+
+rules AccessRules {
+  access Student {
+    update → role == "admin" && school.district.name == "HQ" && school.name != ""
+    delete → role == "admin" && school.district.code == "A"
+  }
+}
+
+page StudentList {
+  route "/students"
+  title { en "Students" }
+  table {
+    query   Students.list
+    columns [name]
+    actions {
+      row [delete → Students.delete confirm]
+    }
+  }
+}

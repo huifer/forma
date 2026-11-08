@@ -111,8 +111,10 @@ fn openapi_import_generates_valid_dsl() {
     assert!(dsl.contains("email Email"));
     assert!(dsl.contains("owner Owner"));
     assert!(dsl.contains("age Int @min(0) @max(100)"));
-    // photos 是数组（v1 跳过），不应出现
-    assert!(!dsl.contains("photos"));
+    // photos 是数组（v1 跳过），不作为字段生成，但必须在损失清单里可见
+    assert!(!dsl.contains("\n  photos "), "{dsl}");
+    assert!(dsl.contains("以下构造未映射"), "{dsl}");
+    assert!(dsl.contains("Pet.photos"), "{dsl}");
     // Pet 操作来自 paths：list(get /pets) + create(post) + get(get /pets/{id}) + delete
     assert!(dsl.contains("operations [list get create delete]"));
     // Owner 无路径 → 默认全量 CRUD

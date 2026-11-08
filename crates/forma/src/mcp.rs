@@ -261,6 +261,7 @@ pub fn call_tool(
                 .collect();
             Ok(serde_json::json!({
                 "project": report.project_name,
+                "irVersion": report.ir_version,
                 "totalFiles": report.total_files(),
                 "steps": steps,
             }))

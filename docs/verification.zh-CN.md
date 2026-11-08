@@ -86,12 +86,15 @@ L5 变更安全   Change Safety   这次变更能不能安全交付？
 
 - **MySQL**：`emit/replay.rs` 是 Forma SQL 子集的 MySQL 语义模拟器，`forma migrate verify` 在 **无数据库** 情况下重放整条迁移链，并与当前 DSL 派生的 schema 逐项比对；真实 MySQL 8 端到端作为最终验收。
 - **Rust**：生成 `axum + sqlx` 工程，`cargo check` / `cargo build` 通过。
+  CI 的 `generated-backend` job 对 **school + access-depth** 两个生成工程真实执行 `cargo check`
+  （覆盖 auth / 命令 / 无租户列 / 两层关系遍历组合）——这是 P2 轨道 A-2 抓出「`cargo test` 全绿但
+  生成后端编译不过」后补上的机器防线。
 - **Web**：生成 React + TanStack 工程，`tsc` 零错误、`vite build` 通过。
 - **Flutter**：生成 Dart 工程，`flutter analyze` 零 issue（`flutter build web` 生产编译）。
 
 ### L4 — 行为验证与规则一致性
 
-规则是 Forma 的一等公民，但「Rust 与 TypeScript 能生成相同的表达式」不代表两端执行结果一定相同（Decimal 精度、Null 处理、时区、日期边界、除零等）。因此 Forma 规划了**跨语言共享的测试向量**：同一组 `(输入, 期望)` 必须在 Rust、TypeScript、Dart 三端得到一致结果（见 [next-milestone.zh-CN.md](next-milestone.zh-CN.md) 的 F-004）。
+规则是 Forma 的一等公民，但「Rust 与 TypeScript 能生成相同的表达式」不代表两端执行结果一定相同（Decimal 精度、Null 处理、时区、日期边界、除零等）。因此 Forma **已落地**跨语言共享的测试向量（F-004）：同一组 `(输入, 期望)` 在 Rust、TypeScript、Dart 三端得到一致结果（见 [next-milestone.zh-CN.md](next-milestone.zh-CN.md) 的 F-004；回归 `tests/rule_vectors.rs`、生成 Web `validators.test.ts`、Dart `rule_vector_test.dart`，CI 执行 `npx vitest run` + `flutter test`）。
 
 ### L5 — 变更安全与迁移风险
 

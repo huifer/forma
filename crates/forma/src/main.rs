@@ -42,7 +42,15 @@ fn run(argv: &[String]) -> Result<i32> {
             if let Some(eq) = name.find('=') {
                 flags.insert(name[..eq].to_string(), name[eq + 1..].to_string());
             } else if [
-                "export", "out", "json-out", "to", "steps", "base", "port", "format",
+                "export",
+                "out",
+                "json-out",
+                "to",
+                "steps",
+                "base",
+                "port",
+                "format",
+                "loss-report",
             ]
             .contains(&name)
             {
@@ -216,19 +224,19 @@ fn run(argv: &[String]) -> Result<i32> {
                     &positional[1..],
                     &flags,
                     "OpenAPI spec",
-                    forma::adapters::openapi::openapi_to_dsl,
+                    forma::adapters::openapi::openapi_to_dsl_with_report,
                 )),
                 "sql" => Ok(cmd_import_with(
                     &positional[1..],
                     &flags,
                     "SQL DDL",
-                    forma::adapters::sql_import::sql_ddl_to_dsl,
+                    forma::adapters::sql_import::sql_ddl_to_dsl_with_report,
                 )),
                 "prisma" => Ok(cmd_import_with(
                     &positional[1..],
                     &flags,
                     "Prisma schema",
-                    forma::adapters::prisma_import::prisma_to_dsl,
+                    forma::adapters::prisma_import::prisma_to_dsl_with_report,
                 )),
                 other => {
                     eprintln!("unknown import target '{other}'");
@@ -394,7 +402,12 @@ fn run(argv: &[String]) -> Result<i32> {
             Ok(0)
         }
         "--version" | "version" => {
-            println!("forma 0.2.0 (Specification Federation, Rust)");
+            // RFC-0009 §16：必须同时报告编译器版本与 IR 版本（v0.2 联邦时代字符串已废弃）
+            println!(
+                "forma {} (IR {}, DSL specification compiler)",
+                env!("CARGO_PKG_VERSION"),
+                forma::dsl::IR_VERSION
+            );
             Ok(0)
         }
         "--help" | "help" => {
@@ -469,12 +482,13 @@ fn cmd_studio(dir: &Path, flags: &std::collections::HashMap<String, String>) -> 
     0
 }
 
-/// `forma import <format> <file> [--out <path>]`：三种逆向导入共用同一 I/O 骨架。
+/// `forma import <format> <file> [--out <path>] [--loss-report <path>]`：
+/// 三种逆向导入共用同一 I/O 骨架；Lossy 构造统一产出机读损失报告（RFC-0002 §14 S2）。
 fn cmd_import_with(
     positional: &[String],
     flags: &std::collections::HashMap<String, String>,
     kind: &str,
-    convert: fn(&str, &str) -> anyhow::Result<String>,
+    convert: fn(&str, &str) -> anyhow::Result<(String, forma::adapters::LossReport)>,
 ) -> i32 {
     let spec_path = match positional.first() {
         Some(p) => p.clone(),
@@ -496,22 +510,37 @@ fn cmd_import_with(
         .map(|f| f.to_string_lossy().to_string())
         .unwrap_or_else(|| spec_path.clone());
     match convert(&text, &file) {
-        Ok(dsl) => match flags.get("out").filter(|s| !s.is_empty()) {
-            Some(out) => match std::fs::write(out, &dsl) {
-                Ok(()) => {
-                    println!("✓ wrote {out}");
+        Ok((dsl, loss)) => {
+            // RFC-0002 §14 S2：所有 Lossy / Partial 导入必须产出可见的损失报告
+            eprintln!(
+                "losses: {} (format: {}, entities: {})",
+                loss.items.len(),
+                loss.format,
+                loss.entities
+            );
+            if let Some(path) = flags.get("loss-report").filter(|s| !s.is_empty()) {
+                if let Err(e) = std::fs::write(path, loss.to_json()) {
+                    eprintln!("error writing loss report {path}: {e}");
+                    return 2;
+                }
+            }
+            match flags.get("out").filter(|s| !s.is_empty()) {
+                Some(out) => match std::fs::write(out, &dsl) {
+                    Ok(()) => {
+                        println!("✓ wrote {out}");
+                        0
+                    }
+                    Err(e) => {
+                        eprintln!("error writing {out}: {e}");
+                        2
+                    }
+                },
+                None => {
+                    print!("{dsl}");
                     0
                 }
-                Err(e) => {
-                    eprintln!("error writing {out}: {e}");
-                    2
-                }
-            },
-            None => {
-                print!("{dsl}");
-                0
             }
-        },
+        }
         Err(e) => {
             eprintln!("error: {e}");
             2
@@ -592,6 +621,7 @@ fn cmd_build_dsl(project_dir: PathBuf, policy: forma::build::OwnershipPolicy, _f
             {
                 eprintln!("{}", forma::validate::format_diagnostic(d));
             }
+            println!("IR: {}", report.ir_version);
             if !report.capabilities.is_empty() {
                 let caps: Vec<String> = report
                     .capabilities

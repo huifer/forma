@@ -41,11 +41,14 @@ breaking_change: false
 |---|---|
 | 人工修改不被静默覆盖（构建前快照 → 构建后恢复） | `tests/artifact_ownership.rs` |
 | Adopted 条目无条件保护（adopt 后不再被覆盖） | `tests/artifact_ownership.rs` |
+| 来源规格（generatorVersion / irVersion / inputFingerprint / deps） | `tests/artifact_ownership.rs::manifest_entries_record_source_provenance` |
+| Extension 锚点登记且永不覆盖（连 `--overwrite` 也不覆盖） | `tests/artifact_ownership.rs::extension_anchor_is_registered_and_never_overwritten` |
 | patchId 幂等（重复提交零二次变更） | `tests/studio.rs::studio_v2_bidirectional_patch` |
-| 失败补丁零写入（事务回滚） | `tests/dsl_patch.rs` + `tests/studio.rs` |
+| 失败补丁零写入（事务回滚） | `tests/dsl_patch.rs` + `tests/studio.rs` + `tests/patch_visual_nodes.rs` |
+| 迁移链导出到既有体系（Flyway / Liquibase / golang-migrate） | `tests/migration_export.rs` |
 
 ## 弃用窗口（spec:compatibility §9–10）
 
 | 承诺 | 证明 |
 |---|---|
-| 弃用 → 移除窗口 ≥ 2 minor 且 ≥ 6 个月（决议条目） | `docs/architecture/roadmap/gap-backlog.zh-CN.md`（P2-2 已决议）|
+| 弃用 → 移除窗口 ≥ 2 minor 且 ≥ 6 个月（决议条目） | `docs/architecture/roadmap/gap-backlog.zh-CN.md`（P2-2 已决议） |

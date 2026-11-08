@@ -1,5 +1,9 @@
 # 近期里程碑（Reliability & Verification）
 
+> **P3 治理收尾与发布就绪已完成（2026-11-08）**：RFC-0002 / RFC-0009 升为 Implemented、
+> S2 机读损失报告 + S3 往返测试补齐、CI 新增生成后端编译门、Conformance 证据矩阵核对、
+> 发布叙事同步。详见 [P3 规划](architecture/roadmap/p3-plan.zh-CN.md)。
+
 > **P2 轨道 A 已全面收尾（2026-11-08）**：F-001…F-008 之后，P2 的 8 项余项
 > （多层关系遍历 / GraphQL 逆向关系 / 多租户管理 UI / 产物清单来源规格与锚点 /
 > 补丁图表看板操作 / SQL·Prisma 逆向导入与迁移链导出 / 字段级显隐与 requestId 核实）

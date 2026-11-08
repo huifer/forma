@@ -1,11 +1,11 @@
 ---
 id: RFC-0002
 title: Specification System
-status: Proposed
-version: 1.0
+status: Implemented
+version: 1.1
 authors: [forma-maintainers]
 created: 2026-11-04
-updated: 2026-11-04
+updated: 2026-11-08
 domain: architecture
 supersedes: []
 superseded_by: []
@@ -267,7 +267,17 @@ RFC-0001 规定了**系统边界**，但不规定**表达体系**。「规格如
 | **S4** | 补齐 G4（每个领域有 Validator） | 各领域诊断码齐备且被测试覆盖 |
 | **S5** | 明确四类版本关系并写入工具 | 版本信息在构建报告中可查 |
 
-> S2 与 S3 优先级最高——它们是「可信赖地互通」的核心，也是当前唯一**完全缺失**的宪法条款（G6）。
+> S2 与 S3 优先级最高——它们是「可信赖地互通」的核心，也是当时唯一**完全缺失**的宪法条款（G6）。
+
+**S1–S5 实现状态（2026-11-08，P3/C-2 核实）**：
+
+| 步 | 状态 | 证据 / 边界 |
+|---|---|---|
+| S1 领域表与元规则 | ✅ | §8.1 领域表与语法元规则已纳入 [REVIEW-CHECKLIST](../REVIEW-CHECKLIST.zh-CN.md)；新增顶层构造先登记 |
+| S2 损失报告 | ✅ | `forma import sql\|prisma\|openapi --loss-report <path>` 输出机读 `LossReport`（`format` / `source` / `entities` / `items[]`），同时写入 `.fm` 头部注释；`tests/adapter_roundtrip.rs` |
+| S3 往返测试 | ✅ | `tests/adapter_roundtrip.rs`：OpenAPI → `.fm` → OpenAPI、SQL DDL → `.fm` → `plan_tables`，断言可表达部分等价 |
+| S4 每领域独立 Validator | ⚠️ 部分 | 诊断由 `check_program` 集中承担（不是按领域拆分的独立 Validator）；诊断码前缀 `dsl-*` 已覆盖各构造，见 §18 开放问题 |
+| S5 四类版本关系可查 | ✅ | `--version` 输出编译器版本 + IR 版本；`BuildReport.ir_version`（CLI 打印 / MCP `irVersion`）；`tests/cli_version.rs` / `tests/adapter_roundtrip.rs::build_report_exposes_ir_version` |
 
 ## 15. Implementation Plan
 
@@ -279,19 +289,41 @@ RFC-0001 规定了**系统边界**，但不规定**表达体系**。「规格如
 
 ## 16. Conformance Requirements
 
+> 核实日期 2026-11-08（P3/C-2）：有回归证据才勾选；未覆盖项**保留未勾选并写明缺口**。
+
 - [ ] 每个顶层构造在领域表中有归属，且有对应诊断码覆盖。
-- [ ] 所有 Lossy / Partial 导入方向产出损失报告。
-- [ ] 所有 Lossless 方向有往返语义等价测试。
-- [ ] 未支持的构造/操作显式报错（无静默忽略）。
-- [ ] 相同规格集合（含文件顺序变化）产生相同 `Program`。
-- [ ] 导入畸形输入产出诊断而非 panic。
+  ⚠️ **部分**：诊断码由 `check_program` 集中覆盖（`dsl-*` 前缀），但**未**按规格领域
+  拆分为独立 Validator / 诊断码命名空间（§18 开放问题，本阶段如实保留未勾选）。
+- [x] 所有 Lossy / Partial 导入方向产出损失报告。
+  证据：`adapters::{LossReport, LossItem}` + 三个 `*_with_report`；CLI `--loss-report`；
+  `tests/adapter_roundtrip.rs::lossy_imports_emit_machine_readable_loss_reports` /
+  `lossless_import_has_empty_report` / `cli_loss_report_flag_writes_json_file`。
+- [x] 所有 Lossless 方向有往返语义等价测试。
+  证据：`tests/adapter_roundtrip.rs::openapi_roundtrip_preserves_expressible_fields_and_operations` /
+  `sql_ddl_roundtrip_preserves_tables_columns_and_relations`。边界：只断言**可表达部分**
+  等价（Decimal→string 是序列化契约；array / 反向列表关系由损失报告显式记录）。
+- [x] 未支持的构造/操作显式报错（无静默忽略）。
+  证据：设计宪法 6.2；emitter `reject_unsupported` / `check_program` 编译期诊断；
+  `tests/adapter_roundtrip.rs::malformed_inputs_return_errors_not_panics`。
+- [x] 相同规格集合（含文件顺序变化）产生相同 `Program`。
+  证据：`dsl::load_program` 对 glob 结果 sort + dedup；
+  `tests/adapter_roundtrip.rs::file_order_does_not_change_program` /
+  `repeated_check_program_is_deterministic`。
+- [x] 导入畸形输入产出诊断而非 panic。
+  证据：`tests/adapter_roundtrip.rs::malformed_inputs_return_errors_not_panics`
+  （三种格式的错误输入均返回 `Err`）。
 
 ## 17. Acceptance Criteria
 
 1. 导入一个含注释与复杂外键的 MySQL DDL，工具报告明确的语义损失清单，且不静默丢弃。
+   ✅ `sql_import::sql_ddl_to_dsl_with_report`：外键→关系字段、不可映射列（如 BLOB）逐条进 `LossReport` 与 `.fm` 注释。
 2. OpenAPI → 实体 → OpenAPI 往返后，操作路径、请求体字段、响应结构语义等价。
+   ✅ **可表达部分**：`tests/adapter_roundtrip.rs` 断言字段集合、类型映射与 `/api/pets` 的 get/post；
+   数组 / 枚举降级由损失报告记录，Forma 统一 `/api` 前缀属显式约定。
 3. `app.version` 与 DSL 语法版本相互独立：升级语法版本不改变项目版本号。
+   ✅ `IR_VERSION` 独立于 `app.version`；`tests/cli_version.rs` 与 `build_report_exposes_ir_version`。
 4. 重复 `check_program` 对同一规格产出完全相同的诊断序列。
+   ✅ `tests/adapter_roundtrip.rs::repeated_check_program_is_deterministic`。
 
 ## 18. Open Questions
 
@@ -315,3 +347,4 @@ RFC-0001 规定了**系统边界**，但不规定**表达体系**。「规格如
 | 版本 | 日期 | 摘要 |
 |---|---|---|
 | 1.0 | 2026-11-04 | 初版提案：定义规格领域划分、语法元规则、四类版本关系、标准互通保真度与往返测试契约 |
+| 1.1 | 2026-11-08 | P3/C-2 互通验收补齐：S2 机读损失报告（三种导入 + `--loss-report`）、S3 往返测试、S5 构建报告 IR 版本；修复 OpenAPI `number` 导入生成非法 `Decimal` 的缺陷；§16 逐条附证据（S4 保留未勾选）；状态升为 Implemented |

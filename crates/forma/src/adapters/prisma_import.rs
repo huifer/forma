@@ -6,6 +6,7 @@
 //! 不支持：反向列表关系（`posts Post[]`）、`@@map` / `@map`、复合主键、视图、
 //! 多文件 schema、原生类型（`@db.*`）——**显式跳过并在注释中列出**，绝不静默编造。
 
+use crate::adapters::{LossItem, LossReport};
 use anyhow::{bail, Result};
 use std::collections::BTreeSet;
 
@@ -93,6 +94,11 @@ fn block_attrs(line: &str) -> Vec<String> {
 }
 
 pub fn prisma_to_dsl(text: &str, file: &str) -> Result<String> {
+    Ok(prisma_to_dsl_with_report(text, file)?.0)
+}
+
+/// RFC-0002 §14 S2：返回骨架 + 机读损失清单。
+pub fn prisma_to_dsl_with_report(text: &str, file: &str) -> Result<(String, LossReport)> {
     // 第一遍：收集 model / enum 名（关系解析需要完整名单）
     let mut models: Vec<String> = Vec::new();
     let mut enums: Vec<(String, Vec<String>)> = Vec::new();
@@ -144,7 +150,7 @@ pub fn prisma_to_dsl(text: &str, file: &str) -> Result<String> {
     let enum_set: BTreeSet<String> = enums.iter().map(|(n, _)| n.clone()).collect();
 
     // 第二遍：逐 model 生成实体
-    let mut skipped: Vec<String> = Vec::new();
+    let mut skipped: Vec<LossItem> = Vec::new();
     let mut entity_blocks: Vec<(String, Vec<FmField>, Vec<String>)> = Vec::new(); // (name, fields, index lines)
                                                                                   // 重新扫描以取回每个 model 的 body
     let mut current: Option<(String, Vec<String>, bool)> = None;
@@ -193,7 +199,10 @@ pub fn prisma_to_dsl(text: &str, file: &str) -> Result<String> {
                         };
                         index_lines.push(format!("{kw} [{}]", cols.join(", ")));
                     } else {
-                        skipped.push(format!("{name}.{l} (block-level attribute)"));
+                        skipped.push(LossItem {
+                            construct: format!("{name}.{l}"),
+                            reason: "block-level attribute with no expressible columns".into(),
+                        });
                     }
                     continue;
                 }
@@ -211,9 +220,10 @@ pub fn prisma_to_dsl(text: &str, file: &str) -> Result<String> {
 
                 if list_relation {
                     // 反向列表关系：v1 不生成（需要逆向关系 DSL）
-                    skipped.push(format!(
-                        "{name}.{raw_name} (reverse list relation; not expressible in DSL v0.3)"
-                    ));
+                    skipped.push(LossItem {
+                        construct: format!("{name}.{raw_name} ({raw_ty})"),
+                        reason: "reverse list relation; not expressible in DSL v0.3".into(),
+                    });
                     continue;
                 }
                 if fk_scalars.contains(raw_name) {
@@ -226,7 +236,10 @@ pub fn prisma_to_dsl(text: &str, file: &str) -> Result<String> {
                     match scalar_type(base_ty) {
                         Some(t) => t,
                         None => {
-                            skipped.push(format!("{name}.{raw_name} ({raw_ty})"));
+                            skipped.push(LossItem {
+                                construct: format!("{name}.{raw_name} ({raw_ty})"),
+                                reason: "unsupported Prisma scalar type".into(),
+                            });
                             continue;
                         }
                     }
@@ -263,7 +276,10 @@ pub fn prisma_to_dsl(text: &str, file: &str) -> Result<String> {
                         optional: false,
                     },
                 );
-                skipped.push(format!("{name}.id (synthesized: model had no @id)"));
+                skipped.push(LossItem {
+                    construct: format!("{name}.id"),
+                    reason: "model had no @id; synthesized Uuid @id".into(),
+                });
             }
             entity_blocks.push((name, fields, index_lines));
         } else if let Some((_, body, _)) = current.as_mut() {
@@ -283,7 +299,7 @@ pub fn prisma_to_dsl(text: &str, file: &str) -> Result<String> {
     if !skipped.is_empty() {
         out.push_str("//\n// 以下构造未映射（需人工处理）：\n");
         for s in &skipped {
-            out.push_str(&format!("//   - {s}\n"));
+            out.push_str(&format!("//   - {} ({})\n", s.construct, s.reason));
         }
     }
     out.push_str("\napp ImportedApp {\n  version = \"0.1.0\"\n  locale = [\"en\"]\n}\n\n");
@@ -318,5 +334,11 @@ pub fn prisma_to_dsl(text: &str, file: &str) -> Result<String> {
             "api {name}s {{\n  entity {name}\n  operations [list get create update delete]\n}}\n\n"
         ));
     }
-    Ok(out)
+    let report = LossReport {
+        format: "prisma".into(),
+        source: file.to_string(),
+        entities: entity_blocks.len(),
+        items: skipped,
+    };
+    Ok((out, report))
 }

@@ -8,6 +8,7 @@
 //! 产物保证通过 `check_program`（不引用不存在的实体、有且仅有一个 @id 主键）。
 
 use crate::adapters::sql::parse_sql_ddl;
+use crate::adapters::{LossItem, LossReport};
 use crate::identity::{singularize, to_pascal_case};
 use anyhow::{bail, Result};
 use std::collections::BTreeMap;
@@ -100,6 +101,11 @@ fn extract_first_num(s: &str) -> Option<u32> {
 
 /// 生成 `.fm` 骨架；`file` 仅用于生成文件头注释（来源追踪）。
 pub fn sql_ddl_to_dsl(sql_text: &str, file: &str) -> Result<String> {
+    Ok(sql_ddl_to_dsl_with_report(sql_text, file)?.0)
+}
+
+/// RFC-0002 §14 S2：返回骨架 + 机读损失清单。
+pub fn sql_ddl_to_dsl_with_report(sql_text: &str, file: &str) -> Result<(String, LossReport)> {
     let parsed = parse_sql_ddl(sql_text)?;
     if parsed.tables.is_empty() {
         bail!("no CREATE TABLE found in {file} — nothing to import");
@@ -118,7 +124,7 @@ pub fn sql_ddl_to_dsl(sql_text: &str, file: &str) -> Result<String> {
         }
     }
 
-    let mut skipped: Vec<String> = Vec::new();
+    let mut skipped: Vec<LossItem> = Vec::new();
     let mut entities: Vec<(String, Vec<Field>)> = Vec::new();
     let mut indexes: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
@@ -169,7 +175,10 @@ pub fn sql_ddl_to_dsl(sql_text: &str, file: &str) -> Result<String> {
                 }
             }
             let Some(ty) = map_type(&col.base_type, &col.type_text) else {
-                skipped.push(format!("{}.{} ({})", t.name, col.name, col.type_text));
+                skipped.push(LossItem {
+                    construct: format!("{}.{} ({})", t.name, col.name, col.type_text),
+                    reason: "unsupported SQL column type; no conservative DSL mapping".into(),
+                });
                 continue;
             };
             let mut attrs = Vec::new();
@@ -208,10 +217,10 @@ pub fn sql_ddl_to_dsl(sql_text: &str, file: &str) -> Result<String> {
                     attrs: vec!["@id".into(), "@default(uuid)".into()],
                 },
             );
-            skipped.push(format!(
-                "{}.id (synthesized: table had no primary key)",
-                t.name
-            ));
+            skipped.push(LossItem {
+                construct: format!("{}.id", t.name),
+                reason: "table had no primary key; synthesized Uuid @id".into(),
+            });
         }
         // CREATE INDEX → DSL index（跳过唯一索引，@unique 已承载）
         let mut ix: Vec<String> = Vec::new();
@@ -248,7 +257,7 @@ pub fn sql_ddl_to_dsl(sql_text: &str, file: &str) -> Result<String> {
     if !skipped.is_empty() {
         out.push_str("//\n// 以下构造未映射（需人工处理）：\n");
         for s in &skipped {
-            out.push_str(&format!("//   - {s}\n"));
+            out.push_str(&format!("//   - {} ({})\n", s.construct, s.reason));
         }
     }
     out.push_str("\napp ImportedApp {\n  version = \"0.1.0\"\n  locale = [\"en\"]\n}\n\n");
@@ -272,5 +281,11 @@ pub fn sql_ddl_to_dsl(sql_text: &str, file: &str) -> Result<String> {
             "api {name}s {{\n  entity {name}\n  operations [list get create update delete]\n}}\n\n"
         ));
     }
-    Ok(out)
+    let report = LossReport {
+        format: "sql".into(),
+        source: file.to_string(),
+        entities: entities.len(),
+        items: skipped,
+    };
+    Ok((out, report))
 }

@@ -1,11 +1,11 @@
 ---
 id: RFC-0009
 title: Developer Experience and Studio
-status: Proposed
-version: 1.0
+status: Implemented
+version: 1.1
 authors: [forma-maintainers]
 created: 2026-11-04
-updated: 2026-11-04
+updated: 2026-11-08
 domain: dx
 supersedes: []
 superseded_by: []
@@ -310,20 +310,35 @@ Studio 的模型**就是 IR**——不新建第二套模型。渲染层订阅 IR
 
 ## 16. Conformance Requirements
 
-- [ ] `forma check` 与 `forma validate` 对同一 DSL 工程产出一致结论与退出码。
-- [ ] 含 `error` 诊断的 DSL 工程，`forma validate` 退出码非 0。
-- [ ] `lint` 与 `check` 输出使用同一 `Diagnostic` 结构。
-- [ ] CLI 与 MCP 对同一工程产出相同诊断集合（回归断言）。
-- [ ] `forma --version` 包含编译器版本与 IR 版本。
-- [ ] `forma docs validate` 对全部治理文档通过（frontmatter 完整、ID 唯一、状态合法、依赖存在、链接有效）。
-- [ ] Studio 的任一视图均可追溯到 IR 节点（无独立模型）。
+> 核实日期 2026-11-08（P3/C-1）：逐条对照实现与回归，**有证据才勾选**。
+
+- [x] `forma check` 与 `forma validate` 对同一 DSL 工程产出一致结论与退出码。
+  证据：`engine::check_project` 单一分发点（CLI 与 MCP 共用）；`tests/dsl_validate.rs`。
+- [x] 含 `error` 诊断的 DSL 工程，`forma validate` 退出码非 0。
+  证据：`tests/dsl_validate.rs::dsl_project_with_semantic_error_is_reported`（P0-4 假绿修复）。
+- [x] `lint` 与 `check` 输出使用同一 `Diagnostic` 结构。
+  证据：`crates/forma/src/validate.rs` 的 `Diagnostic`，lint / check / docs 全线复用。
+- [x] CLI 与 MCP 对同一工程产出相同诊断集合（回归断言）。
+  证据：`tests/dsl_validate.rs::cli_and_mcp_agree_on_dsl_errors`。
+- [x] `forma --version` 包含编译器版本与 IR 版本。
+  证据：本次修复（v0.2 联邦时代字符串 → `forma <pkg> (IR <IR_VERSION>, …)`）；`tests/cli_version.rs`。
+- [x] `forma docs validate` 对全部治理文档通过（frontmatter 完整、ID 唯一、状态合法、依赖存在、链接有效）。
+  证据：CI `docs` job + `tests/docs_validate.rs`；`docs check-links` 亦纳入本地验证门。
+- [x] Studio 的任一视图均可追溯到 IR 节点（无独立模型）。
+  证据：`crates/forma/src/studio.rs` 的视图数据由 `load_program` 派生，`/api/graph` 直接输出
+  `engine::dsl_graph(&program)`（DSL→联邦语义图桥接）；Studio 不维护第二套业务模型。
 
 ## 17. Acceptance Criteria
 
 1. 含语义错误的 DSL 工程：`forma validate` 退出码非 0，错误含 `file` + `line`，与 `forma check` 结论一致。
+   ✅ `tests/dsl_validate.rs`（声明级 `Origin` 注入 `file`/`line`）。
 2. 联邦工程：`forma validate` / `doctor` / `graph` 行为不变（回归通过）。
-3. `forma docs validate` 能检出：重复 ID、缺失 frontmatter 字段、悬空 `depends_on`、失效相对链接（当前仓库即存在此类问题，见 §19）。
+   ✅ `tests/dsl_validate.rs::federal_project_still_takes_federal_path`。
+3. `forma docs validate` 能检出：重复 ID、缺失 frontmatter 字段、悬空 `depends_on`、失效相对链接。
+   ✅ `tests/docs_validate.rs`（14 项，含「仓库自身治理文档零 error」防线）；
+   失效链接由 `forma docs check-links` 检出（本次 P3 修复了 `conformance/README.md` 的存量断链）。
 4. `forma lint` 与 `forma check` 的 JSON 输出可用同一解析器消费。
+   ✅ 同形 `Diagnostic`（`severity` / `code` / `message` / `file` / `line`）。
 
 ## 18. Open Questions
 
@@ -349,3 +364,4 @@ Studio 的模型**就是 IR**——不新建第二套模型。渲染层订阅 IR
 | 版本 | 日期 | 摘要 |
 |---|---|---|
 | 1.0 | 2026-11-04 | 初版提案：定义 CLI 契约与命令面组织原则、诊断统一结构、Studio 阶段与能力边界、`forma docs` 治理校验 |
+| 1.1 | 2026-11-08 | P3/C-1 验收核实：§16 七项逐条附实现证据并勾选；修复 `--version`（补 IR 版本、移除 v0.2 联邦字符串，`tests/cli_version.rs`）；状态升为 Implemented |

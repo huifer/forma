@@ -22,8 +22,11 @@ Wave 3 — 工程化 + 横向扩栈
 M9 工程化产物 + 能力模块 + Studio 双向编辑
 M10 数据库/后端/前端多栈（PostgreSQL、Node、Python、Vue、Expo、GraphQL）
 
-Wave 4 — 企业级与长尾
-M11 Spring/Go/.NET、原生移动、小程序、工作流运行时、支付
+Wave 4 — 部署与企业级（范围已收窄）
+M11 部署产物（K8s / Helm / Terraform）✅
+企业级扩栈（Spring/Go/.NET、原生移动、小程序、工作流、支付）→ 已撤销，不再排期
+
+P2 余项 Closure（轨道 A 8/8 完成，轨道 B 撤销）→ P3 治理收尾与发布就绪
 ```
 
 ## 2. 适配层完整矩阵

@@ -21,6 +21,8 @@ pub struct StepReport {
 #[derive(Debug)]
 pub struct BuildReport {
     pub project_name: String,
+    /// 本次构建所用 IR 版本（RFC-0002 §14 S5：版本信息在构建报告中可查）
+    pub ir_version: String,
     pub steps: Vec<StepReport>,
     /// 本次构建解析出的能力集合（RFC-0004 Capability Registry）。
     pub capabilities: Vec<ResolvedCapability>,
@@ -397,6 +399,7 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
 
     Ok(BuildReport {
         project_name: app_name,
+        ir_version: program.ir_version.clone(),
         steps,
         capabilities,
         capability_diagnostics,

@@ -166,6 +166,8 @@ target configuration selects the concrete output stack.
 - [Agent workflow](docs/agent-workflow.zh-CN.md)
 - [Next milestone (F-001…F-008)](docs/next-milestone.zh-CN.md)
 - [Roadmap](docs/roadmap.zh-CN.md)
+- [P2 track A closure / track B cancelled](docs/architecture/roadmap/p2-plan.zh-CN.md)
+- [P3: governance & release readiness](docs/architecture/roadmap/p3-plan.zh-CN.md)
 
 ## Generated targets
 

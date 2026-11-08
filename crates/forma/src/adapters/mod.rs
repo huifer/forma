@@ -19,6 +19,40 @@ pub struct AdapterContext<'a> {
     pub absolute_path: PathBuf,
 }
 
+/// RFC-0002 §14 S2：Lossy / Partial 导入方向的**机读损失清单**。
+///
+/// 逆向导入是生成视图，不保证 1:1 语义等价；所有被跳过或保守降级的构造
+/// **必须**出现在报告里（同时在生成的 `.fm` 头部注释里可见），不得静默丢弃。
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct LossReport {
+    /// 源格式：sql | prisma | openapi
+    pub format: String,
+    /// 源文件名（来源追踪）
+    pub source: String,
+    /// 生成的实体数
+    pub entities: usize,
+    /// 逐条损失项
+    pub items: Vec<LossItem>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct LossItem {
+    /// 被跳过/降级的构造（如 `students.blob (BLOB)`）
+    pub construct: String,
+    /// 原因（如 `unsupported column type`）
+    pub reason: String,
+}
+
+impl LossReport {
+    pub fn is_lossy(&self) -> bool {
+        !self.items.is_empty()
+    }
+
+    pub fn to_json(&self) -> String {
+        serde_json::to_string_pretty(self).unwrap_or_default()
+    }
+}
+
 #[derive(Default)]
 pub struct AdapterResult {
     pub nodes: Vec<SemanticNode>,

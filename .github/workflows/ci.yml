@@ -55,7 +55,8 @@ jobs:
       - name: Lint governance docs (template sections)
         run: cargo run --locked -- docs lint
       - name: Check capabilities (registry / dependencies / compatibility)
-        run: cargo run --locked -- capability check
+        # capability check 需要工程目录（根目录无 forma.yaml）；用旗舰示例作为受管工程
+        run: cargo run --locked -- capability check examples/school
       - name: Detect specification compatibility changes
         shell: bash
         run: |
@@ -87,6 +88,27 @@ jobs:
       - name: Contract tests (offline roundtrips; live cases auto-skip)
         working-directory: examples/school/app_mobile
         run: flutter test
+
+  # P3/C-3：生成的 Rust 后端必须真实编译（L3 验证门的 CI 落点）。
+  # P2 轨道 A-2 曾抓出 6 类「cargo test 全绿但生成后端编译不过」的错误：
+  #   school 覆盖 auth + 命令 + 无租户列组合，access-depth 覆盖两层关系遍历守卫。
+  generated-backend:
+    name: generated rust backend (cargo check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Generate artifacts (school + access-depth)
+        run: |
+          cargo run --locked -- build examples/school
+          cargo run --locked -- build examples/access-depth
+      - name: Compile generated school backend
+        working-directory: examples/school/generated/backend
+        run: cargo check
+      - name: Compile generated access-depth backend
+        working-directory: examples/access-depth/generated/backend
+        run: cargo check
 
   # 案例协议 V16：生成的 React Web 必须通过 tsc 与 vite 生产构建。
   web:

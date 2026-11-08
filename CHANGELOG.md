@@ -8,6 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **P3 治理收尾与发布就绪（C-1 ~ C-5，5/5）**：
+  - **C-1 RFC-0009 升 `Implemented`**：§16 七项逐条附实现证据并勾选；修复 `forma --version`
+    （v0.2 联邦时代字符串 → `forma <pkg> (IR <IR_VERSION>, …)`，`tests/cli_version.rs`）。
+  - **C-2 RFC-0002 升 `Implemented`**：S2 机读损失报告（`LossReport` + 三种 `*_with_report` +
+    `forma import … --loss-report <path>`，损失项同时写入 `.fm` 注释）、S3 往返语义等价回归
+    （OpenAPI / SQL DDL，可表达部分）、S5 构建报告 `ir_version`（CLI 打印 + MCP `irVersion`）。
+    顺带修复 OpenAPI 导入 `number` 生成非法 `Decimal`（应为 `Decimal(10,2)`）导致骨架被
+    `dsl-invalid-type-arg` 拒绝的缺陷。§16 中「按领域独立 Validator」如实保留未勾选。
+  - **C-3 CI `generated-backend` job**：`examples/school` + 新参考工程 `examples/access-depth`
+    的生成 Rust 后端真实 `cargo check`（覆盖 auth / 命令 / 无租户列 / 两层关系遍历组合），
+    堵住 P2/A-2 暴露的「`cargo test` 全绿但生成后端编译不过」缺口；
+    顺带修复 CI 里 `capability check` 缺工程目录导致必然失败的坏命令（改为 `examples/school`）。
+  - **C-4 Conformance 证据矩阵**：四份 profile 的 44 个 `tests/*` 引用逐个核对真实存在，
+    更新过时描述（跨关系一层 → 任意深度），补 P2/P3 新证据与 CI job 关联。
+  - **C-5 发布叙事同步**：README 双语 / roadmap Wave 4 / verification L3+L4 / p2-plan /
+    next-milestone 与「轨道 B 撤销」决策一致；新增 [P3 规划](docs/architecture/roadmap/p3-plan.zh-CN.md)。
+  - 新增回归：`tests/cli_version.rs`（1 项）、`tests/adapter_roundtrip.rs`（9 项）；
+    全量 `cargo test` **406 项 / 65 套件**通过。
+
+### Added
 - **P2 轨道 A 全面收尾（8/8，用户决策：轨道 B 目标扩栈撤销）**：
   - **A-2 行级访问任意深度关系遍历**：`dsl::resolve_access_field` 单一来源；生成层逐跳
     `repo::find_{E}` 取数（关系行缺失 → 403 fail-closed）；非关系/可选关系/未知字段仍编译期显式拒绝。
@@ -34,7 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **进度同步（P1 全清）**：`docs/roadmap.zh-CN.md` 10 个 P1 项（Redis / OpenAPI 导入 /
   RHF / Zustand / 文件上传 / 导入导出 / 可视化 V0.2–V0.5 / Studio v1+v2）标 ✅ 并附实现说明；
   `docs/next-milestone.zh-CN.md` F-005（OpenAPI 导入）/ F-006（事务式补丁预览与冲突检测）
-  标 ✅ 已完成；`Pinia` 与 `Wave 4` 长尾明确列为后续。
+  标 ✅ 已完成；`Pinia` 列为长尾，`Wave 4` 企业级扩栈在 P2 阶段决策中已撤销（见 P3 阶段记录）。
 
 ### Added
 - **部署产物 K8s / Helm / Terraform（M11 / P1）**：

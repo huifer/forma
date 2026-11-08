@@ -29,8 +29,9 @@ breaking_change: false
 
 | 承诺 | 证明 |
 |---|---|
-| Rust 后端 `cargo check` 零错误 | `tests/backend_contract.rs`（结构断言）+ 本地生成端验证流程 |
-| Web `tsc --noEmit` / `vite build` | CI（cursor-pagination / school 参考）+ 本地验证流程 |
+| Rust 后端 `cargo check` 零错误零警告 | `tests/backend_contract.rs`（结构断言）+ **CI `generated-backend` job**（school + access-depth 两个生成工程真实编译）+ 本地生成端验证流程 |
+| Web `tsc --noEmit` / `vite build` | CI `web` job（cursor-pagination / school）+ 本地验证流程 |
+| GraphQL SDL `parse`/`buildSchema` + `tsc --noEmit` | `tests/graphql.rs`（4 项）+ 生成工程真实验证 |
 | Flutter `flutter analyze` | `tests/flutter_*.rs`（结构断言）+ 本地验证流程 |
 | 跨端行为向量（同一规则三端字面量一致） | `tests/rule_vectors.rs`（Rust/TS/Dart） |
 
@@ -43,6 +44,8 @@ breaking_change: false
 | 无 Attachment 工程：storage.rs / multipart / uploadFile 零产物 | `tests/storage.rs::no_attachment_project_has_zero_storage_artifacts` |
 | 无 export 声明工程：export.rs / 路由 / 按钮 零产物 | `tests/export.rs::no_export_project_has_zero_export_artifacts` |
 | 非 Web 目标显式拒绝 dashboard（宪法 6.2 不静默降级） | `tests/dashboard.rs::non_web_targets_reject_dashboard_pages` |
+| 仅 `@tenant` 工程生成 `TenantAdmin.tsx`（普通工程零变化） | `tests/tenant_admin_ui.rs` |
+| 迁移链导出 SQL 正文逐字复制（三种目录约定） | `tests/migration_export.rs` |
 | NestJS/Hono/FastAPI 对不支持的语义显式拒绝 | `tests/nestjs.rs` / `tests/hono.rs` / `tests/fastapi.rs` |
 
 ## 能力扩展不改核心（Phase 1 标准一）

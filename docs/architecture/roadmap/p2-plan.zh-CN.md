@@ -36,8 +36,8 @@ breaking_change: false
 | **C. 治理收尾** | 叙事与合规 | 文档状态变更 + `forma docs validate/lint/check-*` 全绿 + CI 无回归 |
 
 **轨道间依赖**：A 无外部依赖；B 的扩栈项**不依赖** A；C 的 RFC 升格依赖 A/B 的实际完成状态（先说已完成的事）。
-**实际执行**：A 全部完成；B 撤销；C 中与 A 相关的 spec 同步、gap-backlog 双向关闭已完成，
-RFC-0001~0010 状态升格**随 B 撤销一并取消**。
+**实际执行**：A 全部完成；B 撤销；C 中与 A 相关的 spec 同步、gap-backlog 双向关闭已完成。
+RFC-0001~0010 的状态升格与 Conformance 证据矩阵随后在 **P3 阶段**完成（见 [p3-plan](p3-plan.zh-CN.md)）。
 
 ---
 

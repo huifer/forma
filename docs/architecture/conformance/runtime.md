@@ -31,7 +31,7 @@ breaking_change: false
 
 | 承诺 | 证明 |
 |---|---|
-| requestId 中间件（§4.4，`X-Request-Id`） | `tests/backend_contract.rs` + 生成的 `request_id.rs` |
+| requestId 中间件（§4.4，`X-Request-Id`） | `tests/error_contract.rs`（专项断言）+ 生成的 `request_id.rs` |
 | 结构化日志（RUST_LOG 过滤 + `LOG_FORMAT=json` JSON Lines） | `tests/structured_logging.rs` |
 
 ## API 语义
@@ -42,3 +42,5 @@ breaking_change: false
 | offset 分页协议不变（cursor 与 offset 并存） | `tests/cursor_pagination.rs` |
 | CRUD/守卫/分页端到端（真库案例协议） | `tests/backend_contract.rs` + `docs/case-protocol.zh-CN.md` |
 | 能力模块端点语义（jobs/live/uploads/export） | `tests/jobs.rs` / `tests/live.rs` / `tests/storage.rs` / `tests/export.rs` |
+| 多租户管理端点 + UI（吊销/迁移，`x-admin-token`） | `tests/tenant_admin_ui.rs` + 生成 Web `tsc --noEmit` |
+| 构建报告携带 IR 版本（CLI 打印 / MCP `irVersion`） | `tests/adapter_roundtrip.rs::build_report_exposes_ir_version` + `tests/cli_version.rs` |

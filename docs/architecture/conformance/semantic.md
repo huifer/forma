@@ -39,8 +39,12 @@ breaking_change: false
 | 承诺 | 证明 |
 |---|---|
 | api 操作级 + 实体级规则服务端权威执行（401/403） | `tests/api_auth.rs`（18 项） |
-| 行级条件（跨关系一层 / Timestamp 比较 / 越界诊断） | `tests/api_auth.rs` |
-| 字段级裁剪（服务端序列化裁剪 + 前端显隐同源） | `tests/field_policies.rs` + `tests/web_access.rs` |
+| 行级条件（Timestamp 比较 / 越界诊断） | `tests/api_auth.rs` |
+| 行级条件**任意深度**关系遍历 + 关系行缺失 fail-closed | `tests/access_relation_depth.rs` + 生成后端 `cargo check`（CI `generated-backend`） |
+| 字段级裁剪（服务端序列化裁剪 + 前端显隐同源） | `tests/field_policies.rs` + `tests/web_access.rs` + `tests/flutter_access.rs` |
+| 补丁操作语义（图表/看板节点，错误变换事务回滚） | `tests/patch_visual_nodes.rs` |
+| GraphQL 逆向关系（每请求 DataLoader 防 N+1） | `tests/graphql.rs` + 生成工程 `tsc --noEmit` / SDL `buildSchema` |
+| 逆向导入骨架通过 `check_program`（不引用不存在的实体/非法类型） | `tests/adapter_roundtrip.rs` + `tests/import_reverse.rs` |
 | @tenant 行级隔离 + 管理端点（未设 token → 403 关闭） | `tests/backend_contract.rs` |
 
 ## 可视化语义（RFC-0010）
