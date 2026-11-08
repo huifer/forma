@@ -110,7 +110,7 @@ fn mcp_check_reports_diagnostics_and_lint() {
 fn mcp_build_matches_cli_pipeline() {
     let dir = school_dir();
     let build = call_tool(&dir, "forma_build", &args()).unwrap();
-    assert_eq!(build["totalFiles"], 104); // 96 + request_id.rs（Runtime Contract §4.4 请求追踪中间件）
+    assert_eq!(build["totalFiles"], 107); // 96 + request_id.rs + viz V0.5 三件（theme.tsx / preview.tsx / viz-preview.html）
     let steps: Vec<&str> = build["steps"]
         .as_array()
         .unwrap()

@@ -7,6 +7,7 @@ import React from "react";
 import type { ChartSpec, Row, VizEventPayload } from "./spec";
 import { applyTransform, shapeData } from "./transform";
 import { bindData, createChart, formatValue } from "./echarts";
+import { applyVizThemeVars, echartsThemeObject, useFormaVizTheme } from "./theme";
 import "./viz.css";
 
 export interface VizSource {
@@ -34,12 +35,31 @@ export function FormaChart({
   onEvent,
   className,
 }: FormaChartProps) {
+  // V0.5：有效主题 = 图表显式声明（非 default）优先，否则页面 Provider token
+  const pageToken = useFormaVizTheme();
+  const effectiveTheme =
+    spec.theme && spec.theme !== "default" ? spec.theme : (pageToken ?? spec.theme);
+
   // V0.2：metric / table 走 React 组件渲染（不创建 ECharts 实例）
   if (spec.chartType === "metric") {
-    return <MetricCard spec={spec} source={source} className={className} />;
+    return (
+      <MetricCard
+        spec={spec}
+        source={source}
+        className={className}
+        theme={effectiveTheme}
+      />
+    );
   }
   if (spec.chartType === "table") {
-    return <TableCard spec={spec} source={source} className={className} />;
+    return (
+      <TableCard
+        spec={spec}
+        source={source}
+        className={className}
+        theme={effectiveTheme}
+      />
+    );
   }
 
   const hostRef = React.useRef<HTMLDivElement | null>(null);
@@ -54,7 +74,7 @@ export function FormaChart({
     let observer: ResizeObserver | null = null;
 
     try {
-      chart = createChart(el, spec, option, onEvent);
+      chart = createChart(el, spec, option, onEvent, echartsThemeObject(effectiveTheme));
       observer = new ResizeObserver(() => chart?.resize());
       observer.observe(el);
     } catch (e) {
@@ -82,7 +102,7 @@ export function FormaChart({
       observer?.disconnect();
       chart?.dispose();
     };
-  }, [spec, option, source, onEvent]);
+  }, [spec, option, source, onEvent, effectiveTheme]);
 
   const boxHeight = height ?? spec.minHeight;
 
@@ -110,13 +130,19 @@ function MetricCard({
   spec,
   source,
   className,
+  theme,
 }: {
   spec: ChartSpec;
   source: VizSource;
   className?: string;
+  theme: string;
 }) {
   const [value, setValue] = React.useState<string>("…");
   const [error, setError] = React.useState<string | null>(null);
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    if (rootRef.current) applyVizThemeVars(rootRef.current, theme);
+  }, [theme]);
 
   React.useEffect(() => {
     let disposed = false;
@@ -141,7 +167,7 @@ function MetricCard({
   }, [spec, source]);
 
   return (
-    <div className={className ? `forma-viz ${className}` : "forma-viz"}>
+    <div ref={rootRef} className={className ? `forma-viz ${className}` : "forma-viz"}>
       <div className="forma-viz__metric">
         <div className="forma-viz__metric-title">{spec.title}</div>
         <div
@@ -166,13 +192,19 @@ function TableCard({
   spec,
   source,
   className,
+  theme,
 }: {
   spec: ChartSpec;
   source: VizSource;
   className?: string;
+  theme: string;
 }) {
   const [rows, setRows] = React.useState<Row[]>([]);
   const [error, setError] = React.useState<string | null>(null);
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    if (rootRef.current) applyVizThemeVars(rootRef.current, theme);
+  }, [theme]);
 
   React.useEffect(() => {
     let disposed = false;
@@ -193,7 +225,7 @@ function TableCard({
 
   const cols = source.columns ?? [];
   return (
-    <div className={className ? `forma-viz ${className}` : "forma-viz"}>
+    <div ref={rootRef} className={className ? `forma-viz ${className}` : "forma-viz"}>
       <div className="forma-viz__metric-title">{spec.title}</div>
       <table className="forma-viz__table">
         <thead>

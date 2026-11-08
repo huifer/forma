@@ -18,6 +18,17 @@ use crate::validate::Diagnostic;
 
 // ── 语义类型 ────────────────────────────────────────────
 
+/// V0.5 design token 白名单（RFC-0010 §7.4）。
+pub const THEME_TOKENS: [&str; 3] = ["default", "dark", "data-screen"];
+
+/// DSL `theme` 声明 → 合法 token（未知值回落 default；校验层另行报错）。
+pub fn theme_token(declared: &Option<String>) -> String {
+    match declared.as_deref() {
+        Some(t) if THEME_TOKENS.contains(&t) => t.to_string(),
+        _ => "default".to_string(),
+    }
+}
+
 /// 图表语义类型（与任何图表库无关）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChartType {
@@ -476,6 +487,7 @@ pub fn spec_json(spec: &ChartSpec) -> serde_json::Value {
     m.insert("smooth".into(), json!(spec.series.smooth));
     m.insert("showSymbol".into(), json!(spec.series.show_symbol));
     m.insert("minHeight".into(), json!(spec.responsive.min_height));
+    m.insert("theme".into(), json!(spec.theme));
     m.insert(
         "ariaLabel".into(),
         json!(spec
@@ -650,6 +662,22 @@ pub fn lower_chart(
 ) -> Result<ChartSpec, Vec<Diagnostic>> {
     let mut errors: Vec<Diagnostic> = Vec::new();
 
+    // V0.5：未知 theme token 显式报错（不静默回落 default）
+    if let Some(t) = &decl.theme {
+        if !THEME_TOKENS.contains(&t.as_str()) {
+            errors.push(diag(
+                "viz-unknown-theme",
+                format!(
+                    "chart '{}' uses unknown theme '{}' (allowed: {})",
+                    decl.name,
+                    t,
+                    THEME_TOKENS.join(", ")
+                ),
+                decl.line,
+            ));
+        }
+    }
+
     let Some(chart_type) = ChartType::parse(&decl.chart_type) else {
         return Err(vec![diag(
             "viz-unknown-type",
@@ -757,7 +785,7 @@ pub fn lower_chart(
         interaction: InteractionSpec {
             zoom: decl.zoom.unwrap_or(false),
         },
-        theme: "default".into(),
+        theme: theme_token(&decl.theme),
         responsive: ResponsiveSpec { min_height: 240 },
         accessibility: A11ySpec {
             aria_label: crate::dsl::pick_message(&decl.title, &decl.name).into(),

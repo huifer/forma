@@ -8,6 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **可视化 V0.5：Theme / Preview / 浏览器渲染验证门（RFC-0010 / P1）**：
+  - DSL `theme <token>`（chart 块）：default | dark | data-screen（白名单校验
+    `viz-unknown-theme`，未知值显式报错不回落）；spec 投影携带 theme；
+  - `src/viz/theme.tsx`：3 个 token 的调色板/背景/文本色 + `FormaVizThemeProvider` +
+    `useFormaVizTheme()`（RFC §7.4/§8.9）；有效主题 = 图表显式声明 > 页面 Provider；
+  - Runtime 侧应用主题（Adapter option 保持与主题无关）：ECharts `init` 注入主题对象，
+    主题切换 → 重 init（effect deps 含有效主题）；metric/table 走 CSS 变量
+    （`--viz-fg/--viz-muted/--viz-border/--viz-bg`）；
+  - **Preview + 渲染验证门**：生成 `src/viz/preview.tsx` + `viz-preview.html`——全部图表以
+    **确定性 mock 数据**渲染（自包含无需后端）+ 主题切换器 + 自检标记
+    `body.dataset.vizStatus`（门：vite dev 打开预览页，断言 `ok`）；
+  - mock 数据从实体字段类型合成（Decimal→字符串两位小数、Timestamp→ISO、关系列
+    `{rel}_id`/`{rel}_name`、枚举取首变体）；
+  - 回归 `tests/visualization_v05.rs`（3 项）；
+  - 验证：tsc 0 错 + vite build + 浏览器实测（gate ok、metric ¥8,742.00、ECharts 主题
+    切换重 init canvas 保留、`--viz-bg` #04121f）通过。
+
+### Added
 - **可视化 V0.3：Dashboard IR（RFC-0010 / P1）**：
   - 新 PageBody 变体：`page { dashboard { grid { <Chart> w N h N } filters [...] gap N } }`
     （12 列 CSS Grid + 栅格跨度/行高 + 筛选器）；

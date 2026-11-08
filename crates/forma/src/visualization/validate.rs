@@ -33,6 +33,20 @@ pub fn validate_chart(spec: &mut ChartSpec, errors: &mut Vec<Diagnostic>) {
     let shape = spec.shape;
     let enc = &spec.encoding;
 
+    // V0.5 theme token 白名单（RFC-0010 §7.4）
+    if !super::THEME_TOKENS.contains(&spec.theme.as_str()) {
+        errors.push(diag(
+            "viz-unknown-theme",
+            format!(
+                "chart '{}' uses unknown theme '{}' (allowed: {})",
+                spec.id,
+                spec.theme,
+                super::THEME_TOKENS.join(", ")
+            ),
+            line,
+        ));
+    }
+
     let require = |errors: &mut Vec<Diagnostic>,
                    spec_id: &str,
                    channel: &str,

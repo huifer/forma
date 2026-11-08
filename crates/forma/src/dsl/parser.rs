@@ -213,6 +213,8 @@ pub struct ChartDecl {
     /// interaction.zoom
     pub zoom: Option<bool>,
     pub appearance: AppearanceDecl,
+    /// V0.5 design token：default | dark | data-screen（缺省 default）
+    pub theme: Option<String>,
     pub line: usize,
     /// 声明位置（M1）：`file` 在多文件合并时回填。
     pub file: Option<String>,
@@ -1917,6 +1919,7 @@ impl<'a> Parser<'a> {
             legend: None,
             zoom: None,
             appearance: AppearanceDecl::default(),
+            theme: None,
             line: name_tok.line,
             file: None,
         };
@@ -1974,6 +1977,10 @@ impl<'a> Parser<'a> {
                 "appearance" => {
                     self.next();
                     decl.appearance = self.parse_appearance();
+                }
+                "theme" if tok.kind == TokKind::Ident => {
+                    self.next();
+                    decl.theme = Some(self.expect_ident().unwrap_or_default());
                 }
                 other => {
                     self.error_at(&tok, format!("unknown chart entry '{other}'"));

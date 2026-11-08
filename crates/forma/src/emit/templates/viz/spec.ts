@@ -72,7 +72,10 @@ export interface ChartSpec {
   showSymbol: boolean;
   minHeight: number;
   ariaLabel: string;
+  theme: VizThemeToken;
 }
+
+export type VizThemeToken = "default" | "dark" | "data-screen";
 
 export type Row = Record<string, unknown>;
 

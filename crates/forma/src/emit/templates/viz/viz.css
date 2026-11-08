@@ -2,6 +2,8 @@
 .forma-viz {
   position: relative;
   width: 100%;
+  color: var(--viz-fg);
+  background: var(--viz-bg, transparent);
 }
 
 .forma-viz__canvas {
@@ -29,7 +31,7 @@
 
 .forma-viz__metric-title {
   font-size: 14px;
-  color: var(--muted-fg, #71717a);
+  color: var(--viz-muted, var(--muted-fg, #71717a));
 }
 
 .forma-viz__metric-value {
@@ -46,7 +48,7 @@
 
 .forma-viz__table th,
 .forma-viz__table td {
-  border: 1px solid var(--border, #e4e4e7);
+  border: 1px solid var(--viz-border, var(--border, #e4e4e7));
   padding: 6px 10px;
   text-align: left;
   white-space: nowrap;

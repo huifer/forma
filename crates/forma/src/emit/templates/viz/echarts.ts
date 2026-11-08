@@ -5,6 +5,7 @@
 import * as echarts from "echarts/core";
 %%ECHARTS_IMPORTS%%
 import { CanvasRenderer } from "echarts/renderers";
+import { echartsThemeObject } from "./theme";
 import type { ChartData, ChartSpec, VizEventPayload } from "./spec";
 
 // 只注册本工程实际用到的图表与组件（按需加载，避免把整个 ECharts 打进产物）。
@@ -138,8 +139,13 @@ export function createChart(
   spec: ChartSpec,
   option: Record<string, unknown>,
   onEvent?: (e: VizEventPayload) => void,
+  themeObject?: Record<string, unknown>,
 ): echarts.ECharts {
-  const chart = echarts.init(el, undefined, { renderer: "canvas" });
+  // V0.5：主题在 Runtime 侧应用（Adapter 的 option 与主题无关）；
+  // Provider 切换主题时传入显式 themeObject → 重新 init。
+  const chart = echarts.init(el, themeObject ?? echartsThemeObject(spec.theme), {
+    renderer: "canvas",
+  });
   chart.setOption(option);
   if (onEvent) {
     chart.on("click", (params: any) => {
