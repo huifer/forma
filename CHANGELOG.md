@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **AntV adapter 支持集收口（正确性修复）**：funnel/radar 补全（G2Plot Funnel/Radar 类）；
+  gauge/heatmap/treemap 构建期**显式拒绝**（绝不错误渲染成柱状图）；
+  回归 `tests/visualization_v06.rs`（11 项）；全量 `cargo test` **457 项 / 74 套件**。
+
 - **可视化 V0.6 续：工业监控阈值线（RFC-0010 §16-6）**：
   - DSL `threshold <数值> { label "..." }` 通道（仅笛卡尔形状）；
   - echarts（markLine）/ AntV（annotations）/ Flutter（HorizontalLine）三端渲染；

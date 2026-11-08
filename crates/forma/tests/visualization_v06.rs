@@ -399,3 +399,74 @@ page MetricList {
         "{codes:?}"
     );
 }
+
+#[test]
+fn antv_adapter_supports_funnel_and_radar() {
+    let dir = tmp("antv-funnel");
+    project(&dir, Some("antv"));
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app viz06 { version = "0.1.0" }
+entity Order {
+  id     Uuid @id @default(uuid)
+  stage  String(20)
+  amount Decimal(12,2)
+}
+api Orders { entity Order operations [list get] }
+chart Funnel {
+  type funnel
+  title { en "Funnel" }
+  source Orders.list
+  encoding { x { field stage type nominal } y { field amount type quantitative } }
+}
+page OrderList {
+  route "/orders"
+  title { en "Orders" }
+  table {
+    query   Orders.list
+    columns [stage]
+    actions { row [delete → Orders.delete confirm] }
+  }
+}
+"#,
+    )
+    .unwrap();
+    forma::build::run_build(&dir).unwrap();
+    let runtime = read(&dir, "generated/web/src/viz/runtime.tsx");
+    assert!(runtime.contains("new Funnel("), "{runtime}");
+}
+
+#[test]
+fn antv_adapter_rejects_unsupported_types_explicitly() {
+    // treemap：编码合法（x+y 同构），但 AntV adapter 不支持 → 构建期 bail
+    for bad in ["treemap"] {
+        let dir = tmp("antv-bad");
+        project(&dir, Some("antv"));
+        fs::write(
+            dir.join("forma/app.fm"),
+            format!(
+                r#"
+app viz06 {{ version = "0.1.0" }}
+entity Order {{ id Uuid @id @default(uuid) name String(20) value Decimal(12,2) }}
+api Orders {{ entity Order operations [list get] }}
+chart X {{
+  type {bad}
+  title {{ en "X" }}
+  source Orders.list
+  encoding {{ x {{ field name type nominal }} y {{ field value type quantitative }} }}
+}}
+page OrderList {{
+  route "/orders"
+  title {{ en "Orders" }}
+  table {{ query Orders.list columns [name] actions {{ row [delete → Orders.delete confirm] }} }}
+}}
+"#
+            ),
+        )
+        .unwrap();
+        let err = forma::build::run_build(&dir).unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("not supported by the AntV"), "{msg}");
+    }
+}

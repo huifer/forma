@@ -49,6 +49,31 @@ pub fn emit_visualization_with_adapter(
             "chart type 'candlestick' requires adapter 'antv' (echarts has no built-in candlestick; set targets.visualization.adapter: antv)"
         );
     }
+    // AntV adapter 支持集：bar/line/area/scatter/funnel/radar/pie/candlestick。
+    // gauge/heatmap/treemap 的数据形态与 G2Plot 类差异大——显式拒绝，绝不错误渲染成柱状图。
+    const ANTV_SUPPORTED: &[&str] = &[
+        "bar",
+        "line",
+        "area",
+        "scatter",
+        "funnel",
+        "radar",
+        "pie",
+        "candlestick",
+    ];
+    if adapter == "antv" {
+        for c in &program.charts {
+            if !ANTV_SUPPORTED.contains(&c.chart_type.as_str())
+                && c.chart_type != "metric"
+                && c.chart_type != "table"
+            {
+                anyhow::bail!(
+                    "chart type '{}' is not supported by the AntV (G2Plot) adapter (supported: {:?});                      use adapter 'echarts' or pick a supported type",
+                    c.chart_type, ANTV_SUPPORTED
+                );
+            }
+        }
+    }
     let mut charts: Vec<ChartSpec> = Vec::new();
     for decl in &program.charts {
         // 语义错误已由 check_program 报出；此处跳过无法降级的图表。

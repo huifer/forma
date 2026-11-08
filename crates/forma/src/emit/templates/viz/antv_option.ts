@@ -10,6 +10,8 @@ const GEOMETRY: Record<string, string> = {
   line: "line",
   area: "area",
   scatter: "point",
+  funnel: "interval", // G2Plot Funnel 用独立类渲染（runtime 分派）
+  radar: "line", // G2Plot Radar：xField/yField 同构
 };
 
 export function geometryOf(chartType: string): string {
