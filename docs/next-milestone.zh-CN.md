@@ -1,5 +1,11 @@
 # 近期里程碑（Reliability & Verification）
 
+> **P2 轨道 A 已全面收尾（2026-11-08）**：F-001…F-008 之后，P2 的 8 项余项
+> （多层关系遍历 / GraphQL 逆向关系 / 多租户管理 UI / 产物清单来源规格与锚点 /
+> 补丁图表看板操作 / SQL·Prisma 逆向导入与迁移链导出 / 字段级显隐与 requestId 核实）
+> 全部关闭；目标扩栈（轨道 B）按用户决策撤销。详见
+> [docs/architecture/roadmap/p2-plan.zh-CN.md](architecture/roadmap/p2-plan.zh-CN.md)。
+
 > 完整路线图见 [roadmap.zh-CN.md](roadmap.zh-CN.md) · 验证体系见 [verification.zh-CN.md](verification.zh-CN.md)
 > · 迁移安全见 [migration-safety.zh-CN.md](migration-safety.zh-CN.md) · Agent 工作流见 [agent-workflow.zh-CN.md](agent-workflow.zh-CN.md)
 

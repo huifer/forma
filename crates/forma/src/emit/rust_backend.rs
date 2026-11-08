@@ -313,27 +313,82 @@ fn has_conflict_errors(program: &Program) -> bool {
             .any(|g| !g.denies.is_empty())
 }
 
+/// 编译行级访问守卫（A-2：任意深度关系遍历）。
+///
+/// 对每个跨关系路径生成逐跳 `repo::find_{E}` 取数；**任一行缺失即 403**（fail-closed，
+/// 不用兜底值把条件判成允许）；最终字段 clone 后绑定到 `__relN` 变量供表达式引用。
 fn compile_access_guard(
     program: &Program,
     entity: &EntityDecl,
     cond: &Expr,
-    relations: &[(&str, String)],
+    tenant_arg: &str,
 ) -> String {
+    let mut pre = String::new();
     let mut bindings = String::new();
+    let mut path_bindings: Vec<(Vec<String>, String)> = Vec::new();
     let mut idx = 0usize;
+    let mut paths: Vec<Vec<String>> = Vec::new();
+    for p in crate::dsl::expr_refs(cond) {
+        if p.len() >= 2 && !paths.contains(&p) {
+            paths.push(p);
+        }
+    }
+    for path in paths {
+        let mut current: &EntityDecl = entity;
+        let mut row_var = "row".to_string();
+        let mut ok = true;
+        for seg in &path[..path.len() - 1] {
+            let Some(field) = current.fields.iter().find(|f| f.name == *seg) else {
+                ok = false;
+                break;
+            };
+            let Some(target) = program.entities.iter().find(|e| e.name == field.type_name) else {
+                ok = false;
+                break;
+            };
+            idx += 1;
+            let next = format!("__row{idx}");
+            let fk = format!("{}_id", snake(seg));
+            let repo_fn = format!("find_{}", snake(&target.name));
+            pre.push_str(&format!(
+                "    let {next} = repo::{repo_fn}(&db, &{row_var}.{fk}, {tenant_arg}).await?.ok_or(AppError::Forbidden(\"access relation row missing\".to_string()))?;\n"
+            ));
+            row_var = next;
+            current = target;
+        }
+        if !ok {
+            continue;
+        }
+        let last = path.last().expect("non-empty path");
+        let Some(field) = current.fields.iter().find(|f| f.name == *last) else {
+            continue;
+        };
+        let accessor = format!("{row_var}.{}", snake(&field.name));
+        idx += 1;
+        let var = format!("__rel{idx}");
+        if field.optional {
+            let fallback = typed_fallback(program, &field.type_name);
+            pre.push_str(&format!(
+                "    let {var} = {accessor}.clone().unwrap_or({fallback});\n"
+            ));
+        } else {
+            pre.push_str(&format!("    let {var} = {accessor}.clone();\n"));
+        }
+        path_bindings.push((path, var));
+    }
     let vars: &[(&str, &str)] = &[("role", "role")];
     let expr = expr_to_rust_access(
         cond,
         program,
         entity,
         "row",
-        relations,
+        &path_bindings,
         vars,
         &mut bindings,
         &mut idx,
     );
     format!(
-        "{bindings}    let role = user.role.clone();\n    if !({expr}) {{ return Err(AppError::Forbidden(\"operation not permitted for this role\".to_string())); }}\n"
+        "{pre}{bindings}    let role = user.role.clone();\n    if !({expr}) {{ return Err(AppError::Forbidden(\"operation not permitted for this role\".to_string())); }}\n"
     )
 }
 
@@ -361,7 +416,7 @@ fn op_guard_bundle(
     api_roles: &std::collections::HashMap<String, Vec<String>>,
     access: &std::collections::HashMap<String, Expr>,
     op: &str,
-    relations: &[(&str, String)],
+    tenant_arg: &str,
     force_ext: bool,
 ) -> OpGuard {
     let mut pre = String::new();
@@ -381,7 +436,7 @@ fn op_guard_bundle(
     if let Some(cond) = access.get(op) {
         let is_any = matches!(cond, Expr::Ref { path, .. } if path.len() == 1 && path[0] == "any");
         if !is_any {
-            let code = compile_access_guard(program, entity, cond, relations);
+            let code = compile_access_guard(program, entity, cond, tenant_arg);
             if access_needs_row(cond) {
                 after_row.push_str(&code);
             } else {
@@ -401,6 +456,41 @@ fn op_guard_bundle(
         pre,
         after_row,
     }
+}
+
+/// A-2：行级访问规则跨关系遍历涉及的目标实体——这些实体即使没有
+/// get/update/delete API，也必须生成 `find_{E}` 仓储函数供守卫逐跳取数。
+fn access_relation_targets(program: &Program) -> std::collections::BTreeSet<String> {
+    let mut out = std::collections::BTreeSet::new();
+    for rules in &program.rules {
+        for access in &rules.access {
+            let Some(start) = program.entities.iter().find(|e| e.name == access.entity) else {
+                continue;
+            };
+            for rule in &access.rules {
+                for path in crate::dsl::expr_refs(&rule.expr) {
+                    if path.len() < 2 {
+                        continue;
+                    }
+                    // 逐跳收集目标实体名（最后一段是标量字段，不产生实体跳）
+                    let mut current = start;
+                    for seg in &path[..path.len() - 1] {
+                        let Some(field) = current.fields.iter().find(|f| f.name == *seg) else {
+                            break;
+                        };
+                        let Some(target) =
+                            program.entities.iter().find(|e| e.name == field.type_name)
+                        else {
+                            break;
+                        };
+                        out.insert(target.name.clone());
+                        current = target;
+                    }
+                }
+            }
+        }
+    }
+    out
 }
 
 fn error_rs(
@@ -683,11 +773,11 @@ fn decimal_literal(v: f64) -> String {
     }
 }
 
-/// 访问条件中操作数的类型（用于数字字面量类型化）。
+/// 访问条件中操作数的类型（用于数字字面量类型化；A-2 支持任意深度路径）。
 fn access_operand_type(program: &Program, entity: &EntityDecl, expr: &Expr) -> Option<String> {
     match expr {
-        Expr::Ref { path, .. } if path.len() == 1 => {
-            let field = entity.fields.iter().find(|f| f.name == path[0])?;
+        Expr::Ref { path, .. } => {
+            let field = crate::dsl::resolve_access_field(program, entity, path).ok()?;
             if super::is_enum(program, &field.type_name) {
                 // 枚举在模型侧落为 String
                 Some("String".to_string())
@@ -704,6 +794,7 @@ fn access_operand_type(program: &Program, entity: &EntityDecl, expr: &Expr) -> O
 ///
 /// 与通用表达式编译器的差异：
 /// - `role` 绑定为当前用户角色（String）；
+/// - 跨关系路径（`a.b.c`）由 `path_bindings` 提供已取数的变量（A-2：任意深度）；
 /// - Option 字段**克隆后**取兜底值——既不移动出 `row`（否则 `Ok(Json(row))` 报部分移动），
 ///   也不移动出引用；
 /// - 数值字面量按对侧字段类型渲染（Decimal 必须显式类型）。
@@ -713,7 +804,7 @@ fn expr_to_rust_access(
     program: &Program,
     entity: &EntityDecl,
     row: &str,
-    relations: &[(&str, String)],
+    path_bindings: &[(Vec<String>, String)],
     vars: &[(&str, &str)],
     bindings: &mut String,
     idx: &mut usize,
@@ -726,38 +817,13 @@ fn expr_to_rust_access(
                     return code.to_string();
                 }
             }
-            // 跨关系：仅支持一层 `relation.field`，字段声明时已校验存在与类型
-            if path.len() == 2 {
-                if let Some((alias, _)) = relations.iter().find(|(name, _)| *name == path[0]) {
-                    let target_field = {
-                        let relation_field = entity.fields.iter().find(|f| f.name == path[0]);
-                        let relation_field = match relation_field {
-                            Some(f) => f,
-                            None => return "Default::default()".to_string(),
-                        };
-                        let Some(target) = program
-                            .entities
-                            .iter()
-                            .find(|e| e.name == relation_field.type_name)
-                        else {
-                            return "Default::default()".to_string();
-                        };
-                        target.fields.iter().find(|f| f.name == path[1])
-                    };
-                    let Some(target_field) = target_field else {
-                        return "Default::default()".to_string();
-                    };
-                    let col = snake(&target_field.name);
-                    let accessor = format!("{alias}.{col}");
-                    *idx += 1;
-                    let var = format!("__rel{idx}");
-                    let fallback = typed_fallback(program, &target_field.type_name);
-                    // 关系行可能缺失（LEFT JOIN）→ clone 后兜底，不移动出别名
-                    bindings.push_str(&format!(
-                        "    let {var} = {accessor}.clone().unwrap_or({fallback});\n"
-                    ));
-                    return var;
+            // 跨关系：由编译器在守卫前置代码里完成取数，这里直接引用绑定变量
+            if path.len() >= 2 {
+                if let Some((_, var)) = path_bindings.iter().find(|(p, _)| p == path) {
+                    return var.clone();
                 }
+                // 检查层保证绑定存在；缺绑定时 fail-closed 返回默认（不生成不可判定表达式）
+                return "Default::default()".to_string();
             }
             let Some(field) = entity.fields.iter().find(|f| f.name == path[0]) else {
                 return "Default::default()".to_string();
@@ -788,25 +854,42 @@ fn expr_to_rust_access(
             let parts: Vec<String> = items
                 .iter()
                 .map(|i| {
-                    expr_to_rust_access(i, program, entity, row, relations, vars, bindings, idx)
+                    expr_to_rust_access(i, program, entity, row, path_bindings, vars, bindings, idx)
                 })
                 .collect();
             format!("vec![{}]", parts.join(", "))
         }
         Expr::Not(inner) => format!(
             "!({})",
-            expr_to_rust_access(inner, program, entity, row, relations, vars, bindings, idx)
+            expr_to_rust_access(
+                inner,
+                program,
+                entity,
+                row,
+                path_bindings,
+                vars,
+                bindings,
+                idx
+            )
         ),
         Expr::Call(_, _) => "true".to_string(),
         Expr::Null => "Default::default()".to_string(),
         Expr::Bin(op, a, b) => {
-            let l = expr_to_rust_access(a, program, entity, row, relations, vars, bindings, idx);
+            let l =
+                expr_to_rust_access(a, program, entity, row, path_bindings, vars, bindings, idx);
             let l_type = access_operand_type(program, entity, a);
             let r = match &**b {
                 Expr::Num(v) if l_type.as_deref() == Some("Decimal") => decimal_literal(*v),
-                other => {
-                    expr_to_rust_access(other, program, entity, row, relations, vars, bindings, idx)
-                }
+                other => expr_to_rust_access(
+                    other,
+                    program,
+                    entity,
+                    row,
+                    path_bindings,
+                    vars,
+                    bindings,
+                    idx,
+                ),
             };
             let r_type = access_operand_type(program, entity, b);
             let l_final = match &**a {
@@ -958,15 +1041,15 @@ fn repo_rs(program: &Program) -> String {
     if !any_repo_api {
         return out;
     }
-    out.push_str("use serde::Deserialize;\nuse crate::models::*;\nuse sqlx::MySqlPool;\n");
-    // ListParams（含 CursorPayload）都 derive Deserialize
-    if program
+    let any_list_op = program
         .apis
         .iter()
-        .any(|a| !a.operations.is_empty() && a.list.is_some())
-    {
-        out.push_str("use serde::Deserialize;\n");
+        .any(|a| a.operations.iter().any(|o| o == "list"));
+    let mut imports = String::from("use crate::models::*;\nuse sqlx::MySqlPool;\n");
+    if any_list_op {
+        imports.insert_str(0, "use serde::Deserialize;\n");
     }
+    out.push_str(&imports);
     if any_create_op {
         out.push_str("use uuid::Uuid;\n");
     }
@@ -1083,6 +1166,12 @@ fn repo_rs(program: &Program) -> String {
         // 租户维度（M10 收尾）：实体含 @tenant 字段 → 查询强制限当前租户。
         // tenant=None → `s.{col} = NULL` 恒不命中 → 空集（安全且确定，无绕过路径）。
         let tenant_col = crate::dsl::tenant_field_of(program, &entity.name).map(|f| snake(&f));
+        // 无租户列时形参改名 `_tenant`，避免生成工程 unused_variables 警告
+        let tenant_param: &str = if tenant_col.is_some() {
+            "tenant"
+        } else {
+            "_tenant"
+        };
         if let Some(col) = &tenant_col {
             wheres.push_str(&format!("        (s.{col} = ?) AND\n"));
         }
@@ -1186,7 +1275,7 @@ fn repo_rs(program: &Program) -> String {
                     })
                     .collect::<String>();
                 let frag = format!(
-                    r#"pub async fn list__SNAKE__(db: &MySqlPool, params: &__NAME__ListParams, cursor: Option<{cursor_ty}>, tenant: Option<&str>) -> sqlx::Result<Vec<__NAME__ListRow>> {{
+                    r#"pub async fn list__SNAKE__(db: &MySqlPool, params: &__NAME__ListParams, cursor: Option<{cursor_ty}>, __TENANT_PARAM__: Option<&str>) -> sqlx::Result<Vec<__NAME__ListRow>> {{
     let page_size = params.page_size.unwrap_or(20).clamp(1, 200);
     let cursor_where = if cursor.is_some() {{ {cursor_sql:?}.to_string() }} else {{ String::new() }};
     let sql = format!(
@@ -1201,6 +1290,7 @@ __JOINS__        __WHERE__ {{}}\n        ORDER BY __ORDER__
                     cursor_ty = cursor_ty,
                     cursor_sql = cursor_sql,
                 )
+                .replace("__TENANT_PARAM__", tenant_param)
                 .replace("__SNAKE__", &format!("_{}", snake_name))
                 .replace("__NAME__", name)
                 .replace("__SELECT__", &select_cols)
@@ -1213,7 +1303,7 @@ __JOINS__        __WHERE__ {{}}\n        ORDER BY __ORDER__
                     "    if let Some(({tuple_binding})) = cursor {{\n{cursor_binds}    }}\n"
                 );
             } else {
-                let frag = r#"pub async fn list__SNAKE__(db: &MySqlPool, params: &__NAME__ListParams, tenant: Option<&str>) -> sqlx::Result<Vec<__NAME__ListRow>> {
+                let frag = r#"pub async fn list__SNAKE__(db: &MySqlPool, params: &__NAME__ListParams, __TENANT_PARAM__: Option<&str>) -> sqlx::Result<Vec<__NAME__ListRow>> {
     let page = params.page.unwrap_or(1).max(1);
     let page_size = params.page_size.unwrap_or(20).clamp(1, 200);
     let sql = format!(
@@ -1226,6 +1316,7 @@ __JOINS__        __WHERE__
     let mut query = sqlx::query_as::<_, __NAME__ListRow>(&sql);
 "#;
                 let frag = frag
+                    .replace("__TENANT_PARAM__", tenant_param)
                     .replace("__SNAKE__", &format!("_{}", snake_name))
                     .replace("__NAME__", name)
                     .replace("__SELECT__", &select_cols)
@@ -1345,13 +1436,14 @@ __JOINS__        __WHERE__
         }
 
         if has_op("create") {
-            let frag = r#"pub async fn insert__SNAKE__(db: &MySqlPool, input: &Create__NAME__, tenant: Option<&str>) -> sqlx::Result<()> {
+            let frag = r#"pub async fn insert__SNAKE__(db: &MySqlPool, input: &Create__NAME__, __TENANT_PARAM__: Option<&str>) -> sqlx::Result<()> {
     let id = Uuid::new_v4().to_string();
     let sql = "INSERT INTO __TABLE__ (__COLS__) VALUES (__VALS__)";
     sqlx::query(sql)
         .bind(id)
 "#;
             let frag = frag
+                .replace("__TENANT_PARAM__", tenant_param)
                 .replace("__SNAKE__", &format!("_{}", snake_name))
                 .replace("__NAME__", name)
                 .replace("__TABLE__", &table)
@@ -1419,10 +1511,18 @@ __JOINS__        __WHERE__
 "#
             ));
         }
-        if has_op("get") || has_op("update") || has_op("delete") {
+        // A-2：关系遍历守卫需要 find_X（即使该实体没有 get/update/delete API）
+        let relation_targets = access_relation_targets(program);
+        if has_op("get") || has_op("update") || has_op("delete") || relation_targets.contains(name)
+        {
             let tenant_find = match &tenant_col {
                 Some(col) => format!(" AND {col} = ?"),
                 None => String::new(),
+            };
+            let tenant_param = if tenant_col.is_some() {
+                "tenant"
+            } else {
+                "_tenant"
             };
             let tenant_bind = if tenant_col.is_some() {
                 ".bind(tenant)"
@@ -1430,7 +1530,7 @@ __JOINS__        __WHERE__
                 ""
             };
             out.push_str(&format!(
-                r#"pub async fn find_{snake_name}(db: &MySqlPool, id: &str, tenant: Option<&str>) -> sqlx::Result<Option<{name}>> {{
+                r#"pub async fn find_{snake_name}(db: &MySqlPool, id: &str, {tenant_param}: Option<&str>) -> sqlx::Result<Option<{name}>> {{
     let sql = "SELECT * FROM {table} WHERE id = ?{tenant_find}";
     let query = sqlx::query_as::<_, {name}>(sql).bind(id);
     query{tenant_bind}.fetch_optional(db)
@@ -1439,6 +1539,7 @@ __JOINS__        __WHERE__
 
 "#,
                 tenant_bind = tenant_bind,
+                tenant_param = tenant_param,
             ));
         }
     }
@@ -1720,6 +1821,11 @@ fn routes_rs(program: &Program) -> String {
     // 按需导入（P2-4）：entity-only / auth-only 不需要 models/repo
     let needs_repo = !program.apis.is_empty();
     let needs_models = needs_repo;
+    // repo glob 仅用于 `Query<{Entity}ListParams>` 的未限定类型名
+    let needs_repo_glob = program
+        .apis
+        .iter()
+        .any(|a| a.operations.iter().any(|o| o == "list"));
     let needs_error =
         !program.apis.is_empty() || program.auth.is_some() || !program.commands.is_empty();
     let mut header = String::new();
@@ -1732,7 +1838,9 @@ fn routes_rs(program: &Program) -> String {
     if needs_repo {
         header.push_str("use crate::repo;\n");
         header.push_str(validators_import);
-        header.push_str("use crate::repo::*;\n");
+        if needs_repo_glob {
+            header.push_str("use crate::repo::*;\n");
+        }
     }
     header.push_str(auth_import);
     header.push_str("use std::sync::Arc;\n\npub type Db = Arc<sqlx::MySqlPool>;\n\n");
@@ -1798,37 +1906,24 @@ fn routes_rs(program: &Program) -> String {
         let auth_map = api.map(api_auth_roles).unwrap_or_default();
         // 实体级访问规则：op → 条件表达式
         let access_map = access_conditions(program, name);
-        let relations: Vec<(&str, String)> = entity
-            .fields
-            .iter()
-            .filter(|f| super::is_relation(program, &f.type_name))
-            .map(|f| {
-                let alias = format!(
-                    "t{}",
-                    1 + entity
-                        .fields
-                        .iter()
-                        .take(
-                            entity
-                                .fields
-                                .iter()
-                                .position(|x| x.name == f.name)
-                                .unwrap_or(0)
-                        )
-                        .filter(|x| super::is_relation(program, &x.type_name))
-                        .count()
-                );
-                (f.name.as_str(), alias)
-            })
-            .collect();
         // 字段级策略（P0-2）：list/get 需要角色做显隐裁剪
         let has_field_policies = !crate::dsl::field_policy_roles(program)
             .iter()
             .filter(|(e, _, _)| e == name)
             .collect::<Vec<_>>()
             .is_empty();
-        // 租户调用参数：有 auth 时从 claim 取；无 auth 时 None（repo 按参数过滤）
-        let tenant_arg = if program.auth.is_some() {
+        // 租户维度（M10 收尾）：@tenant 实体全操作需要当前用户（claim 的 tenant）
+        let has_tenant_col = crate::dsl::tenant_field_of(program, name).is_some();
+        // 调用参数：仅该实体带租户列且启用了 auth 时，handler 才有 `user` 提取器。
+        // 无租户列的实体传 None——避免「auth 工程无租户列却引用 user」的存量编译错误。
+        let tenant_arg = if has_tenant_col && program.auth.is_some() {
+            "user.tenant.as_deref()"
+        } else {
+            "None"
+        };
+        // 守卫里的关系行取数：仅多租户工程按 claim 租户过滤（fail-closed）；
+        // 无租户维度时 CurrentUser 没有 tenant 字段，必须传 None。
+        let guard_tenant_arg = if crate::dsl::tenant_enabled(program) {
             "user.tenant.as_deref()"
         } else {
             "None"
@@ -1844,7 +1939,6 @@ fn routes_rs(program: &Program) -> String {
             String::new()
         };
         // 租户维度（M10 收尾）：@tenant 实体全操作需要当前用户（claim 的 tenant）
-        let has_tenant_col = crate::dsl::tenant_field_of(program, name).is_some();
         let guard = |op: &str| {
             let force_ext = (has_field_policies && matches!(op, "list" | "get")) || has_tenant_col;
             op_guard_bundle(
@@ -1853,7 +1947,7 @@ fn routes_rs(program: &Program) -> String {
                 &auth_map,
                 &access_map,
                 op,
-                &relations,
+                guard_tenant_arg,
                 force_ext,
             )
         };
@@ -2547,6 +2641,12 @@ fn command_routes_rs(program: &Program) -> anyhow::Result<(String, Vec<(String, 
         } else {
             ""
         };
+        // A-2 连带修复：命令 handler 的 find_X 也带 tenant 形参（与 repo 契约一致）
+        let cmd_tenant_arg = if crate::dsl::tenant_enabled(program) {
+            "req_user.tenant.as_deref()"
+        } else {
+            "None"
+        };
         let actor = if program.auth.is_some() {
             "Some(req_user.username.as_str())"
         } else {
@@ -2583,13 +2683,14 @@ fn command_routes_rs(program: &Program) -> anyhow::Result<(String, Vec<(String, 
     if !errs.is_empty() {{
         return Err(AppError::Validation(errs));
     }}
-    let row = repo::find_{0}(&db, &id).await?.ok_or(AppError::NotFound)?;
+    let row = repo::find_{0}(&db, &id, {tenant_arg}).await?.ok_or(AppError::NotFound)?;
 {pre_check}{audit_call}    repo::{fn_name}(&db, &id, &input).await?;
 {notify_call}    Ok(Json(serde_json::json!({{ "ok": true }})))
 }}
 
 "#,
             snake(entity_name),
+            tenant_arg = cmd_tenant_arg,
         ));
         routes.push((axum_path, format!("{fn_name}_handler")));
     }
@@ -3010,6 +3111,10 @@ fn has_notify_rules(program: &Program, entity: &str, event: &str) -> bool {
 /// 租户维度（M10 收尾）的条件代码片段——te=false 时全空（产物零变化）。
 struct TenantBlocks {
     tenant_let: String,
+    /// issue_token 的 tenant 形参名（无租户维度时前缀 _ 避免 unused warning）
+    token_param: String,
+    /// login 里 issue_token 的第三参数（te=false 时不能用 user.tenant）
+    login_arg: String,
     field_tail: String,
     login_tail: String,
     token_field: String,
@@ -3029,7 +3134,10 @@ struct TenantBlocks {
 fn tenant_block(te: bool) -> TenantBlocks {
     if !te {
         return TenantBlocks {
-            tenant_let: String::new(),
+            // 无租户维度：register 仍需一个 Option<String> 绑定供 issue_token 使用
+            tenant_let: "    let tenant: Option<String> = None;\n".into(),
+            token_param: "_tenant".into(),
+            login_arg: "None".into(),
             field_tail: String::new(),
             login_tail: String::new(),
             token_field: String::new(),
@@ -3048,6 +3156,8 @@ fn tenant_block(te: bool) -> TenantBlocks {
     }
     TenantBlocks {
         tenant_let: "    let tenant = input.tenant.clone();\n".into(),
+        token_param: "tenant".into(),
+        login_arg: "user.tenant.as_deref()".into(),
         field_tail: ", tenant".into(),
         login_tail: ", tenant: user.tenant".into(),
         token_field: "\n    pub tenant: Option<String>,".into(),
@@ -3209,7 +3319,7 @@ fn jwt_secret() -> String {
     std::env::var("JWT_SECRET").unwrap_or_else(|_| "__APP__-dev-secret-change-me".into())
 }
 
-fn issue_token(username: &str, role: &str, tenant: Option<&str>) -> String {
+fn issue_token(username: &str, role: &str, __TENANT_PARAM__: Option<&str>) -> String {
     use jsonwebtoken::{encode, EncodingKey, Header};
     let claims = serde_json::json!({
         "sub": username,
@@ -3331,7 +3441,7 @@ pub async fn login(
     if !verify_password(&input.password, &user.password_hash) {
         return Err(AppError::Auth("用户名或密码错误".into()));
     }
-__DISABLED_CHECK__    let token = issue_token(&user.username, &user.role, user.tenant.as_deref());
+__DISABLED_CHECK__    let token = issue_token(&user.username, &user.role, __TENANT_LOGIN_ARG__);
     Ok(Json(TokenResponse { token, username: user.username, role: user.role__TENANT_LOGIN_TAIL__ }))
 }
 
@@ -3354,6 +3464,8 @@ __TENANT_ME__
         .replace("//REQUIRE_ROLE_BLOCK\n", &require_role_block)
         .replace("__TENANT_TABLES__\n", &tenant_admin)
         .replace("__TENANT_LET__", tenant_block.tenant_let.as_str())
+        .replace("__TENANT_PARAM__", tenant_block.token_param.as_str())
+        .replace("__TENANT_LOGIN_ARG__", tenant_block.login_arg.as_str())
         .replace("__TENANT_FIELD_TAIL__", tenant_block.field_tail.as_str())
         .replace("__TENANT_LOGIN_TAIL__", tenant_block.login_tail.as_str())
         .replace("__TENANT_TOKEN_FIELD__", tenant_block.token_field.as_str())
@@ -3924,7 +4036,7 @@ fn models_rs(program: &Program) -> String {
             }
         }
         out.push_str(&format!(
-            "#[derive(Debug, Serialize, FromRow)]\npub struct {struct_name}ListRow {{\n{row_fields}}}\n\n"
+            "#[derive(Debug, Serialize, FromRow)]\n#[allow(dead_code)] // 无 list API 的实体仍保留 ListRow 契约\npub struct {struct_name}ListRow {{\n{row_fields}}}\n\n"
         ));
 
         // Create / Update 输入

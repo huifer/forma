@@ -171,6 +171,22 @@ pub enum DslPatchOperation {
         #[serde(default)]
         message: Option<String>,
     },
+    /// 改图表语义类型（spec:ir §15.4 图表节点细粒度操作）
+    SetChartType {
+        chart: String,
+        /// 目标语义类型（ChartType 白名单：line/bar/…/metric/table）
+        #[serde(rename = "chartType")]
+        chart_type: String,
+    },
+    /// 看板网格追加图表槽位（`page { dashboard { grid { … } } }`）
+    AddDashboardChart {
+        page: String,
+        chart: String,
+        /// 栅格跨度（12 列制，1..=12）
+        w: u32,
+        /// 行高（px，> 0）
+        h: u32,
+    },
 }
 
 /// 补丁里的字段规格（`add-entity` 用）。
@@ -1038,40 +1054,25 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                         });
                         continue;
                     }
-                    if path.len() > 2 {
-                        d.push(Diagnostic {
-                            severity: "error".into(),
-                            code: "dsl-access-relation-depth-unsupported".into(),
-                            message: format!(
-                                "access rule for '{}' op '{}' traverses more than one relation (`{}`); maximum supported path is relation.field",
-                                access.entity, rule.op, path.join(".")
-                            ),
-                            file: ctx.file.clone(),
-                            line: ctx.line,
-                            nodes: None,
-                        });
-                        continue;
-                    }
-                    let Some(root_field) =
-                        entity.and_then(|e| e.fields.iter().find(|f| f.name == path[0]))
-                    else {
-                        continue; // check_expr_paths already reported the unknown field
+                    // A-2：路径解析支持任意深度关系遍历；中间段必须非可选关系
+                    let Some(entity) = entity else {
+                        continue; // 实体不存在由别的诊断报告
                     };
-                    let field = if path.len() == 1 {
-                        Some(root_field)
-                    } else {
-                        let target = program
-                            .entities
-                            .iter()
-                            .find(|e| e.name == root_field.type_name);
-                        if target.is_none() {
+                    let field = match resolve_access_field(program, entity, &path) {
+                        Ok(f) => f,
+                        Err(AccessPathError::UnknownField { .. }) => continue, // check_expr_paths 已报
+                        Err(AccessPathError::NonRelation {
+                            entity: e,
+                            field: f,
+                        }) => {
                             d.push(Diagnostic {
                                 severity: "error".into(),
                                 code: "dsl-access-relation-unsupported".into(),
                                 message: format!(
-                                    "access path '{}' traverses non-relation field '{}'",
+                                    "access path '{}' traverses non-relation field '{}.{}'",
                                     path.join("."),
-                                    path[0]
+                                    e,
+                                    f
                                 ),
                                 file: ctx.file.clone(),
                                 line: ctx.line,
@@ -1079,21 +1080,20 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                             });
                             continue;
                         }
-                        if root_field.optional {
+                        Err(AccessPathError::OptionalRelation {
+                            entity: e,
+                            field: f,
+                        }) => {
                             d.push(Diagnostic {
                                 severity: "error".into(),
                                 code: "dsl-access-relation-optional-unsupported".into(),
-                                message: format!("access path '{}' traverses optional relation '{}'; optional relation access is not supported", path.join("."), path[0]),
+                                message: format!("access path '{}' traverses optional relation '{}.{}'; optional relation access is not supported (fail-closed)", path.join("."), e, f),
                                 file: ctx.file.clone(),
                                 line: ctx.line,
                                 nodes: None,
                             });
                             continue;
                         }
-                        target.and_then(|e| e.fields.iter().find(|f| f.name == path[1]))
-                    };
-                    let Some(field) = field else {
-                        continue;
                     };
                     let type_name = field.type_name.clone();
                     if !access_comparable(program, &type_name) {
@@ -1941,7 +1941,7 @@ fn check_expr_paths(
             if path.len() == 1 && vars.contains(&path[0].as_str()) {
                 return out;
             }
-            let Some(field) = entity.fields.iter().find(|f| f.name == path[0]) else {
+            let Some(_field) = entity.fields.iter().find(|f| f.name == path[0]) else {
                 out.push(Diagnostic {
                     severity: "error".into(),
                     code: "dsl-unknown-field".into(),
@@ -1952,35 +1952,41 @@ fn check_expr_paths(
                 });
                 return out;
             };
-            if path.len() > 1 {
-                // 跨关系：path[0] 必须是关系字段
-                let is_relation = program.entities.iter().any(|e| e.name == field.type_name);
-                if !is_relation {
+            // A-2：任意深度关系遍历——逐段校验路径存在性与中间段类型
+            let mut current = entity;
+            for (i, seg) in path.iter().enumerate() {
+                let Some(field) = current.fields.iter().find(|f| f.name == *seg) else {
+                    out.push(Diagnostic {
+                        severity: "error".into(),
+                        code: "dsl-unknown-field".into(),
+                        message: format!("rule references unknown field {}.{}", current.name, seg),
+                        file: ctx.file.clone(),
+                        line: ctx.line,
+                        nodes: None,
+                    });
+                    return out;
+                };
+                if i + 1 == path.len() {
+                    break;
+                }
+                let Some(target) = program.entities.iter().find(|e| e.name == field.type_name)
+                else {
                     out.push(Diagnostic {
                         severity: "error".into(),
                         code: "dsl-path".into(),
                         message: format!(
                             "'{}.{}' is not a relation, cannot traverse '{}'",
-                            entity.name, path[0], path[1]
+                            current.name,
+                            seg,
+                            path[i + 1]
                         ),
                         file: ctx.file.clone(),
                         line: ctx.line,
                         nodes: None,
                     });
-                } else if let Some(target) =
-                    program.entities.iter().find(|e| e.name == field.type_name)
-                {
-                    if !target.fields.iter().any(|f| f.name == path[1]) {
-                        out.push(Diagnostic {
-                            severity: "error".into(),
-                            code: "dsl-unknown-field".into(),
-                            message: format!("'{}' has no field '{}'", field.type_name, path[1]),
-                            file: ctx.file.clone(),
-                            line: ctx.line,
-                            nodes: None,
-                        });
-                    }
-                }
+                    return out;
+                };
+                current = target;
             }
             let _ = old;
         }
@@ -2077,6 +2083,55 @@ pub fn tenant_fields(program: &Program) -> Vec<(String, String)> {
         }
     }
     out
+}
+
+/// 行级访问字段路径的解析错误（A-2：任意深度关系遍历）。
+#[derive(Debug, Clone)]
+pub enum AccessPathError {
+    UnknownField { entity: String, field: String },
+    NonRelation { entity: String, field: String },
+    OptionalRelation { entity: String, field: String },
+}
+
+/// 解析 `relation.relation.field` 形式的字段路径，返回最终字段声明。
+///
+/// **单一来源**：检查层（诊断）、生成层（关系行取数 / 字面量类型化）共用。
+/// 中间段必须是**非可选关系**（fail-closed：可选关系遍历显式拒绝，
+/// 避免关系行缺失时兜底值把条件判成允许）。
+pub fn resolve_access_field<'a>(
+    program: &'a Program,
+    start: &'a crate::dsl::EntityDecl,
+    path: &[String],
+) -> Result<&'a crate::dsl::FieldDecl, AccessPathError> {
+    let mut current = start;
+    for (i, seg) in path.iter().enumerate() {
+        let field = current
+            .fields
+            .iter()
+            .find(|f| f.name == *seg)
+            .ok_or_else(|| AccessPathError::UnknownField {
+                entity: current.name.clone(),
+                field: seg.clone(),
+            })?;
+        if i + 1 == path.len() {
+            return Ok(field);
+        }
+        if field.optional {
+            return Err(AccessPathError::OptionalRelation {
+                entity: current.name.clone(),
+                field: seg.clone(),
+            });
+        }
+        current = program
+            .entities
+            .iter()
+            .find(|e| e.name == field.type_name)
+            .ok_or_else(|| AccessPathError::NonRelation {
+                entity: current.name.clone(),
+                field: seg.clone(),
+            })?;
+    }
+    unreachable!("empty access path")
 }
 
 /// 某实体的租户字段名（无租户维度 → None）。

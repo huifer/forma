@@ -113,6 +113,14 @@ pub fn run_build(project_dir: &Path) -> Result<BuildReport> {
 }
 
 pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<BuildReport> {
+    // F-002 余项：构建来源规格（IR 版本 + .fm 输入指纹 + 依赖清单）
+    let provenance = build_provenance(project_dir)?;
+    // A-6：扩展点锚点登记（磁盘存在的锚点 → 清单 Extension 归属，永不覆盖）
+    crate::artifacts::register_anchors(
+        project_dir,
+        &extension_anchors_for(project_dir),
+        &provenance,
+    )?;
     // F-002：构建前快照受保护产物（清单哈希 ≠ 磁盘内容 = 人工改过）
     let protected = crate::artifacts::snapshot_protected(project_dir)?;
     let (dir, program) = load_dsl_program(project_dir)?;
@@ -379,6 +387,7 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
         policy.overwrite,
         policy.strict,
         &all_files,
+        &provenance,
     )?;
     if policy.strict {
         for d in &mut artifact_diagnostics {
@@ -393,4 +402,89 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
         capability_diagnostics,
         artifact_diagnostics,
     })
+}
+
+/// 构建来源规格：`.fm` 源文件清单 + 归一化内容指纹（sha256，CRLF→LF 口径）。
+fn build_provenance(project_dir: &Path) -> Result<crate::artifacts::BuildProvenance> {
+    let loaded = crate::manifest::load_manifest(project_dir)?;
+    let patterns: Vec<String> = loaded.manifest.source.clone().unwrap_or_default();
+    // source 是 glob（如 "forma/**/*.fm"）——必须展开成真实文件
+    let mut files: Vec<String> = Vec::new();
+    for pattern in &patterns {
+        for p in crate::dsl::glob_files(project_dir, pattern) {
+            let rel = p
+                .strip_prefix(project_dir)
+                .unwrap_or(&p)
+                .to_string_lossy()
+                .to_string();
+            files.push(rel);
+        }
+    }
+    files.sort();
+    files.dedup();
+    let mut hasher = String::new();
+    for rel in &files {
+        let abs = if Path::new(rel).is_absolute() {
+            PathBuf::from(rel)
+        } else {
+            project_dir.join(rel)
+        };
+        let content = crate::util::read_text(&abs)?;
+        hasher.push_str(&crate::util::sha256_hex(&content));
+        hasher.push('\n');
+    }
+    Ok(crate::artifacts::BuildProvenance {
+        ir_version: crate::dsl::IR_VERSION.to_string(),
+        input_fingerprint: crate::util::sha256_hex(&hasher),
+        deps: files,
+    })
+}
+
+/// 扩展点锚点（ADR-0003 §6.3）：按已启用 target 声明锚点路径。
+/// 锚点文件由人工创建（Forma 不凭空生成）；构建只登记、永不覆盖。
+fn extension_anchors_for(project_dir: &Path) -> Vec<(String, String)> {
+    let mut anchors = Vec::new();
+    let loaded = crate::manifest::load_manifest(project_dir).ok();
+    if let Some(loaded) = loaded {
+        let targets = &loaded.manifest.targets;
+        if let Some(b) = &targets.backend {
+            let out = b.out.clone().unwrap_or_else(|| "generated/backend".into());
+            let ext = if b.language.as_deref() == Some("typescript") {
+                "ts"
+            } else {
+                "rs"
+            };
+            anchors.push((format!("{out}/src/extensions.{ext}"), "gen-rust".into()));
+        }
+        if let Some(f) = &targets.frontend {
+            let out = f.out.clone().unwrap_or_else(|| "generated/web".into());
+            match f.framework.as_deref() {
+                Some("vue") | Some("vue3") => {
+                    anchors.push((format!("{out}/src/overrides.vue"), "gen-vue".into()));
+                }
+                Some("nextjs") | Some("next") => {
+                    anchors.push((format!("{out}/src/overrides.tsx"), "gen-web".into()));
+                }
+                _ => {
+                    anchors.push((format!("{out}/src/overrides.tsx"), "gen-web".into()));
+                }
+            }
+        }
+        if let Some(m) = &targets.mobile {
+            let out = m.out.clone().unwrap_or_else(|| "generated/mobile".into());
+            match m.framework.as_deref() {
+                Some("expo") => {
+                    anchors.push((format!("{out}/src/overrides.tsx"), "gen-expo".into()));
+                }
+                _ => {
+                    anchors.push((format!("{out}/lib/extensions.dart"), "gen-flutter".into()));
+                }
+            }
+        }
+        if let Some(db) = &targets.database {
+            let out = db.out.clone().unwrap_or_else(|| "generated/db".into());
+            anchors.push((format!("{out}/extensions.sql"), "gen-mysql".into()));
+        }
+    }
+    anchors
 }

@@ -249,3 +249,113 @@ api Items {
     let models = fs::read_to_string(dir.join(MODELS)).unwrap();
     assert!(models.contains("pub stock"), "{models}");
 }
+
+// ── 7. A-6：来源规格（generator_version / ir_version / input_fingerprint / deps）──
+
+#[test]
+fn manifest_entries_record_source_provenance() {
+    let dir = tmp_dir("provenance");
+    write_project(&dir);
+    build(&dir, OwnershipPolicy::default());
+
+    let manifest_text = fs::read_to_string(dir.join(".forma/artifacts.json")).unwrap();
+    let m: serde_json::Value = serde_json::from_str(&manifest_text).unwrap();
+    let entry = m["artifacts"][MODELS].clone();
+    let src = entry["source"].clone();
+    assert_eq!(src["generator_version"], "1.0.0", "{src}");
+    assert_eq!(src["ir_version"], forma::dsl::IR_VERSION, "{src}");
+    assert!(
+        !src["input_fingerprint"].as_str().unwrap().is_empty(),
+        "{src}"
+    );
+    let deps = src["deps"].as_array().unwrap();
+    assert!(
+        deps.iter()
+            .any(|d| d.as_str().unwrap().ends_with("forma/app.fm")),
+        "{src}"
+    );
+    // 指纹稳定：同规格重建指纹不变
+    let before = src["input_fingerprint"].as_str().unwrap().to_string();
+    build(&dir, OwnershipPolicy::default());
+    let m2: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(dir.join(".forma/artifacts.json")).unwrap())
+            .unwrap();
+    assert_eq!(
+        m2["artifacts"][MODELS]["source"]["input_fingerprint"]
+            .as_str()
+            .unwrap(),
+        before,
+        "同一规格的输入指纹必须稳定"
+    );
+}
+
+// ── 8. A-6：扩展点锚点（Extension 归属登记 + 永不覆盖）──────────
+
+#[test]
+fn extension_anchor_is_registered_and_never_overwritten() {
+    let dir = tmp_dir("anchor");
+    write_project(&dir);
+    const ANCHOR: &str = "generated/backend/src/extensions.rs";
+    fs::create_dir_all(dir.join(std::path::Path::new(ANCHOR).parent().unwrap())).unwrap();
+    let human = "// 人工扩展：业务钩子\npub fn hook() {}\n";
+    fs::write(dir.join(ANCHOR), human).unwrap();
+
+    build(&dir, OwnershipPolicy::default());
+
+    // 清单登记为 extension 归属
+    let manifest_text = fs::read_to_string(dir.join(".forma/artifacts.json")).unwrap();
+    let m: serde_json::Value = serde_json::from_str(&manifest_text).unwrap();
+    assert_eq!(
+        m["artifacts"][ANCHOR]["ownership"], "extension",
+        "{manifest_text}"
+    );
+    assert_eq!(m["artifacts"][ANCHOR]["generator"], "gen-rust");
+
+    // 重建：锚点内容不变、无冲突警告
+    let report = build(&dir, OwnershipPolicy::default());
+    assert!(
+        !codes(&report).contains(&"artifact-modified"),
+        "{:?}",
+        artifact_diags(&report)
+    );
+    assert_eq!(fs::read_to_string(dir.join(ANCHOR)).unwrap(), human);
+}
+
+#[test]
+fn extension_anchor_survives_emit_overwrite_via_restore() {
+    let dir = tmp_dir("anchor-restore");
+    write_project(&dir);
+    const ANCHOR: &str = "generated/backend/src/extensions.rs";
+    fs::create_dir_all(dir.join(std::path::Path::new(ANCHOR).parent().unwrap())).unwrap();
+    let human = "// 人工扩展内容\n";
+    fs::write(dir.join(ANCHOR), human).unwrap();
+
+    // 模拟构建流程：登记锚点 → 快照 → emitter 覆盖写盘 → 恢复
+    let prov = forma::artifacts::BuildProvenance {
+        ir_version: forma::dsl::IR_VERSION.to_string(),
+        input_fingerprint: "x".into(),
+        deps: vec![],
+    };
+    forma::artifacts::register_anchors(&dir, &[(ANCHOR.into(), "gen-rust".into())], &prov).unwrap();
+    let snap = forma::artifacts::snapshot_protected(&dir).unwrap();
+    assert!(
+        snap.iter()
+            .any(|(p, _, o)| p == ANCHOR && *o == forma::artifacts::Ownership::Extension),
+        "{snap:?}"
+    );
+    fs::write(dir.join(ANCHOR), "// 生成器覆盖内容\n").unwrap();
+    let (diags, resolved) =
+        forma::artifacts::restore_protected(&dir, &snap, false, false, false, &[], &prov).unwrap();
+    assert_eq!(resolved, 1);
+    assert_eq!(fs::read_to_string(dir.join(ANCHOR)).unwrap(), human);
+    let codes: Vec<&str> = diags.iter().map(|d| d.code.as_str()).collect();
+    assert!(codes.contains(&"artifact-extension-preserved"), "{codes:?}");
+
+    // --overwrite 也不得覆盖 Extension 锚点
+    let snap = forma::artifacts::snapshot_protected(&dir).unwrap();
+    fs::write(dir.join(ANCHOR), "// 再次覆盖\n").unwrap();
+    let (_diags, resolved) =
+        forma::artifacts::restore_protected(&dir, &snap, false, true, false, &[], &prov).unwrap();
+    assert_eq!(resolved, 1);
+    assert_eq!(fs::read_to_string(dir.join(ANCHOR)).unwrap(), human);
+}

@@ -2,7 +2,9 @@ pub mod bpmn;
 pub mod jsonforms;
 pub mod jsonschema;
 pub mod openapi;
+pub mod prisma_import;
 pub mod sql;
+pub mod sql_import;
 
 use crate::graph::{SemanticEdge, SemanticNode};
 use crate::manifest::LoadedManifest;

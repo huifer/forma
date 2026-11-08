@@ -15,7 +15,7 @@ breaking_change: false
 
 # Conformance Suite（一致性套件总纲）
 
-> 治理铁律（[README §0](../../README.md)）：**测试规范必须能验证 RFC 与 Specification 中的承诺**。
+> 治理铁律（[README §0](../README.md)）：**测试规范必须能验证 RFC 与 Specification 中的承诺**。
 > 本套件把这一铁律形式化：每一条「承诺（RFC/Spec 条款）」都必须指向一个**可运行的证明**（测试），
 > 缺口在 [roadmap/gap-backlog](../roadmap/gap-backlog.zh-CN.md) 排期。
 

@@ -27,6 +27,8 @@ pub enum Ownership {
     Generated,
     /// 人工实现 / 经 `--adopt` 登记——**永不覆盖**
     Adopted,
+    /// 扩展点锚点文件（ADR-0003 §6.3：扩展点文件升级不动）——构建登记、**永不覆盖**
+    Extension,
 }
 
 impl Ownership {
@@ -34,8 +36,28 @@ impl Ownership {
         match self {
             Ownership::Generated => "generated",
             Ownership::Adopted => "adopted",
+            Ownership::Extension => "extension",
         }
     }
+}
+
+/// 产物来源规格（F-002 余项）：供缓存失效、追溯与外部工具消费。
+///
+/// 全部字段 `serde(default)`——旧清单无该字段时反序列化为空结构，不破坏兼容。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ArtifactSource {
+    /// 生成器的实现版本（registry 查询，见 `generators::generator_version`）
+    #[serde(default)]
+    pub generator_version: String,
+    /// 构建所用 IR 版本（`IR_VERSION`，spec:ir G-4）
+    #[serde(default)]
+    pub ir_version: String,
+    /// 规格输入指纹：全部 `.fm` 源文件归一化内容的 sha256
+    #[serde(default)]
+    pub input_fingerprint: String,
+    /// 输入依赖：`.fm` 源文件相对路径清单
+    #[serde(default)]
+    pub deps: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,6 +68,9 @@ pub struct ArtifactEntry {
     /// 生成器 id（如 "gen-rust"）；Adopted 可为空
     #[serde(default)]
     pub generator: String,
+    /// 来源规格（生成器版本 / IR 版本 / 输入指纹 / 依赖节点字段）
+    #[serde(default)]
+    pub source: Option<ArtifactSource>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -87,20 +112,73 @@ pub fn snapshot_protected(project_dir: &Path) -> Result<Vec<(String, String, Own
         let content = crate::util::read_text(&abs)?;
         let disk = crate::util::sha256_hex(&content);
         // Adopted / Extension：**无条件保护**（即使磁盘与清单一致——
-        // 否则 adopt 后的干净状态反而会让 emitter 覆盖人工版本，踩过）。
+        // 否则 adopt / 锚点后的干净状态反而会让 emitter 覆盖人工版本，踩过）。
         // Generated：仅当磁盘内容 ≠ 清单记录（人工改过）才保护。
-        if entry.ownership == Ownership::Adopted || disk != entry.hash {
+        if entry.ownership == Ownership::Adopted
+            || entry.ownership == Ownership::Extension
+            || disk != entry.hash
+        {
             out.push((rel.clone(), content, entry.ownership));
         }
     }
     Ok(out)
 }
 
+/// 构建来源规格（F-002 余项）：由构建器计算并注入清单条目的 `source` 字段。
+#[derive(Debug, Clone, Default)]
+pub struct BuildProvenance {
+    /// IR 版本（`IR_VERSION`）
+    pub ir_version: String,
+    /// 规格输入指纹（全部 `.fm` 源文件归一化内容 sha256）
+    pub input_fingerprint: String,
+    /// 输入依赖（`.fm` 源文件相对路径清单）
+    pub deps: Vec<String>,
+}
+
+/// 扩展点锚点登记（ADR-0003 §6.3 的清单级证据）：
+/// 给定 (相对路径, 生成器 id) 清单，磁盘上**已存在**的文件登记为 `Ownership::Extension`
+/// （永不覆盖、升级不动）；不存在的锚点跳过（不凭空创建）。
+///
+/// 返回登记条数。
+pub fn register_anchors(
+    project_dir: &Path,
+    anchors: &[(String, String)],
+    prov: &BuildProvenance,
+) -> Result<usize> {
+    let mut manifest = read_manifest(project_dir);
+    let mut n = 0;
+    for (rel, generator) in anchors {
+        let abs = project_dir.join(rel);
+        if !abs.is_file() {
+            continue; // 锚点由人工/外部创建，Forma 不凭空生成
+        }
+        let content = crate::util::read_text(&abs)?;
+        manifest.artifacts.insert(
+            rel.clone(),
+            ArtifactEntry {
+                hash: crate::util::sha256_hex(&content),
+                ownership: Ownership::Extension,
+                generator: generator.clone(),
+                source: Some(ArtifactSource {
+                    generator_version: crate::generators::generator_version(generator).to_string(),
+                    ir_version: prov.ir_version.clone(),
+                    input_fingerprint: prov.input_fingerprint.clone(),
+                    deps: prov.deps.clone(),
+                }),
+            },
+        );
+        n += 1;
+    }
+    write_manifest(project_dir, &manifest).map(|()| n)
+}
+
 /// 构建后处理：恢复受保护内容（emitter 已在内部覆盖写盘）并产出诊断。
 ///
 /// - 冲突且无裁决旗标 → 恢复人工版本 + `artifact-modified` 警告（`--strict` 下为 error）；
 /// - `--adopt` → 恢复人工版本 + 清单登记 Adopted（人工版本胜出）；
-/// - `--overwrite` → 保留生成版本 + 清单更新 Generated 哈希 + 审计留痕。
+/// - `--overwrite` → 保留生成版本 + 清单更新 Generated 哈希 + 审计留痕；
+/// - **Extension 锚点 → 永远恢复锚点内容 + `artifact-extension-preserved` info**
+///   （预期行为而非待裁决冲突，不告警）。
 ///
 /// 返回 (诊断, 被恢复/改判的文件数)。
 pub fn restore_protected(
@@ -110,6 +188,7 @@ pub fn restore_protected(
     overwrite: bool,
     strict: bool,
     generated_files: &[crate::generators::GeneratedFile],
+    prov: &BuildProvenance,
 ) -> Result<(Vec<crate::validate::Diagnostic>, usize)> {
     use crate::validate::Diagnostic;
     let mut diagnostics = Vec::new();
@@ -132,24 +211,45 @@ pub fn restore_protected(
             continue;
         }
         resolved += 1;
-        if *ownership == Ownership::Adopted || adopt {
+        if *ownership == Ownership::Extension {
+            // 锚点：emitter 若覆盖了则原样恢复（预期行为，info 级）
+            crate::util::write_text(&abs, human_content)?;
+            diagnostics.push(Diagnostic {
+                severity: "info".into(),
+                code: "artifact-extension-preserved".into(),
+                message: format!(
+                    "{rel} is an extension anchor — preserved as-is (never overwritten)"
+                ),
+                file: Some(rel.clone()),
+                line: None,
+                nodes: None,
+            });
+        } else if *ownership == Ownership::Adopted || adopt {
             // Adopted / --adopt：人工版本胜出 → 恢复 + 登记
             crate::util::write_text(&abs, human_content)?;
+            let generator = manifest
+                .artifacts
+                .get(rel)
+                .map(|e| e.generator.clone())
+                .or_else(|| {
+                    generated_by_path
+                        .get(rel.as_str())
+                        .map(|f| f.generator.clone())
+                })
+                .unwrap_or_default();
             manifest.artifacts.insert(
                 rel.clone(),
                 ArtifactEntry {
                     hash: crate::util::sha256_hex(human_content),
                     ownership: Ownership::Adopted,
-                    generator: manifest
-                        .artifacts
-                        .get(rel)
-                        .map(|e| e.generator.clone())
-                        .or_else(|| {
-                            generated_by_path
-                                .get(rel.as_str())
-                                .map(|f| f.generator.clone())
-                        })
-                        .unwrap_or_default(),
+                    generator: generator.clone(),
+                    source: Some(ArtifactSource {
+                        generator_version: crate::generators::generator_version(&generator)
+                            .to_string(),
+                        ir_version: prov.ir_version.clone(),
+                        input_fingerprint: prov.input_fingerprint.clone(),
+                        deps: prov.deps.clone(),
+                    }),
                 },
             );
             let severity = if strict { "error" } else { "warning" };
@@ -166,16 +266,24 @@ pub fn restore_protected(
         } else if overwrite {
             // --overwrite：生成版本胜出（保留 emitter 写入的内容）+ 审计
             let new_hash = crate::util::sha256_hex(&disk);
+            let generator = generated_by_path
+                .get(rel.as_str())
+                .map(|f| f.generator.clone())
+                .or_else(|| manifest.artifacts.get(rel).map(|e| e.generator.clone()))
+                .unwrap_or_default();
             manifest.artifacts.insert(
                 rel.clone(),
                 ArtifactEntry {
                     hash: new_hash,
                     ownership: Ownership::Generated,
-                    generator: generated_by_path
-                        .get(rel.as_str())
-                        .map(|f| f.generator.clone())
-                        .or_else(|| manifest.artifacts.get(rel).map(|e| e.generator.clone()))
-                        .unwrap_or_default(),
+                    generator: generator.clone(),
+                    source: Some(ArtifactSource {
+                        generator_version: crate::generators::generator_version(&generator)
+                            .to_string(),
+                        ir_version: prov.ir_version.clone(),
+                        input_fingerprint: prov.input_fingerprint.clone(),
+                        deps: prov.deps.clone(),
+                    }),
                 },
             );
             crate::auditing::record_event(
@@ -216,11 +324,11 @@ pub fn restore_protected(
 
     // 生成的产物登记哈希（供下一次构建的冲突检测）
     for f in generated_files {
-        // Adopted 文件即便被 emitter 覆盖，清单仍指向人工版本（下一次构建会再恢复）
+        // Adopted / Extension 文件即便被 emitter 覆盖，清单仍指向人工版本（下一次构建会再恢复）
         if manifest
             .artifacts
             .get(&f.path)
-            .map(|e| e.ownership == Ownership::Adopted)
+            .map(|e| e.ownership == Ownership::Adopted || e.ownership == Ownership::Extension)
             .unwrap_or(false)
         {
             continue;
@@ -231,6 +339,13 @@ pub fn restore_protected(
                 hash: crate::util::sha256_hex(&f.content),
                 ownership: Ownership::Generated,
                 generator: f.generator.clone(),
+                source: Some(ArtifactSource {
+                    generator_version: crate::generators::generator_version(&f.generator)
+                        .to_string(),
+                    ir_version: prov.ir_version.clone(),
+                    input_fingerprint: prov.input_fingerprint.clone(),
+                    deps: prov.deps.clone(),
+                }),
             },
         );
     }

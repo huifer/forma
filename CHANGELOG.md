@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **P2 轨道 A 全面收尾（8/8，用户决策：轨道 B 目标扩栈撤销）**：
+  - **A-2 行级访问任意深度关系遍历**：`dsl::resolve_access_field` 单一来源；生成层逐跳
+    `repo::find_{E}` 取数（关系行缺失 → 403 fail-closed）；非关系/可选关系/未知字段仍编译期显式拒绝。
+    连带修复生成后端存量编译错误：auth.rs 的 `tenant` 引用、routes 的 `user` 提取器误用、
+    repo 未使用变量与重复导入、命令 handler 的 `find_X` 签名；school 生成后端 `cargo check` 零错误零警告。
+  - **A-4 GraphQL 逆向关系**：SDL `[Source!]!` 字段 + 每请求 DataLoader（单批 REST list 按
+    `{rel}_id` 分组，避免 N+1）；`dataloader` 依赖、README 边界说明。
+  - **A-5 多租户管理 UI**：`TenantAdmin.tsx`（吊销/迁移 + `x-admin-token`），仅 `@tenant` 工程生成。
+  - **A-6 产物清单来源规格 + Extension 锚点**：`ArtifactEntry.source`
+    （generatorVersion / irVersion / inputFingerprint / deps）+ `Ownership::Extension` 永不覆盖。
+  - **A-7 补丁图表/看板节点操作**：`set-chart-type` / `add-dashboard-chart`；迁移节点为派生节点，
+    显式决议不设补丁操作并写入 spec:ir §15.4。
+  - **A-8 逆向导入与迁移链导出**：`forma import sql|prisma`（生成通过 `check_program` 的 `.fm`
+    骨架，不可映射构造显式列出）、`forma migrate export --format flyway|golang-migrate|liquibase`
+    （SQL 正文逐字复制）。
+  - **A-1 / A-3 核实**：字段级前端显隐、`requestId` 中间件此前已实现，仅同步文档。
+  - 新增回归：`tests/access_relation_depth.rs` / `patch_visual_nodes.rs` / `import_reverse.rs` /
+    `migration_export.rs` / `tenant_admin_ui.rs`，并扩 `artifact_ownership.rs` / `graphql.rs`
+    （全量 `cargo test` 396 项 / 63 套件）。
+  - 验证门：生成 Rust backend `cargo check`（含 school + 两层遍历探针）零错误零警告；
+    GraphQL / Web `npx tsc --noEmit`；SDL `graphql.parse` / `buildSchema`；三条新 CLI 命令冒烟。
+
 ### Changed
 - **进度同步（P1 全清）**：`docs/roadmap.zh-CN.md` 10 个 P1 项（Redis / OpenAPI 导入 /
   RHF / Zustand / 文件上传 / 导入导出 / 可视化 V0.2–V0.5 / Studio v1+v2）标 ✅ 并附实现说明；

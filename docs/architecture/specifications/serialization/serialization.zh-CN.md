@@ -118,6 +118,8 @@ breaking_change: false
 |---|---|
 | ~~1~~ | ~~跨平台换行（CRLF）未在哈希前归一化~~ **已关闭（2026-11-05）**：`util::sha256_hex` 统一执行 `CRLF/CR → LF` 归一化后再哈希（Windows 检出的工作树不再产生假差异），有单元测试锁定 |
 | ~~2~~ | ~~二进制/大文件产物的哈希口径未与文本产物统一约定~~ **已决议（2026-11-05）**：Forma 的产物**全部是文本**（生成器只产文本文件），故**不设**二进制哈希口径；若未来引入二进制产物，**必须**新增 `sha256_bytes` 并在本文件与 `util.rs` 声明，不得复用文本口径 |
+| ~~3~~ | ~~产物清单缺少来源规格与 Extension 锚点证据~~ **已关闭（2026-11-08，轨道 A-6）**：`.forma/artifacts.json` 每条新增 `source`（`generatorVersion` / `irVersion` / `inputFingerprint` / `deps`）；`Ownership::Extension` 归属落地，构建期登记磁盘上存在的扩展点锚点（永不覆盖，连 `--overwrite` 也不覆盖）；字段全部 `serde(default)` 兼容旧清单（回归 `tests/artifact_ownership.rs` 3 项） |
+| ~~4~~ | ~~逆向导入与迁移链导出未完成~~ **已关闭（2026-11-08，轨道 A-8）**：`forma import sql|prisma` 生成通过 `check_program` 的 `.fm` 骨架（无法保守映射的构造显式列出，不静默编造）；`forma migrate export --format flyway|golang-migrate|liquibase` 把版本化链包装为既有迁移体系目录约定，SQL 正文逐字复制（回归 `tests/import_reverse.rs` / `tests/migration_export.rs`） |
 
 ## 13. 开放问题
 

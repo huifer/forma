@@ -307,6 +307,15 @@ pub fn plan(project_dir: &Path, patch: &DslPatchDocument) -> Result<serde_json::
                 })
                 .unwrap_or_default(),
             crate::dsl::DslPatchOperation::SetFieldRule { entity, .. } => entity.clone(),
+            crate::dsl::DslPatchOperation::SetChartType { chart, .. }
+            | crate::dsl::DslPatchOperation::AddDashboardChart { chart, .. } => pre_program
+                .charts
+                .iter()
+                .find(|c| c.name == *chart)
+                .and_then(|c| c.source.as_ref())
+                .and_then(|(api, _)| pre_program.apis.iter().find(|a| a.name == *api))
+                .map(|a| a.entity.clone())
+                .unwrap_or_default(),
         })
         .collect::<std::collections::BTreeSet<String>>()
         .into_iter()

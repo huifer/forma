@@ -415,5 +415,9 @@ DSL .fm ──parse──▶ Program（当前规范表示）
   模型（`Entity` / `EntityField`）、表单（`UiForm` / `UiControl`）、图表（`Chart`：
   chart → api 操作 / 编码通道字段，页面 → chart）、迁移（`Migration` 链：表 → 迁移链
   `generates` 向前传播）。回归 `impact_closure_covers_all_five_target_kinds`。
-  **余项**：补丁操作集尚未覆盖「改规则字段约束 / 加实体」；图表/迁移节点的更细粒度
-  （按迁移版本 / 按图表变换）按需立项。
+  **P2 轨道 A 收尾（2026-11-08）**：补丁操作集已有 `add-entity` / `add-field-rule` /
+  `set-field-rule` / `add-form-field`（改规则约束与加实体已覆盖），并新增
+  **`set-chart-type` / `add-dashboard-chart`** 两个图表/看板节点细粒度操作（回归
+  `tests/patch_visual_nodes.rs`，错误变换沿补丁事务整体回滚）。迁移节点是**派生节点**——
+  没有可编辑的 DSL 声明，故显式决议「不设迁移节点补丁操作」而非造假接口；如需按迁移版本
+  操作，应先在 DSL 引入对应声明并走 RFC 流程。

@@ -28,6 +28,12 @@ M11 Spring/Go/.NET、原生移动、小程序、工作流运行时、支付
 
 ## 2. 适配层完整矩阵
 
+> **范围决议（2026-11-08）**：矩阵中标 `👁 P2` 的目标扩栈行（SQL Server / Oracle / MongoDB /
+> Spring Boot / Gin / Laravel / .NET / gRPC / tRPC / SvelteKit / Angular / Tauri / Electron /
+> SwiftUI / Compose / 小程序 / uni-app / 工作流运行时 / 支付 / Playwright e2e / Token Benchmark）
+> 已按用户决策**撤销，不再排期**。本表保留为历史评估记录。P2 阶段实际完成的是
+> [P2 轨道 A 余项 Closure](architecture/roadmap/p2-plan.zh-CN.md)（8/8，详见 gap-backlog「轨道 A 收尾」）。
+
 每个目标 = 一个 emitter crate（`forma-gen-*`），实现统一接口契约（见 §6.1）。
 
 ### 2.1 数据库
@@ -222,6 +228,15 @@ trait Emitter {
 [docs/verification.zh-CN.md](verification.zh-CN.md)）、迁移风险分级（[docs/migration-safety.zh-CN.md](migration-safety.zh-CN.md)）、
 Agent 原生工作流（[docs/agent-workflow.zh-CN.md](agent-workflow.zh-CN.md)）。具体任务清单与状态见
 [docs/next-milestone.zh-CN.md](next-milestone.zh-CN.md)（F-001…F-008）。
+
+### 6.6 P2 轨道 A 收尾（2026-11-08）
+
+P2 任务按「余项 Closure（轨道 A）/ 目标扩栈（轨道 B）」分轨，用户决策只完成轨道 A、
+**轨道 B 撤销**。轨道 A 八项已全部关闭：多层关系遍历、GraphQL 逆向关系（DataLoader）、
+多租户管理 UI、artifacts 来源规格与 Extension 锚点、补丁图表/看板操作、SQL/Prisma 逆向导入
+与迁移链导出（Flyway/Liquibase/golang-migrate），以及两项「已实现、文档滞后」的核实
+（字段级前端显隐 / requestId）。完整验收与回归见
+[docs/architecture/roadmap/p2-plan.zh-CN.md](architecture/roadmap/p2-plan.zh-CN.md)。
 
 ## 7. 遗留代码处置
 

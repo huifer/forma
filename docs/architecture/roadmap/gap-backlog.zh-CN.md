@@ -36,7 +36,7 @@ breaking_change: false
 | # | 缺口 | 来源 | 现状 | 关闭条件 |
 |---|---|---|---|---|
 | ~~P0-1~~ | ~~**行级访问条件未实现**~~ | **已关闭（2026-11-05）**：`get`/`update`/`delete` 支持行级条件（取行 → 授权 → 校验 → 变更）；Option 字段克隆后比较；Decimal 字面量类型化 | ✅ 已完成（余 P0-1a/b 见 P1） |
-| ~~P0-2~~ | ~~**资源级 / 字段级策略未实现**~~ | **已关闭（2026-11-05）**：字段级策略落地——`access Entity { fields { field → 角色表达式 } }`；服务端在 list/get 响应序列化时裁剪（`trim_<entity>_fields`，字段→允许角色表）；Check 层 5 条 `dsl-field-policy-*` 诊断（未知字段/关联/无 provider/未知角色/表达式受限）。资源级/行级此前已实现（`access` 操作规则 + 行级条件注入 WHERE）。**余项**：字段级前端显隐（体验层）；多租户（RFC-0008 C4） | ✅ 已完成 |
+| ~~P0-2~~ | ~~**资源级 / 字段级策略未实现**~~ | **已关闭（2026-11-05）**：字段级策略落地——`access Entity { fields { field → 角色表达式 } }`；服务端在 list/get 响应序列化时裁剪（`trim_<entity>_fields`，字段→允许角色表）；Check 层 5 条 `dsl-field-policy-*` 诊断（未知字段/关联/无 provider/未知角色/表达式受限）。资源级/行级此前已实现（`access` 操作规则 + 行级条件注入 WHERE）。**余项已清零（2026-11-08，轨道 A-1）**：字段级前端显隐 Web（`canSeeField`）与 Flutter（`fieldRules + canSeeField`）均已实现并回归；多租户已落地 + A-5 管理 UI | ✅ 已完成 |
 | ~~P0-3~~ | ~~**前端不做角色感知**~~ | **已关闭（2026-11-05）**：Web 端由授权规则编译出 `src/access.ts`（`ACCESS_RULES` + `useCan`），列表页按角色显隐；角色未知时不隐藏（服务端仍为判定方） | ✅ 已完成（Flutter 端见 P2-6） |
 | ~~P0-4~~ | ~~**DSL 工程上 `forma validate` 假绿**~~ | **已关闭（2026-11-05）**：CLI 与 MCP 统一走 `engine::check_project` 分发；DSL 工程跑 `check_program` + lint；带错误工程**退出码 1** | ✅ 已完成 |
 
@@ -57,7 +57,7 @@ breaking_change: false
 | ~~P1-10~~ | 破坏性变更无自动检测 | 2026-11-05 | `forma docs check-compatibility --base <git-ref>` 检测 major bump 未标记（error）、删除 spec（error）、规范性 MUST 条款或带反引号标识的契约表行删除/弱化候选（warning candidate）；CI 对 PR 与目标分支比较 |
 | ~~P2-5~~ | 属性形式 `@min`/`@max` 未做类型校验 | 2026-11-05 | 随 P1-2 落地：仅数值类型 + 恰好 1 个数值参数（`dsl-invalid-constraint`） |
 | ~~P0-1~~ | 行级访问条件未实现 | 2026-11-05 | `get`/`update`/`delete` 支持行级条件；类型感知编译器（Decimal 字面量显式化、Option 克隆后比较）；越界用法（create/list 用行级、跨关系、不可比较类型）均有**编译期显式诊断** |
-| ~~P0-1a~~ | ~~**行级条件不支持跨关系遍历**~~ | **已关闭（2026-11-05）**：一层 `relation.field` 遍历已实现（自动 t{N} 别名 + Option 关系 clone 后兜底）；两层以上 / Optional 关系 / 非关系遍历仍有编译期显式诊断 | ✅ 已完成 |
+| ~~P0-1a~~ | ~~**行级条件不支持跨关系遍历**~~ | **已关闭（2026-11-05，一层；2026-11-08 轨道 A-2 补齐任意深度）**：`dsl::resolve_access_field` 单一来源支持 `relation.relation.field`；生成层逐跳取数 + 缺失行 403 fail-closed；非关系 / 可选关系 / 未知字段仍编译期显式诊断；回归 `tests/access_relation_depth.rs` + 生成后端 `cargo check` 零错误零警告 | ✅ 已完成 |
 | ~~P0-1b~~ | ~~**行级条件不支持 Timestamp / Date / Json 比较**~~ | **已关闭（2026-11-05）**：Timestamp/Date 同类型字段对字段比较已实现（含 Option clone fallback），混比/字面量报 `dsl-access-temporal-type-mismatch`；Json 字段已入 `access_comparable`（支持 `==`/`!=`），其他组合仍 fail-closed | ✅ 已完成 |
 | ~~P1-2~~ | ~~**参数化类型边界未校验**~~ | **已关闭（2026-11-05）**：`dsl-invalid-type-arg`（String 0<n≤65535 / Decimal 0<p≤65 且 s≤p / 非参数化类型带参） | ✅ 已完成 |
 | ~~P1-3~~ | ~~**枚举跨端一致性向量缺失**~~ | **已关闭（2026-11-05）**：共享语义向量落地——`tests/rule_vectors.rs` 断言同一规则的边界字面量与比较方向在 Rust/TS/Dart 三端一致（Int 边界、Decimal 显式类型化字面量、required 文案）；参考应用 `app_mobile/test/rule_vector_test.dart`（12 条行为用例）在 **Flutter CI 真实执行** Dart 校验器。余项：Web 无测试运行器，TS 行为验证暂缺（结构性断言已覆盖） | ✅ 已完成 |
@@ -106,6 +106,19 @@ breaking_change: false
 | ~~M1~~ | DSL 诊断缺少精确 file/line | 2026-11-05 | 声明级 `line` + `file`；`Origin` 统一注入位置；`dsl-*` 诊断全部可定位 |
 | ~~M2~~ | IR 无版本 + 内建类型清单不唯一 | 2026-11-05 | `IR_VERSION` + `Program.ir_version`；`BUILTIN_TYPES` 单一权威清单 + 四目标映射一致性回归 |
 | ~~M3~~ | DSL 侧无稳定标识 / 依赖边 / 降级 | 2026-11-05 | `dsl::lower` 单向桥接产出与联邦同构的节点/边；`forma graph` 输出并可导出；`forma impact` 对 DSL 工程可用 |
+
+### 轨道 A 收尾（2026-11-08，用户决策：仅完成轨道 A，轨道 B 撤销）
+
+| # | 缺口 | 关闭说明 |
+|---|---|---|
+| ~~A-1~~ | 字段级策略前端显隐（Web + Flutter） | **已核实已实现**（文档滞后）：Web `canSeeField` / Flutter `fieldRules + canSeeField`；spec:protocols §7 缺口 6 同步标注 |
+| ~~A-2~~ | 行级访问多层关系遍历 | 任意深度 + fail-closed 取数；`tests/access_relation_depth.rs`；修复连带存量编译错误（auth.rs tenant / routes `user` 提取器 / repo 未用变量 / 命令 handler `find_X` 签名） |
+| ~~A-3~~ | `requestId` 中间件接线 | **已核实已实现**（文档滞后）：`request_id.rs` + task-local + 错误体填充；`tests/error_contract.rs` 专项断言；spec:protocols §4.4 / §7 缺口 4、8 同步 |
+| ~~A-4~~ | GraphQL 逆向关系 + N+1 | SDL `[Source!]!` 字段 + 每请求 DataLoader（单批 REST list 按 `{rel}_id` 分组）；`tests/graphql.rs` 4 项 + 生成工程 `tsc --noEmit` + `graphql.parse/buildSchema` 通过 |
+| ~~A-5~~ | 多租户管理 UI | `TenantAdmin.tsx`（吊销/迁移 + `x-admin-token`）；`tests/tenant_admin_ui.rs` + 生成 Web `tsc --noEmit`；无租户工程零变化 |
+| ~~A-6~~ | artifacts manifest 来源规格 + Extension 锚点 | `ArtifactEntry.source`（生成器版本/IR 版本/输入指纹/依赖）+ `Ownership::Extension`；`tests/artifact_ownership.rs` 3 项；spec:serialization §12 同步 |
+| ~~A-7~~ | patch 图表/迁移节点细粒度 | `set-chart-type` / `add-dashboard-chart`；`tests/patch_visual_nodes.rs` 5 项（含事务回滚）；迁移节点为派生节点，显式决议「不设补丁操作」并写入 spec:ir §15.4 |
+| ~~A-8~~ | 逆向导入与迁移链导出 | `forma import sql|prisma`、`forma migrate export --format flyway|golang-migrate|liquibase`；`tests/import_reverse.rs` + `tests/migration_export.rs`；CLI 端到端冒烟通过 |
 
 ---
 

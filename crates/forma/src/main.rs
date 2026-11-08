@@ -41,7 +41,11 @@ fn run(argv: &[String]) -> Result<i32> {
         if let Some(name) = arg.strip_prefix("--") {
             if let Some(eq) = name.find('=') {
                 flags.insert(name[..eq].to_string(), name[eq + 1..].to_string());
-            } else if ["export", "out", "json-out", "to", "steps", "base", "port"].contains(&name) {
+            } else if [
+                "export", "out", "json-out", "to", "steps", "base", "port", "format",
+            ]
+            .contains(&name)
+            {
                 // 只有当下一个 token 存在且不是另一个 flag 时，才把它当作本 flag 的参数；
                 // 否则按布尔开关处理（如 `forma graph --json`）。
                 match argv.get(i + 1) {
@@ -208,10 +212,27 @@ fn run(argv: &[String]) -> Result<i32> {
         "import" => {
             let sub = positional.first().map(String::as_str).unwrap_or("");
             match sub {
-                "openapi" => Ok(cmd_import_openapi(&positional[1..], &flags)),
+                "openapi" => Ok(cmd_import_with(
+                    &positional[1..],
+                    &flags,
+                    "OpenAPI spec",
+                    forma::adapters::openapi::openapi_to_dsl,
+                )),
+                "sql" => Ok(cmd_import_with(
+                    &positional[1..],
+                    &flags,
+                    "SQL DDL",
+                    forma::adapters::sql_import::sql_ddl_to_dsl,
+                )),
+                "prisma" => Ok(cmd_import_with(
+                    &positional[1..],
+                    &flags,
+                    "Prisma schema",
+                    forma::adapters::prisma_import::prisma_to_dsl,
+                )),
                 other => {
                     eprintln!("unknown import target '{other}'");
-                    eprintln!("usage: forma import openapi <spec.yaml> [--out <path>]");
+                    eprintln!("usage: forma import <openapi|sql|prisma> <file> [--out <path>]");
                     Ok(2)
                 }
             }
@@ -317,7 +338,7 @@ fn run(argv: &[String]) -> Result<i32> {
         "migrate" => {
             // forma migrate [status|history|verify|up|down] [dir] [--sql] [--apply] [--to v] [--steps N]
             // 子命令与项目目录顺序无关：已知子命令取一个，其余第一个当作项目目录
-            let subs = ["status", "history", "verify", "up", "down"];
+            let subs = ["status", "history", "verify", "up", "down", "export"];
             let mut sub = "status".to_string();
             let mut dir_arg: Option<String> = None;
             let mut sub_seen = false;
@@ -330,6 +351,9 @@ fn run(argv: &[String]) -> Result<i32> {
                 }
             }
             let dir = PathBuf::from(dir_arg.as_deref().unwrap_or("."));
+            if sub == "export" {
+                return Ok(cmd_migrate_export(&dir, &flags));
+            }
             Ok(cmd_migrate(
                 &dir,
                 &sub,
@@ -445,15 +469,18 @@ fn cmd_studio(dir: &Path, flags: &std::collections::HashMap<String, String>) -> 
     0
 }
 
-fn cmd_import_openapi(
+/// `forma import <format> <file> [--out <path>]`：三种逆向导入共用同一 I/O 骨架。
+fn cmd_import_with(
     positional: &[String],
     flags: &std::collections::HashMap<String, String>,
+    kind: &str,
+    convert: fn(&str, &str) -> anyhow::Result<String>,
 ) -> i32 {
     let spec_path = match positional.first() {
         Some(p) => p.clone(),
         None => {
-            eprintln!("error: missing OpenAPI spec file");
-            eprintln!("usage: forma import openapi <spec.yaml> [--out <path>]");
+            eprintln!("error: missing {kind} file");
+            eprintln!("usage: forma import <openapi|sql|prisma> <file> [--out <path>]");
             return 2;
         }
     };
@@ -468,7 +495,7 @@ fn cmd_import_openapi(
         .file_name()
         .map(|f| f.to_string_lossy().to_string())
         .unwrap_or_else(|| spec_path.clone());
-    match forma::adapters::openapi::openapi_to_dsl(&text, &file) {
+    match convert(&text, &file) {
         Ok(dsl) => match flags.get("out").filter(|s| !s.is_empty()) {
             Some(out) => match std::fs::write(out, &dsl) {
                 Ok(()) => {
@@ -720,6 +747,73 @@ fn cmd_capability(positional: &[String], flags: &std::collections::HashMap<Strin
         other => {
             eprintln!("forma capability: unknown action `{other}` (available: list, check, show)");
             2
+        }
+    }
+}
+
+/// `forma migrate export [dir] --format <flyway|golang-migrate|liquibase> [--out <dir>]`
+///
+/// 迁移链包装导出（roadmap M9）：SQL 正文逐字复制，只换文件名 / 清单结构。
+fn cmd_migrate_export(
+    project_dir: &std::path::Path,
+    flags: &std::collections::HashMap<String, String>,
+) -> i32 {
+    let format = match flags.get("format").filter(|s| !s.is_empty()) {
+        Some(f) => match forma::emit::migration_export::MigrationFormat::parse(f) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("✗ {e}");
+                return 2;
+            }
+        },
+        None => {
+            eprintln!("error: missing --format <flyway|golang-migrate|liquibase>");
+            return 2;
+        }
+    };
+    let manifest = match forma::manifest::load_manifest(project_dir) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("✗ {e:#}");
+            return 1;
+        }
+    };
+    let db_out = manifest
+        .manifest
+        .targets
+        .database
+        .as_ref()
+        .and_then(|t| t.out.clone())
+        .unwrap_or_else(|| "generated/db".into());
+    let migrations_dir = project_dir.join(format!("{db_out}/migrations"));
+    let out_dir = flags
+        .get("out")
+        .filter(|s| !s.is_empty())
+        .map(|p| {
+            let path = std::path::PathBuf::from(p);
+            if path.is_absolute() {
+                path
+            } else {
+                project_dir.join(path)
+            }
+        })
+        .unwrap_or_else(|| project_dir.join(format!("{db_out}/migrations-{}", format.as_str())));
+    match forma::emit::migration_export::export_to(&migrations_dir, &out_dir, format) {
+        Ok(files) => {
+            println!(
+                "✓ exported {} file(s) for {} → {}",
+                files.len(),
+                format.as_str(),
+                out_dir.display()
+            );
+            for f in &files {
+                println!("  {}", f.path);
+            }
+            0
+        }
+        Err(e) => {
+            eprintln!("✗ {e:#}");
+            1
         }
     }
 }

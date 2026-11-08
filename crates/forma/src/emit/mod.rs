@@ -11,6 +11,7 @@ pub mod flutter;
 pub mod graphql;
 pub mod hono;
 pub mod migrate;
+pub mod migration_export;
 pub mod mysql;
 pub mod nest;
 pub mod nextjs;

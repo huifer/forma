@@ -171,7 +171,7 @@ access Student {
   "error": "Validation failed",
   "code": "FORMA_VALIDATION_FAILED",
   "fields": [{ "field": "email", "message": "邮箱必填" }],
-  "requestId": "…（预留，当前不生成）"
+  "requestId": "…（由 request_id.rs 中间件注入；见 §7.8）"
 }
 ```
 
@@ -296,14 +296,20 @@ api Orders {
 
 | # | 缺口 | 影响 |
 |---|---|---|
-| ~~1~~ | ~~**行级条件不支持跨关系遍历**~~ **已关闭**：一层 `relation.field` 遍历已实现；两层以上 / Optional 关系 / 非关系遍历仍有编译期显式诊断 |
+| ~~1~~ | ~~**行级条件不支持跨关系遍历**~~ **已关闭（2026-11-08，轨道 A-2）**：任意深度 `relation.relation.field` 遍历已实现——`dsl::resolve_access_field` 为检查层/生成层单一来源；生成层逐跳 `repo::find_{E}` 取数（关系行缺失 → 403 fail-closed），即使目标实体无 get/update/delete API 也生成 `find_X`；非关系遍历 / 可选关系 / 未知字段仍编译期显式拒绝（回归 `tests/access_relation_depth.rs`，生成后端 `cargo check` 零错误零警告） |
 | ~~2~~ | ~~**行级条件不支持 Json 比较**~~ **已关闭**：Timestamp/Date 同类型比较已实现（混比报 `dsl-access-temporal-type-mismatch`）；Json 字段已入 `access_comparable`（`==`/`!=`） |
 | ~~3~~ | ~~**Flutter target 不支持 cursor pagination**~~ **已关闭（2026-11-05）**：Flutter 端支持游标分页——`CursorPage<T>` 信封（`{items, nextCursor}`）、`ListParams.cursor`、列表页「加载更多」按 `nextCursor` 续取（首屏 + 增量追加）；`Api.getRaw` 取原始信封。**余项**：可视化运行时仍要求裸列表响应（chart 消费 cursor api 仍在构建期显式拒绝） |
-| 4 | ~~统一错误响应体契约未落地~~（已实现，见 §4.4） | `error/code/fields/requestId` 跨后端 / Web / Flutter / OpenAPI 同形；`requestId` 尚为预留 |
+| 4 | ~~统一错误响应体契约未落地~~（已实现，见 §4.4） | `error/code/fields/requestId` 跨后端 / Web / Flutter / OpenAPI 同形；`requestId` 由 `request_id.rs` 中间件真实注入（见缺口 #8，轨道 A-3 已核实） |
 | 5 | ~~`pre` 的表达式子集受限~~ **已决议（2026-11-05）**：`pre` 限定为**目标实体当前行**的可判定表达式子集（字段比较 / 枚举字面量 / 逻辑组合）；跨实体查询依赖 spec:ir §15 的 DSL→图 lowering（M3 稳定标识），列入后续；未知字段与越界路径编译期显式报错 | 已决议——不再是缺口，是显式的语言边界 |
 | ~~6~~ | ~~资源级 / 字段级策略未实现~~ **已关闭（2026-11-05，P0-2）**：四层模型全部落地——认证（JWT）+ 策略（RBAC）+ 资源/实体级（`access` 操作规则 + 行级条件）+ **字段级**（`fields { }` 输出裁剪）。前端体验层（列/输入框/详情行按角色隐藏）亦已补齐（Web `FIELD_RULES` / Flutter `fieldRules`）。**余项**：多租户（RFC-0008 C4） |
 | ~~7~~ | ~~**移动端（Flutter）不做角色感知**~~ **已关闭（2026-11-05）**：生成 `lib/access.dart` + `can(entity, op)`，登录写入 `Api.currentRole`；按钮按角色显隐；角色未知不隐藏；无规则的工程产物零变化（回归测试 `tests/flutter_access.rs`） | ✅ 已完成 |
-| ~~8~~ | ~~**`requestId` 未生成**~~ **已关闭（2026-11-05）**：生成 `request_id.rs` 中间件——透传/生成 id、`tokio::task_local` 作用域、`x-request-id` 响应头回写；错误体从作用域填充；Web/Flutter 客户端同形读取 |
+| ~~8~~ | ~~**`requestId` 未生成**~~ **已关闭（2026-11-05；2026-11-08 轨道 A-3 复核）**：生成 `request_id.rs` 中间件——透传/生成 id、`tokio::task_local` 作用域、`x-request-id` 响应头回写；错误体从作用域填充；Web/Flutter 客户端同形读取。回归 `tests/error_contract.rs` 有专项断言 |
+
+### A-5 追加：多租户管理 UI（2026-11-08）
+
+`@tenant` 工程生成 `src/pages/TenantAdmin.tsx`（吊销 / 迁移，管理令牌 `x-admin-token` 头），
+与后端 `/api/admin/tenants/:tenant/{revoke,transfer}` 同一判定条件；无租户工程产物零变化
+（回归 `tests/tenant_admin_ui.rs`，生成 Web `tsc --noEmit` 通过）。
 
 ## 8. 开放问题
 

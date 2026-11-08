@@ -400,6 +400,8 @@ pub fn build_project(options: &BuildOptions) -> Result<BuildOutcome> {
     diagnostics.extend(run_doctor(&load.graph));
     // F-002：构建后恢复受保护产物 + 归属诊断
     if !options.dry_run {
+        // 联邦工程无 DSL 源文件，来源规格按空值登记（保留哈希/归属语义）
+        let prov = crate::artifacts::BuildProvenance::default();
         let (mut artifact_diags, _) = crate::artifacts::restore_protected(
             &options.project_dir,
             &protected,
@@ -407,6 +409,7 @@ pub fn build_project(options: &BuildOptions) -> Result<BuildOutcome> {
             options.ownership.overwrite,
             options.ownership.strict,
             &files,
+            &prov,
         )?;
         if options.ownership.strict {
             for d in &mut artifact_diags {

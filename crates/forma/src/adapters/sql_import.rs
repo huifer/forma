@@ -1,0 +1,276 @@
+//! SQL DDL → Forma DSL（`.fm`）逆向工程生成视图（roadmap M7 / 轨道 A-8）。
+//!
+//! 设计立场与 [openapi] 导入一致：**导入是生成视图，不是语义等价保证**。
+//! 表→实体、列→字段、外键/REFERENCES→关系字段、主键/非空/唯一→属性；
+//! 数据库专有构造（触发器、存储过程、分区、CHECK、部分索引等）**显式跳过并在
+//! 生成注释里提示人工校对**，绝不静默编造 DSL 语义。
+//!
+//! 产物保证通过 `check_program`（不引用不存在的实体、有且仅有一个 @id 主键）。
+
+use crate::adapters::sql::parse_sql_ddl;
+use crate::identity::{singularize, to_pascal_case};
+use anyhow::{bail, Result};
+use std::collections::BTreeMap;
+
+struct Field {
+    name: String,
+    ty: String,
+    attrs: Vec<String>,
+}
+
+fn norm(s: &str) -> String {
+    s.trim().trim_matches('`').trim_matches('"').to_lowercase()
+}
+
+/// 任意 snake_case 列名 → lowerCamelCase DSL 标识符。
+fn to_camel(s: &str) -> String {
+    let mut out = String::new();
+    let mut upper = false;
+    for c in s.chars() {
+        if c == '_' || c == '-' {
+            upper = true;
+            continue;
+        }
+        if upper && !out.is_empty() {
+            out.extend(c.to_uppercase());
+            upper = false;
+        } else {
+            out.push(c.to_ascii_lowercase());
+        }
+    }
+    if out.is_empty() || out.chars().next().unwrap().is_ascii_digit() {
+        format!("f{out}")
+    } else {
+        out
+    }
+}
+
+/// SQL 类型 → DSL 类型。返回 `None` = 无法保守映射（显式跳过，不降级编造）。
+fn map_type(base: &str, type_text: &str) -> Option<String> {
+    let b = base.to_uppercase();
+    match b.as_str() {
+        "VARCHAR" | "NVARCHAR" | "CHARACTER VARYING" => {
+            let n = extract_first_num(type_text).unwrap_or(255);
+            Some(format!("String({n})"))
+        }
+        "CHAR" | "NCHAR" => {
+            // CHAR(36) 通常是文本 UUID（生成的 MySQL schema 契约）
+            if extract_first_num(type_text) == Some(36) {
+                Some("Uuid".into())
+            } else {
+                let n = extract_first_num(type_text).unwrap_or(255);
+                Some(format!("String({n})"))
+            }
+        }
+        "UUID" | "UNIQUEIDENTIFIER" => Some("Uuid".into()),
+        "TEXT" | "LONGTEXT" | "MEDIUMTEXT" | "TINYTEXT" | "CLOB" => Some("Text".into()),
+        "INT" | "INTEGER" | "BIGINT" | "SMALLINT" | "MEDIUMINT" => Some("Int".into()),
+        "DECIMAL" | "NUMERIC" => {
+            let nums = extract_nums(type_text);
+            match nums.as_slice() {
+                [p, s] => Some(format!("Decimal({p},{s})")),
+                [p] => Some(format!("Decimal({p},0)")),
+                _ => Some("Decimal(10,2)".into()),
+            }
+        }
+        "FLOAT" | "DOUBLE" | "REAL" | "DOUBLE PRECISION" => Some("Float".into()),
+        "BOOL" | "BOOLEAN" | "TINYINT" => Some("Bool".into()),
+        "DATE" => Some("Date".into()),
+        "DATETIME" | "TIMESTAMP" | "TIMESTAMPTZ" | "TIME" => Some("Timestamp".into()),
+        "JSON" | "JSONB" => Some("Json".into()),
+        _ => None,
+    }
+}
+
+fn extract_nums(s: &str) -> Vec<u32> {
+    let inner = s
+        .find('(')
+        .and_then(|i| s[i + 1..].find(')').map(|j| &s[i + 1..i + 1 + j]));
+    inner
+        .unwrap_or("")
+        .split(',')
+        .filter_map(|x| x.trim().parse::<u32>().ok())
+        .filter(|n| *n > 0 && *n <= 65535)
+        .collect()
+}
+
+fn extract_first_num(s: &str) -> Option<u32> {
+    extract_nums(s).first().copied()
+}
+
+/// 生成 `.fm` 骨架；`file` 仅用于生成文件头注释（来源追踪）。
+pub fn sql_ddl_to_dsl(sql_text: &str, file: &str) -> Result<String> {
+    let parsed = parse_sql_ddl(sql_text)?;
+    if parsed.tables.is_empty() {
+        bail!("no CREATE TABLE found in {file} — nothing to import");
+    }
+
+    // 第一遍：表名 → 实体名（关系解析需要完整名单）
+    let mut entity_by_table: BTreeMap<String, String> = BTreeMap::new();
+    for t in &parsed.tables {
+        entity_by_table.insert(norm(&t.name), to_pascal_case(&singularize(&t.name)));
+    }
+    // 同名冲突（不同表归一化后同名）：显式拒绝，避免静默覆盖
+    let mut seen: BTreeMap<String, String> = BTreeMap::new();
+    for (table, entity) in &entity_by_table {
+        if let Some(prev) = seen.insert(entity.clone(), table.clone()) {
+            bail!("table '{table}' and '{prev}' both map to entity '{entity}' — rename manually");
+        }
+    }
+
+    let mut skipped: Vec<String> = Vec::new();
+    let mut entities: Vec<(String, Vec<Field>)> = Vec::new();
+    let mut indexes: BTreeMap<String, Vec<String>> = BTreeMap::new();
+
+    for t in &parsed.tables {
+        let entity = entity_by_table[&norm(&t.name)].clone();
+        // 表级 FOREIGN KEY 约束 → 列 → 目标表（列级 REFERENCES 优先）
+        let mut fk_by_col: BTreeMap<String, String> = BTreeMap::new();
+        for c in &t.constraints {
+            if c.kind == "foreign-key" {
+                if let Some((target, _)) = &c.references {
+                    for col in &c.columns {
+                        fk_by_col.insert(norm(col), target.clone());
+                    }
+                }
+            }
+        }
+        let mut fields: Vec<Field> = Vec::new();
+        for col in &t.columns {
+            let target = col
+                .references
+                .as_ref()
+                .map(|(tbl, _)| tbl.clone())
+                .or_else(|| fk_by_col.get(&norm(&col.name)).cloned());
+            if let Some(target_table) = target {
+                if let Some(target_entity) = entity_by_table.get(&norm(&target_table)) {
+                    // 关系字段：外键列 xxx_id → DSL 字段名 xxx，类型 = 目标实体名
+                    let raw = col
+                        .name
+                        .strip_suffix("_id")
+                        .unwrap_or(&col.name)
+                        .to_string();
+                    let mut attrs = Vec::new();
+                    if col.not_null {
+                        attrs.push("@required".into());
+                    }
+                    // 可空外键 → DSL 可选关系（Rust 侧 Option<String>）
+                    let ty = if col.not_null {
+                        target_entity.clone()
+                    } else {
+                        format!("{target_entity}?")
+                    };
+                    fields.push(Field {
+                        name: to_camel(&raw),
+                        ty,
+                        attrs,
+                    });
+                    continue;
+                }
+            }
+            let Some(ty) = map_type(&col.base_type, &col.type_text) else {
+                skipped.push(format!("{}.{} ({})", t.name, col.name, col.type_text));
+                continue;
+            };
+            let mut attrs = Vec::new();
+            if col.primary_key {
+                attrs.push("@id".into());
+                if ty == "Uuid" || ty.starts_with("String(") {
+                    attrs.push("@default(uuid)".into());
+                }
+            }
+            if col.not_null && !col.primary_key {
+                attrs.push("@required".into());
+            }
+            if col.unique && !col.primary_key {
+                attrs.push("@unique".into());
+            }
+            // 可空列 → DSL 可选类型（`?` 决定 Rust 侧 Option<T>）
+            let ty = if !col.not_null && !col.primary_key {
+                format!("{ty}?")
+            } else {
+                ty
+            };
+            // SQL DEFAULT 不自动翻译（now()/字面量/表达式跨端语义不一致）——人工校对
+            fields.push(Field {
+                name: to_camel(&col.name),
+                ty,
+                attrs,
+            });
+        }
+        // 保证有且仅有一个 @id（关系目标必须满足；无主键的导入表补 Uuid id）
+        if !fields.iter().any(|f| f.attrs.iter().any(|a| a == "@id")) {
+            fields.insert(
+                0,
+                Field {
+                    name: "id".into(),
+                    ty: "Uuid".into(),
+                    attrs: vec!["@id".into(), "@default(uuid)".into()],
+                },
+            );
+            skipped.push(format!(
+                "{}.id (synthesized: table had no primary key)",
+                t.name
+            ));
+        }
+        // CREATE INDEX → DSL index（跳过唯一索引，@unique 已承载）
+        let mut ix: Vec<String> = Vec::new();
+        for i in &parsed.indexes {
+            if !i.unique && norm(&i.table) == norm(&t.name) {
+                let cols: Vec<String> = i
+                    .columns
+                    .iter()
+                    .map(|c| {
+                        let raw = c.strip_suffix("_id").unwrap_or(c);
+                        to_camel(raw)
+                    })
+                    .collect();
+                let cols: Vec<String> = cols
+                    .into_iter()
+                    .filter(|c| fields.iter().any(|f| f.name == *c))
+                    .collect();
+                if !cols.is_empty() {
+                    ix.push(format!("index [{}]", cols.join(", ")));
+                }
+            }
+        }
+        indexes.insert(entity.clone(), ix);
+        entities.push((entity, fields));
+    }
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "// Generated by Forma from {file} (SQL DDL import)\n"
+    ));
+    out.push_str(
+        "// 逆向工程骨架：表→实体，外键→关系，索引/约束按可表达范围映射；请人工校对业务规则。\n",
+    );
+    if !skipped.is_empty() {
+        out.push_str("//\n// 以下构造未映射（需人工处理）：\n");
+        for s in &skipped {
+            out.push_str(&format!("//   - {s}\n"));
+        }
+    }
+    out.push_str("\napp ImportedApp {\n  version = \"0.1.0\"\n  locale = [\"en\"]\n}\n\n");
+    for (name, fields) in &entities {
+        out.push_str(&format!("entity {name} {{\n"));
+        for f in fields {
+            let attrs = if f.attrs.is_empty() {
+                String::new()
+            } else {
+                format!(" {}", f.attrs.join(" "))
+            };
+            out.push_str(&format!("  {} {}{}\n", f.name, f.ty, attrs));
+        }
+        for line in indexes.get(name).into_iter().flatten() {
+            out.push_str(&format!("\n  {line}\n"));
+        }
+        out.push_str("}\n\n");
+    }
+    for (name, _) in &entities {
+        out.push_str(&format!(
+            "api {name}s {{\n  entity {name}\n  operations [list get create update delete]\n}}\n\n"
+        ));
+    }
+    Ok(out)
+}

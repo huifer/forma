@@ -657,6 +657,10 @@ fn describe_op(op: &DslPatchOperation) -> (String, String) {
         DslPatchOperation::AddFieldRule { entity, .. } => ("add-field-rule".into(), entity.clone()),
         DslPatchOperation::AddFormField { page, .. } => ("add-form-field".into(), page.clone()),
         DslPatchOperation::SetFieldRule { entity, .. } => ("set-field-rule".into(), entity.clone()),
+        DslPatchOperation::SetChartType { chart, .. } => ("set-chart-type".into(), chart.clone()),
+        DslPatchOperation::AddDashboardChart { page, .. } => {
+            ("add-dashboard-chart".into(), page.clone())
+        }
     }
 }
 
@@ -725,6 +729,12 @@ fn plan_operation(
             *value,
             message,
         ),
+        DslPatchOperation::SetChartType { chart, chart_type } => {
+            plan_set_chart_type(project_dir, program, chart, chart_type)
+        }
+        DslPatchOperation::AddDashboardChart { page, chart, w, h } => {
+            plan_add_dashboard_chart(project_dir, program, page, chart, *w, *h)
+        }
     }
 }
 
@@ -1534,4 +1544,134 @@ fn plan_set_field_rule(
         entity = entity_name,
         field = field_name
     )
+}
+
+/// A-7：改图表语义类型（`chart X { type bar … }` → `type line`）。
+///
+/// 类型白名单复用可视化子系统的 `ChartType::parse`（单一权威清单）；
+/// 编辑后的 `check_program` 由补丁事务负责——不兼容的变换（如 metric 带编码
+/// 通道）会被语义检查拒绝并整体回滚。
+fn plan_set_chart_type(
+    project_dir: &Path,
+    program: &Program,
+    chart_name: &str,
+    new_type: &str,
+) -> Result<Vec<DslEdit>> {
+    if crate::visualization::ChartType::parse(new_type).is_none() {
+        bail!("unknown chart type '{new_type}' (expected line|bar|area|pie|scatter|funnel|gauge|radar|heatmap|treemap|metric|table)");
+    }
+    let Some(chart) = program.charts.iter().find(|c| c.name == chart_name) else {
+        bail!("chart \"{chart_name}\" not found in DSL sources");
+    };
+    if chart.chart_type == new_type {
+        bail!("chart {chart_name} is already type {new_type}");
+    }
+    let Some(file) = chart.file.clone() else {
+        bail!("chart {chart_name} has no source file recorded");
+    };
+    let text = read_file(project_dir, &file)?;
+    let decl_start = line_start(&text, chart.line);
+    let open = decl_start
+        + text[decl_start..]
+            .find('{')
+            .ok_or_else(|| anyhow::anyhow!("cannot locate chart {chart_name} block"))?;
+    let close = matching_brace_fm(&text, open)
+        .ok_or_else(|| anyhow::anyhow!("unterminated chart {chart_name} block"))?;
+
+    // 只认块内顶格（相对块）的 `type <ident>` 行——避免误伤编码通道的
+    // `type quantitative` 之类同名 token。
+    let mut cursor = open + 1;
+    for segment in text[open + 1..close].split_inclusive('\n') {
+        let trimmed = segment.trim_start();
+        if trimmed.starts_with("type ") {
+            let indent = &segment[..segment.len() - trimmed.len()];
+            let tail = trimmed.strip_prefix("type ").unwrap_or(trimmed);
+            let word_end = "type ".len()
+                + tail
+                    .find(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+                    .unwrap_or(tail.len());
+            let old = &trimmed["type ".len()..word_end];
+            let replacement = format!("{indent}type {new_type}{}", &trimmed[word_end..]);
+            return Ok(vec![DslEdit {
+                file,
+                action: "set-chart-type",
+                detail: format!("{chart_name}: {old} → {new_type}"),
+                start: cursor,
+                end: cursor + segment.len(),
+                replacement,
+            }]);
+        }
+        cursor += segment.len();
+    }
+    bail!("no `type` line found inside chart {chart_name}")
+}
+
+/// A-7：看板网格追加图表槽位（`X w 6 h 220`）。
+fn plan_add_dashboard_chart(
+    project_dir: &Path,
+    program: &Program,
+    page_name: &str,
+    chart_name: &str,
+    w: u32,
+    h: u32,
+) -> Result<Vec<DslEdit>> {
+    if !(1..=12).contains(&w) {
+        bail!("dashboard width w must be 1..=12 (12-column grid), got {w}");
+    }
+    if h == 0 {
+        bail!("dashboard height h must be > 0");
+    }
+    if !program.charts.iter().any(|c| c.name == chart_name) {
+        bail!("chart \"{chart_name}\" not found in DSL sources");
+    }
+    let Some(page) = program.pages.iter().find(|p| p.name == page_name) else {
+        bail!("page \"{page_name}\" not found in DSL sources");
+    };
+    match &page.body {
+        crate::dsl::PageBody::Dashboard(dash) => {
+            if dash.items.iter().any(|i| i.chart == chart_name) {
+                bail!("dashboard {page_name} already contains chart {chart_name}");
+            }
+        }
+        _ => bail!("page {page_name} has no dashboard block"),
+    }
+    let Some(file) = page.file.clone() else {
+        bail!("page {page_name} has no source file recorded");
+    };
+    let text = read_file(project_dir, &file)?;
+    let decl_start = line_start(&text, page.line);
+    let page_open = decl_start
+        + text[decl_start..]
+            .find('{')
+            .ok_or_else(|| anyhow::anyhow!("cannot locate page {page_name} block"))?;
+    let page_close = matching_brace_fm(&text, page_open)
+        .ok_or_else(|| anyhow::anyhow!("unterminated page {page_name} block"))?;
+    // grid { ... } 块（在页块内查找 `grid` 关键字后的 `{`）
+    let page_body = &text[page_open + 1..page_close];
+    let Some(grid_rel) = page_body.find("grid") else {
+        bail!("dashboard {page_name} has no grid block");
+    };
+    let grid_abs = page_open + 1 + grid_rel;
+    let grid_open = grid_abs
+        + text[grid_abs..]
+            .find('{')
+            .ok_or_else(|| anyhow::anyhow!("cannot locate grid opening brace"))?;
+    let grid_close = matching_brace_fm(&text, grid_open)
+        .ok_or_else(|| anyhow::anyhow!("unterminated grid block"))?;
+    let insert_at = text[..grid_close].rfind('\n').map(|p| p + 1).unwrap_or(0);
+    // 缩进沿用既有条目行，空 grid 用默认 6 空格
+    let indent = text[grid_open + 1..grid_close]
+        .lines()
+        .rev()
+        .find(|l| !l.trim().is_empty())
+        .map(|l| l[..l.len() - l.trim_start().len()].to_string())
+        .unwrap_or_else(|| "      ".into());
+    Ok(vec![DslEdit {
+        file,
+        action: "add-dashboard-chart",
+        detail: format!("{page_name}: {chart_name} w {w} h {h}"),
+        start: insert_at,
+        end: insert_at,
+        replacement: format!("{indent}{chart_name} w {w} h {h}\n"),
+    }])
 }
