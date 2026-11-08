@@ -41,7 +41,7 @@ fn run(argv: &[String]) -> Result<i32> {
         if let Some(name) = arg.strip_prefix("--") {
             if let Some(eq) = name.find('=') {
                 flags.insert(name[..eq].to_string(), name[eq + 1..].to_string());
-            } else if ["export", "out", "json-out", "to", "steps", "base"].contains(&name) {
+            } else if ["export", "out", "json-out", "to", "steps", "base", "port"].contains(&name) {
                 // 只有当下一个 token 存在且不是另一个 flag 时，才把它当作本 flag 的参数；
                 // 否则按布尔开关处理（如 `forma graph --json`）。
                 match argv.get(i + 1) {
@@ -204,6 +204,7 @@ fn run(argv: &[String]) -> Result<i32> {
             println!("  next: forma validate && forma build");
             Ok(0)
         }
+        "studio" => Ok(cmd_studio(&project_dir(0), &flags)),
         "import" => {
             let sub = positional.first().map(String::as_str).unwrap_or("");
             match sub {
@@ -423,6 +424,25 @@ fn cmd_check(project_dir: PathBuf) -> i32 {
     } else {
         1
     }
+}
+
+fn cmd_studio(dir: &Path, flags: &std::collections::HashMap<String, String>) -> i32 {
+    let port = flags
+        .get("port")
+        .filter(|s| !s.is_empty())
+        .and_then(|s| s.parse::<u16>().ok())
+        .unwrap_or_else(|| forma::studio::studio_port(None));
+    let listener = match forma::studio::run_studio(port) {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("error: cannot bind 127.0.0.1:{port}: {e}");
+            return 1;
+        }
+    };
+    let actual = listener.local_addr().map(|a| a.port()).unwrap_or(port);
+    println!("Forma Studio → http://127.0.0.1:{actual}  (Ctrl-C to stop)");
+    forma::studio::serve(listener, std::sync::Arc::from(dir));
+    0
 }
 
 fn cmd_import_openapi(

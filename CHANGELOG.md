@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Studio（M6/M9 P1）：只读审阅服务 + v2 双向编辑写回**：
+  - `forma studio [dir] [--port N]`（默认 4747 / `FORMA_STUDIO_PORT`）本地服务（127.0.0.1，
+    零新增依赖——手写 HTTP/1.1，thread-per-conn）；
+  - 语义模型 API：`GET /api/model`（实体/字段/关系/索引/唯一/枚举/api/命令/页面/图表/
+    auth/IR 版本）、`GET /api/graph`（语义图）、最小 Web UI（实体导航 + 字段表 + 关系）；
+  - **v2 双向编辑**：UI 的「添加字段 / 设为必填 / 添加表格页」→ `POST /api/patch` →
+    `dsl::patch::apply_dsl_patch` **事务**（快照 → 编辑 → check_program → 重建产物，
+    错误即回滚零写入）；patchId 幂等；UI 提交后自动刷新模型；
+  - 回归 `tests/studio.rs`（3 项：服务/模型/图 + 双向编辑端到端：写回 .fm、幂等零变更、
+    失败零写入、非法 JSON 400）；
+  - 浏览器实测：UI 点击「添加字段」→ 200 + `insert-field Order.priority: Int` 写回
+    `forma/app.fm` + 产物重建 + 导航字段数 5→6 自动刷新；「添加表格页」同样落盘。
+
+### Added
 - **可视化 V0.5：Theme / Preview / 浏览器渲染验证门（RFC-0010 / P1）**：
   - DSL `theme <token>`（chart 块）：default | dark | data-screen（白名单校验
     `viz-unknown-theme`，未知值显式报错不回落）；spec 投影携带 theme；

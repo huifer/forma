@@ -24,6 +24,7 @@ pub mod manifest;
 pub mod mcp;
 pub mod patch;
 pub mod scaffold;
+pub mod studio;
 pub mod util;
 pub mod validate;
 /// 规则一致性向量（F-004）：从 DSL 规则派生跨端行为测试用例。
