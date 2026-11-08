@@ -151,3 +151,130 @@ page Dashboard {
     // 非 pie 类型（bar）不受影响
     assert!(page.contains("PieChart("), "{page}");
 }
+
+// ── V0.6：Candlestick（AntV 专属）─────────────────────────────
+
+#[test]
+fn candlestick_requires_antv_adapter() {
+    let dir = tmp("kline-echarts");
+    project(&dir, Some("echarts"));
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app viz06 { version = "0.1.0" }
+entity Trade {
+  id     Uuid @id @default(uuid)
+  date   Timestamp @default(now)
+  open   Decimal(12,2)
+  high   Decimal(12,2)
+  low    Decimal(12,2)
+  close  Decimal(12,2)
+}
+api Trades { entity Trade operations [list get] }
+chart KLine {
+  type candlestick
+  title { en "K-Line" }
+  source Trades.list
+  encoding {
+    x { field date type temporal }
+    ohlc { open open high high low low close close }
+  }
+}
+page TradeList {
+  route "/trades"
+  title { en "Trades" }
+  table {
+    query   Trades.list
+    columns [date]
+    actions { row [delete → Trades.delete confirm] }
+  }
+}
+"#,
+    )
+    .unwrap();
+    let err = forma::build::run_build(&dir).unwrap_err();
+    let msg = format!("{err:#}");
+    assert!(msg.contains("candlestick") && msg.contains("antv"), "{msg}");
+}
+
+#[test]
+fn candlestick_renders_with_antv_adapter() {
+    let dir = tmp("kline-antv");
+    project(&dir, Some("antv"));
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app viz06 { version = "0.1.0" }
+entity Trade {
+  id     Uuid @id @default(uuid)
+  date   Timestamp @default(now)
+  open   Decimal(12,2)
+  high   Decimal(12,2)
+  low    Decimal(12,2)
+  close  Decimal(12,2)
+}
+api Trades { entity Trade operations [list get] }
+chart KLine {
+  type candlestick
+  title { en "K-Line" }
+  source Trades.list
+  encoding {
+    x { field date type temporal }
+    ohlc { open open high high low low close close }
+  }
+}
+page TradeList {
+  route "/trades"
+  title { en "Trades" }
+  table {
+    query   Trades.list
+    columns [date]
+    actions { row [delete → Trades.delete confirm] }
+  }
+}
+"#,
+    )
+    .unwrap();
+    forma::build::run_build(&dir).unwrap();
+    let option = read(&dir, "generated/web/src/viz/echarts.ts");
+    assert!(
+        option.contains("[ohlc.open, ohlc.close, ohlc.high, ohlc.low]"),
+        "{option}"
+    );
+    let runtime = read(&dir, "generated/web/src/viz/runtime.tsx");
+    assert!(runtime.contains("new Candlestick("), "{runtime}");
+}
+
+#[test]
+fn candlestick_validates_ohlc_fields() {
+    // 缺 ohlc → viz-candlestick-missing-ohlc
+    let dir = tmp("kline-missing");
+    project(&dir, Some("antv"));
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app viz06 { version = "0.1.0" }
+entity Trade { id Uuid @id @default(uuid) date Timestamp @default(now) }
+api Trades { entity Trade operations [list get] }
+chart KLine {
+  type candlestick
+  title { en "K" }
+  source Trades.list
+  encoding { x { field date type temporal } }
+}
+page TradeList {
+  route "/trades"
+  title { en "T" }
+  table { query Trades.list columns [date] actions { row [delete → Trades.delete confirm] } }
+}
+"#,
+    )
+    .unwrap();
+    let (program, _) = forma::dsl::load_program(&dir, &["forma/**/*.fm".into()]).unwrap();
+    let sem = forma::dsl::check_program(&program);
+    let codes: Vec<String> = sem.iter().map(|d| d.code.clone()).collect();
+    assert!(
+        codes.iter().any(|c| c == "viz-candlestick-missing-ohlc"),
+        "{codes:?}"
+    );
+}

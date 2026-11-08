@@ -95,7 +95,10 @@ pub fn validate_chart(spec: &mut ChartSpec, errors: &mut Vec<Diagnostic>) {
                 &[ValueType::Nominal, ValueType::Ordinal, ValueType::Temporal],
                 "category or time",
             );
-            require(errors, &spec.id, "y", &[ValueType::Quantitative], "numeric");
+            // V0.6 candlestick：用 ohlc 四字段而非 y 通道（AntV 专属）
+            if spec.chart_type != crate::visualization::ChartType::Candlestick {
+                require(errors, &spec.id, "y", &[ValueType::Quantitative], "numeric");
+            }
             if enc.series.is_some() {
                 let ok = matches!(
                     enc.series.as_ref().map(|c| c.value_type),

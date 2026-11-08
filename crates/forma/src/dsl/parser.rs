@@ -226,6 +226,16 @@ pub struct EncodingDecl {
     pub y: Option<ChannelDecl>,
     pub series: Option<ChannelDecl>,
     pub color: Option<ChannelDecl>,
+    /// K 线（candlestick）四字段：开/高/低/收（字段名）
+    pub ohlc: Option<OhlcDecl>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct OhlcDecl {
+    pub open: String,
+    pub high: String,
+    pub low: String,
+    pub close: String,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -2101,6 +2111,26 @@ impl<'a> Parser<'a> {
         while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
             let tok = self.peek().clone();
             match tok.value.as_str() {
+                "ohlc" => {
+                    self.next();
+                    let mut ohlc = OhlcDecl::default();
+                    if self.eat_punct("{") {
+                        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+                            let key = self.peek().value.clone();
+                            self.next();
+                            let field = self.expect_ident().unwrap_or_default();
+                            match key.as_str() {
+                                "open" => ohlc.open = field,
+                                "high" => ohlc.high = field,
+                                "low" => ohlc.low = field,
+                                "close" => ohlc.close = field,
+                                _ => {}
+                            }
+                        }
+                        self.expect_punct("}");
+                    }
+                    enc.ohlc = Some(ohlc);
+                }
                 "x" | "y" | "series" | "color" => {
                     self.next();
                     let ch = self.parse_channel(false);

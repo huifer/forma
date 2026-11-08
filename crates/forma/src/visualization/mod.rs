@@ -46,10 +46,12 @@ pub enum ChartType {
     Metric,
     /// 数据表（V0.2）：原始行以 <table> 渲染（真实数据回退）
     Table,
+    /// K 线（V0.6 / AntV）：开高低收四字段（G2Plot Candlestick；echarts 不支持 → 构建期拒绝）
+    Candlestick,
 }
 
 impl ChartType {
-    pub const ALL: [ChartType; 12] = [
+    pub const ALL: [ChartType; 13] = [
         ChartType::Line,
         ChartType::Bar,
         ChartType::Area,
@@ -62,6 +64,7 @@ impl ChartType {
         ChartType::Treemap,
         ChartType::Metric,
         ChartType::Table,
+        ChartType::Candlestick,
     ];
 
     pub fn parse(s: &str) -> Option<Self> {
@@ -78,6 +81,7 @@ impl ChartType {
             "treemap" => Some(ChartType::Treemap),
             "metric" => Some(ChartType::Metric),
             "table" => Some(ChartType::Table),
+            "candlestick" => Some(ChartType::Candlestick),
             _ => None,
         }
     }
@@ -96,6 +100,7 @@ impl ChartType {
             ChartType::Treemap => "treemap",
             ChartType::Metric => "metric",
             ChartType::Table => "table",
+            ChartType::Candlestick => "candlestick",
         }
     }
 
@@ -110,6 +115,8 @@ impl ChartType {
             ChartType::Heatmap => ShapeFamily::Heatmap,
             ChartType::Metric => ShapeFamily::Metric,
             ChartType::Table => ShapeFamily::Table,
+            // K 线：x 时间 + 四值（AntV 专用渲染；形状按笛卡尔整形）
+            ChartType::Candlestick => ShapeFamily::Cartesian,
         }
     }
 }
@@ -727,6 +734,65 @@ pub fn lower_chart(
         )]);
     }
     let entity = api.entity.clone();
+
+    // V0.6 candlestick：必须 x + ohlc 四字段，且四字段都是实体上的数值字段
+    if chart_type == ChartType::Candlestick {
+        let Some(ohlc) = &decl.encoding.ohlc else {
+            return Err(vec![diag(
+                "viz-candlestick-missing-ohlc",
+                format!(
+                    "chart '{}' (candlestick) requires `ohlc {{ open high low close }}` encoding",
+                    decl.name
+                ),
+                decl.line,
+            )]);
+        };
+        if decl.encoding.x.is_none() {
+            return Err(vec![diag(
+                "viz-candlestick-missing-x",
+                format!(
+                    "chart '{}' (candlestick) requires an `x` channel",
+                    decl.name
+                ),
+                decl.line,
+            )]);
+        }
+        let Some(ent) = program.entities.iter().find(|e| e.name == entity) else {
+            return Err(vec![diag(
+                "viz-unknown-entity",
+                format!("unknown entity '{entity}'"),
+                decl.line,
+            )]);
+        };
+        for (label, field) in [
+            ("open", &ohlc.open),
+            ("high", &ohlc.high),
+            ("low", &ohlc.low),
+            ("close", &ohlc.close),
+        ] {
+            let Some(fd) = ent.fields.iter().find(|f| &f.name == field) else {
+                errors.push(diag(
+                    "viz-candlestick-unknown-field",
+                    format!(
+                        "chart '{}' ohlc.{} references unknown field '{entity}.{}'",
+                        decl.name, label, field
+                    ),
+                    decl.line,
+                ));
+                continue;
+            };
+            if !matches!(fd.type_name.as_str(), "Int" | "Float" | "Decimal") {
+                errors.push(diag(
+                    "viz-candlestick-non-numeric",
+                    format!(
+                        "chart '{}' ohlc.{} field '{entity}.{}' must be numeric (got {})",
+                        decl.name, label, field, fd.type_name
+                    ),
+                    decl.line,
+                ));
+            }
+        }
+    }
 
     // 聚合输出字段（如 `op count` 产生 value）：编码通道可直接引用它
     let agg_output = aggregate_output_name(decl);

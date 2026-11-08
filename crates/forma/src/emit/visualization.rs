@@ -43,6 +43,12 @@ pub fn emit_visualization_with_adapter(
     if !matches!(adapter, "echarts" | "antv") {
         anyhow::bail!("unknown visualization adapter '{adapter}' (expected echarts|antv)");
     }
+    // candlestick 是 AntV（G2Plot）专属：echarts 无内置 K 线，显式拒绝而非静默降级
+    if adapter != "antv" && program.charts.iter().any(|c| c.chart_type == "candlestick") {
+        anyhow::bail!(
+            "chart type 'candlestick' requires adapter 'antv' (echarts has no built-in candlestick; set targets.visualization.adapter: antv)"
+        );
+    }
     let mut charts: Vec<ChartSpec> = Vec::new();
     for decl in &program.charts {
         // 语义错误已由 check_program 报出；此处跳过无法降级的图表。
@@ -141,6 +147,9 @@ fn echarts_runtime(charts: &[ChartSpec]) -> String {
             crate::visualization::ChartType::Radar => "RadarChart",
             crate::visualization::ChartType::Heatmap => "HeatmapChart",
             crate::visualization::ChartType::Treemap => "TreemapChart",
+            // echarts 无内置 K 线（需 custom series）——该分支只在 antv adapter 下可达
+            // （emit_visualization_with_adapter 对 echarts + candlestick 提前 bail）
+            crate::visualization::ChartType::Candlestick => "CandlestickChart",
         };
         if !chart_ctors.contains(&ctor) {
             chart_ctors.push(ctor);

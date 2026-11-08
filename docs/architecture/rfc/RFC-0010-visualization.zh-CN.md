@@ -891,9 +891,12 @@ V0.5（theme + preview + 浏览器渲染门）已落地；V0.4 / V0.6 待排期�
 6. **领域图表（GIS / 金融 / 工业监控）评估（2026-11-08）**：
    - **GIS/地图**：需要 GeoJSON 数据源 + 地图渲染（ECharts map / L7）——DSL 目前无地图数据构造，
      属于 RFC 级扩展（数据从哪来、如何绑定）。**结论：v1 不做**，需先立 `geo` 数据契约。
-   - **金融 K 线**：ECharts 无内置（需 custom series），G2Plot 有 Candlestick——
-     需要新 chart type `candlestick` + 开高低收的数据字段约定（数据契约先行）。
-     **结论：待真实场景**，触发条件明确（有金融数据源时）。
+   - **金融 K 线**：**已落地（2026-11-08，AntV 专属）**：`type candlestick` +
+     `ohlc { open high low close }` 编码（四字段必须数值）；G2Plot Candlestick 渲染；
+     echarts adapter 显式拒绝（无内置 K 线，不静默降级）；检查层
+     `viz-candlestick-missing-ohlc` / `viz-candlestick-missing-x` /
+     `viz-candlestick-unknown-field` / `viz-candlestick-non-numeric`；
+     回归 `tests/visualization_v06.rs`（7 项）。
    - **工业监控（时序告警）**：本质是 line + 阈值线（markLine/markArea）——
      **可基于现有 line 扩展**（加 threshold 通道），是三者中最易落地的；待需求。
 

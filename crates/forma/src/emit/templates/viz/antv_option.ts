@@ -33,6 +33,13 @@ export function antvOption(spec: ChartSpec): AntVOption {
   if (spec.chartType === "scatter") {
     option.size = 4;
   }
+  if (spec.chartType === "candlestick") {
+    // G2Plot Candlestick 契约：yField = [open, close, high, low] 四元数组
+    const ohlc = spec.encoding.ohlc;
+    if (ohlc) {
+      option.yField = [ohlc.open, ohlc.close, ohlc.high, ohlc.low];
+    }
+  }
   if (spec.chartType === "area") {
     option.smooth = true;
     option.area = { style: { fillOpacity: 0.3 } };

@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **可视化 V0.6 续：Candlestick（K 线）——AntV 专属**：
+  - DSL `type candlestick` + `ohlc { open high low close }` 编码；
+  - AntV（G2Plot Candlestick）渲染；echarts adapter **显式拒绝**（无内置 K 线）；
+  - 检查层 4 条诊断（缺 ohlc / 缺 x / 未知字段 / 非数值）；
+  - 形状校验对 candlestick 豁免 y 通道（用 ohlc 四字段）；
+  - 回归 `tests/visualization_v06.rs`（7 项）；全量 `cargo test` **453 项 / 74 套件**。
+
 - **可视化 V0.6：AntV（G2Plot）适配层 + 移动端图表扩展（RFC-0010 §13）**：
   - `targets.visualization.adapter: antv|echarts`（缺省 echarts，零变化）；未知 adapter 构建期显式失败；
   - AntV 运行时（G2Plot `Plot`/`Pie`）与 echarts **共享 ChartSpec 与 transform.ts**——
