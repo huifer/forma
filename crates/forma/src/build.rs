@@ -287,12 +287,40 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
             .map(|f| f.map(|f| vec![f]).unwrap_or_default()),
     )?;
     push("seed", crate::emit::emit_seed(&dir, &program, &seed_out))?;
+    // M11/P1：deployment 显式校验（宪法 6.2——声明了就必须有明确结果，不静默跳过）
+    if let Some(dep) = loaded.manifest.deployment.as_ref() {
+        if !matches!(
+            dep.provider.as_str(),
+            "kubernetes" | "helm" | "terraform" | "all"
+        ) {
+            bail!(
+                "unsupported deployment provider '{}' (allowed: kubernetes, helm, terraform, all)",
+                dep.provider
+            );
+        }
+        if !backend_is_rust {
+            bail!("deployment requires a Rust/axum backend target (backend.language: rust)");
+        }
+    }
     // M9/P1：Docker + backend engineering 只对 Rust/axum 生成。
     if backend_is_rust {
         push(
             "docker",
             crate::emit::emit_docker(&dir, &program, ".", &app_name),
         )?;
+        // M11/P1：部署产物（deployment: manifest 段 opt-in，默认零产物）
+        if let Some(dep) = loaded.manifest.deployment.as_ref() {
+            push(
+                "deployment",
+                crate::emit::emit_deploy(
+                    &dir,
+                    &program,
+                    dep,
+                    &app_name,
+                    &loaded.manifest.project_version,
+                ),
+            )?;
+        }
         push(
             "backend-engineering",
             crate::emit::engineering::emit_backend_engineering(

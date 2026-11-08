@@ -1,5 +1,6 @@
 //! 适配层（Emitter）集合：消费 DSL Program，生成各目标产物。
 
+pub mod deploy;
 pub mod diagram;
 pub mod diff;
 pub mod docker;
@@ -24,6 +25,7 @@ pub mod visualization;
 pub mod vue;
 pub mod web_react;
 
+pub use deploy::emit_deploy;
 pub use diagram::emit_diagrams;
 pub use diff::{diff_programs, emit_diff, DiffReport};
 pub use docker::emit_docker;

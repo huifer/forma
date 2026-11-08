@@ -120,7 +120,7 @@ M11 Spring/Go/.NET、原生移动、小程序、工作流运行时、支付
 | ✅ 首批 | 各目标工程自带 CI 模板（lint/test/build） | M4 |
 | ✅ 已完成 | Docker / docker-compose 产物 | M9 | `generated/backend/Dockerfile`（多阶段 Rust build → debian-slim）、`docker-compose.yml`（MySQL 8 healthcheck + backend + 可选 Web）、`entrypoint.sh`（等待库就绪 → 迁移 → 启动）、`.dockerignore`；环境变量 `DATABASE_URL` / `PORT` 可覆盖 |
 
-| 🔨 P1 | K8s / Helm / Terraform | M11 |
+| ✅ 已完成 | K8s / Helm / Terraform | M11 | `deployment:` manifest 段 opt-in（provider: kubernetes\|helm\|terraform\|all）→ 同源生成 k8s manifests / Helm v3 Chart / Terraform kubernetes provider 模块；未知 provider / 非 Rust backend 显式拒绝（M11/P1） |
 | ✅ 已完成 | Makefile + GitHub Actions CI 模板 | M9 | 后端 Makefile（build/check/test/run/migrate/seed/docker）、后端 CI（cargo check/test/build）、Web CI（npm install + tsc + vitest + build）|
 | ✅ 已完成 | 结构化日志基础（RUST_LOG + LOG_FORMAT=json） | M10 | `tracing-subscriber`（env-filter + json features）统一初始化——默认 human-readable，`LOG_FORMAT=json` 输出 JSON Lines；错误/审计/请求 id 统一走 `tracing::` 宏；**余项**：OTLP exporter 接入（外部 collector 依赖，按需立项） |
 

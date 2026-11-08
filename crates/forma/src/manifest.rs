@@ -88,6 +88,20 @@ pub struct Targets {
     pub api: Option<TargetConfig>,
 }
 
+/// 部署产物配置（M11 / P1）：`deployment:` 段 opt-in，默认零产物。
+#[derive(Debug, Clone, Default)]
+pub struct DeploymentConfig {
+    /// kubernetes | helm | terraform | all
+    pub provider: String,
+    pub replicas: u32,
+    /// 镜像（缺省 `<app>-backend:latest`）
+    pub image: Option<String>,
+    /// Ingress host（缺省不写 host）
+    pub host: Option<String>,
+    /// K8s namespace（缺省 default）
+    pub namespace: Option<String>,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct FormaManifest {
     pub project_name: String,
@@ -100,6 +114,8 @@ pub struct FormaManifest {
     pub targets: Targets,
     /// 项目启用的能力（RFC-0004 Capability Registry）。
     pub capabilities: crate::capability::CapabilitySelection,
+    /// M11/P1：部署产物（opt-in）
+    pub deployment: Option<DeploymentConfig>,
 }
 
 impl FormaManifest {
@@ -335,6 +351,29 @@ fn normalize_manifest(
         }
     }
 
+    // 部署产物（M11/P1）：opt-in，未声明 = 零产物
+    let deployment = root
+        .get(serde_yaml::Value::String("deployment".into()))
+        .and_then(|v| v.as_mapping())
+        .map(|m| {
+            let str_field = |k: &str| -> Option<String> {
+                m.get(serde_yaml::Value::String(k.into()))
+                    .and_then(|v| v.as_str())
+                    .map(String::from)
+            };
+            DeploymentConfig {
+                provider: str_field("provider").unwrap_or_else(|| "all".into()),
+                replicas: m
+                    .get(serde_yaml::Value::String("replicas".into()))
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(2)
+                    .min(100) as u32,
+                image: str_field("image"),
+                host: str_field("host"),
+                namespace: str_field("namespace"),
+            }
+        });
+
     Ok(FormaManifest {
         project_name,
         project_version,
@@ -343,6 +382,7 @@ fn normalize_manifest(
         bindings,
         targets,
         capabilities,
+        deployment,
     })
 }
 

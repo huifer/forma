@@ -14,6 +14,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   标 ✅ 已完成；`Pinia` 与 `Wave 4` 长尾明确列为后续。
 
 ### Added
+- **部署产物 K8s / Helm / Terraform（M11 / P1）**：
+  - `deployment:` manifest 段 **opt-in**（默认零产物）：`provider: kubernetes|helm|terraform|all`、
+    `replicas` / `image` / `host` / `namespace`；
+  - 三套**同源**产物：`k8s/*.yaml`（Namespace/ConfigMap/Secret 占位/Deployment/Service/Ingress，
+    TCP 8080 探活、资源限额、Secret 不落真凭据）、`helm/<app>/`（Chart v2 + values +
+    4 个 Go 模板）、`terraform/*.tf`（kubernetes_namespace / deployment / service + 敏感变量）；
+  - 未知 provider / 非 Rust backend → 构建期显式拒绝（宪法 6.2，不静默跳过）；
+  - 模板用占位符替换（避开 YAML `{}` / Go `{{ }}` / HCL `{}` 与 format! 冲突）；
+  - 回归 `tests/deployment.rs`（4 项：6 份 manifests 经 serde_yaml 真实解析、Helm/Terraform
+    结构 + HCL 括号平衡、all 分派、零变化、显式拒绝）；
+  - 验证：真实 `forma build` 产出 17 文件，无占位符残留，Helm define/include 名称一致
+    （本机无 helm/terraform CLI，kubectl 因本机 kubeconfig 集群不可达跳过 dry-run）。
+
+### Added
 - **治理收尾：RFC 状态推进 + Conformance Suite**：
   - RFC-0003/0004/0005/0006/0007/0008 → `Implemented`（frontmatter + Implementation Status
     证据段：IR 契约 / Capability Registry / 错误契约 E1–E5 / Agent 工具与补丁事务 /
