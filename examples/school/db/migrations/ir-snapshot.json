@@ -44,6 +44,7 @@
         ]
       ],
       "indexes": [],
+      "fulltext": [],
       "fks": []
     },
     {
@@ -78,6 +79,7 @@
       "primary_key": "id",
       "uniques": [],
       "indexes": [],
+      "fulltext": [],
       "fks": []
     },
     {
@@ -135,6 +137,7 @@
           "name"
         ]
       ],
+      "fulltext": [],
       "fks": [
         {
           "column": "school_id",
@@ -184,6 +187,7 @@
           "school_id"
         ]
       ],
+      "fulltext": [],
       "fks": [
         {
           "column": "school_id",
@@ -254,6 +258,7 @@
           "course_id"
         ]
       ],
+      "fulltext": [],
       "fks": [
         {
           "column": "student_id",
@@ -309,6 +314,7 @@
       "primary_key": "id",
       "uniques": [],
       "indexes": [],
+      "fulltext": [],
       "fks": []
     },
     {
@@ -347,6 +353,7 @@
           "election_id"
         ]
       ],
+      "fulltext": [],
       "fks": [
         {
           "column": "election_id",
@@ -399,6 +406,7 @@
           "voter_id"
         ]
       ],
+      "fulltext": [],
       "fks": [
         {
           "column": "election_id",
@@ -449,6 +457,12 @@
           "unique": false
         },
         {
+          "name": "idempotency_key",
+          "sql_type": "CHAR(36)",
+          "nullable": true,
+          "unique": false
+        },
+        {
           "name": "payload",
           "sql_type": "JSON",
           "nullable": true,
@@ -472,6 +486,7 @@
           "entity_id"
         ]
       ],
+      "fulltext": [],
       "fks": []
     }
   ]

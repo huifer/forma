@@ -2741,7 +2741,7 @@ fn command_routes_rs(program: &Program) -> anyhow::Result<(String, Vec<(String, 
                     "Some(serde_json::to_value(&input).unwrap_or(serde_json::Value::Null))".to_string()
                 };
                 format!(
-                    "    crate::audit::log_action(&db, \"{a}\", \"{entity_name}\", &id, {actor}, {payload}).await?;\n"
+                    "    let idempotency_key = headers.get(\"idempotency-key\").and_then(|v| v.to_str().ok());\n    crate::audit::log_action(&db, \"{a}\", \"{entity_name}\", &id, {actor}, idempotency_key, {payload}).await?;\n"
                 )
             })
             .unwrap_or_default();
@@ -2756,7 +2756,7 @@ fn command_routes_rs(program: &Program) -> anyhow::Result<(String, Vec<(String, 
             String::new()
         };
         handlers.push_str(&format!(
-            r#"async fn {fn_name}_handler(State(db): State<Db>, {user_arg}Path(id): Path<String>, Json(input): Json<{struct_name}Input>) -> AppResult<Json<serde_json::Value>> {{
+            r#"async fn {fn_name}_handler(State(db): State<Db>, {user_arg}headers: axum::http::HeaderMap, Path(id): Path<String>, Json(input): Json<{struct_name}Input>) -> AppResult<Json<serde_json::Value>> {{
     let errs = crate::validators::validate_{fn_name}(&input);
     if !errs.is_empty() {{
         return Err(AppError::Validation(errs));
@@ -3581,6 +3581,8 @@ pub struct AuditLogRow {
     pub entity: String,
     pub entity_id: String,
     pub actor: Option<String>,
+    /// 命令幂等键（spec:protocols §10.5）：来自客户端 `Idempotency-Key` 头
+    pub idempotency_key: Option<String>,
     pub payload: Option<serde_json::Value>,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
@@ -3591,16 +3593,18 @@ pub async fn log_action(
     entity: &str,
     entity_id: &str,
     actor: Option<&str>,
+    idempotency_key: Option<&str>,
     payload: Option<serde_json::Value>,
 ) -> sqlx::Result<()> {
-    tracing::info!(action, entity, id = entity_id, actor = actor.unwrap_or("anonymous"), "forma.audit");
+    tracing::info!(action, entity, id = entity_id, actor = actor.unwrap_or("anonymous"), idempotency_key = idempotency_key.unwrap_or(""), "forma.audit");
     let id = Uuid::new_v4().to_string();
-    sqlx::query("INSERT INTO audit_logs (id, action, entity, entity_id, actor, payload, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    sqlx::query("INSERT INTO audit_logs (id, action, entity, entity_id, actor, idempotency_key, payload, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
         .bind(id)
         .bind(action)
         .bind(entity)
         .bind(entity_id)
         .bind(actor)
+        .bind(idempotency_key)
         .bind(payload)
         .bind(chrono::Utc::now())
         .execute(db)
@@ -3612,7 +3616,7 @@ pub async fn list_audit_logs(db: &MySqlPool, page: u64, page_size: u64) -> sqlx:
     let page_size = page_size.clamp(1, 200);
     let offset = (page.max(1) - 1) * page_size;
     sqlx::query_as::<_, AuditLogRow>(
-        "SELECT id, action, entity, entity_id, actor, payload, created_at FROM audit_logs ORDER BY created_at DESC LIMIT ? OFFSET ?",
+        "SELECT id, action, entity, entity_id, actor, idempotency_key, payload, created_at FROM audit_logs ORDER BY created_at DESC LIMIT ? OFFSET ?",
     )
     .bind(page_size)
     .bind(offset)

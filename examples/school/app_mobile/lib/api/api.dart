@@ -56,7 +56,8 @@ class Api {
       : client = client ?? http.Client(),
         baseUrl = baseUrl ?? kApiBase;
 
-  Future<dynamic> _send(String method, Uri uri, {Map<String, dynamic>? body}) async {
+  Future<dynamic> _send(String method, Uri uri,
+      {Map<String, dynamic>? body, Map<String, String>? headers}) async {
     final req = http.Request(method, uri);
     if (body != null) {
       req.headers['Content-Type'] = 'application/json';
@@ -64,6 +65,9 @@ class Api {
     }
     if (authToken != null && authToken!.isNotEmpty) {
       req.headers['Authorization'] = 'Bearer $authToken';
+    }
+    if (headers != null) {
+      req.headers.addAll(headers);
     }
     final res = await http.Response.fromStream(await client.send(req));
     if (res.statusCode == 401) {
@@ -112,8 +116,9 @@ class Api {
     return fromJson(data as Map<String, dynamic>);
   }
 
-  Future<void> post(String path, Map<String, dynamic> body) async {
-    await _send('POST', Uri.parse('$baseUrl$path'), body: body);
+  Future<void> post(String path, Map<String, dynamic> body,
+      {Map<String, String>? headers}) async {
+    await _send('POST', Uri.parse('$baseUrl$path'), body: body, headers: headers);
   }
 
   Future<void> put(String path, Map<String, dynamic> body) async {
@@ -363,12 +368,17 @@ class VoteRecordApi {
   Future<void> create(VoteRecordInput input) => client.post('/vote_records', input.toJson());
 }
 
+/// 命令幂等键（spec:protocols §10.5）：每次执行生成唯一键。
+String newIdempotencyKey() =>
+    '${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}-${identityHashCode(Object().toString())}';
+
 class EnrollmentApproveApi {
   final Api client;
   EnrollmentApproveApi(this.client);
 
   /// 批准
-  Future<void> execute(String id) => client.post('/enrollments/$id/approve', const {});
+  Future<void> execute(String id) =>
+      client.post('/enrollments/$id/approve', const {}, headers: {'Idempotency-Key': newIdempotencyKey()});
 }
 
 class EnrollmentRejectApi {
@@ -377,7 +387,7 @@ class EnrollmentRejectApi {
 
   /// 驳回
   Future<void> execute(String id, EnrollmentRejectInput input) =>
-      client.post('/enrollments/$id/reject', input.toJson());
+      client.post('/enrollments/$id/reject', input.toJson(), headers: {'Idempotency-Key': newIdempotencyKey()});
 }
 
 /// 认证响应（token + 用户信息）。

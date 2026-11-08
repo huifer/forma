@@ -915,7 +915,7 @@ pub fn commands_api_ts(program: &Program) -> String {
         body_obj.push_str(&cols.join(", "));
         body_obj.push_str(" }");
         out.push_str(&format!(
-            "export interface {name}Input {{\n{fields}}}\n\nexport const {name}Api = {{\n  label: \"{label}\",\n  execute: (id: string, input: {name}Input) =>\n    req<{{ ok: boolean }}>(`/api{path}`.replace(\"{{id}}\", id), {{ method: \"POST\", body: JSON.stringify(input) }}),\n}};\n\n",
+            "export interface {name}Input {{\n{fields}}}\n\nexport const {name}Api = {{\n  label: \"{label}\",\n  execute: (id: string, input: {name}Input) =>\n    req<{{ ok: boolean }}>(`/api{path}`.replace(\"{{id}}\", id), {{\n      method: \"POST\",\n      body: JSON.stringify(input),\n      // 命令幂等键（spec:protocols §10.5）：服务端落审计，供对账识别重复提交\n      headers: {{ \"Idempotency-Key\": crypto.randomUUID() }},\n    }}),\n}};\n\n",
             name = cmd.name,
             label = escape_ts(&label),
             path = cmd.path,

@@ -26,7 +26,8 @@
 use crate::dsl::{is_enum, is_relation, ApiDecl, EntityDecl, PageBody, Program};
 use crate::graph::{EdgeKind, NodeKind, SemanticEdge, SemanticNode, SourceRef, Standard};
 use crate::identity::{
-    api_operation_uri, entity_field_uri, entity_uri, type_uri, ui_control_uri, ui_form_uri,
+    api_operation_uri, entity_field_uri, entity_uri, rule_uri, type_uri, ui_control_uri,
+    ui_form_uri,
 };
 
 /// 桥接产物：语义图 + 桥接元信息。
@@ -549,11 +550,168 @@ pub fn lower_to_graph(program: &Program) -> anyhow::Result<LoweredGraph> {
         }
     }
 
+    // ── 规格规则 → 引用字段：表达式级依赖（RFC-0003 §18，P3 收口）──
+    // 边方向 rule → field（references，向后传播）：改字段 → 引用它的规则受影响。
+    // 覆盖：实体级 access 条件、字段级策略、guards（denies）、checks、field rules。
+    for rules in &program.rules {
+        for access in &rules.access {
+            for rule in &access.rules {
+                let uri = rule_uri(&project, &access.entity, &rule.op);
+                graph.add_node(SemanticNode {
+                    uri: uri.clone(),
+                    kind: NodeKind::Rule,
+                    name: format!("{}.{}", access.entity, rule.op),
+                    standard: Standard::Core,
+                    source: SourceRef {
+                        file: rules.file.clone().unwrap_or_default(),
+                        line: Some(rules.line),
+                    },
+                    data: serde_json::json!({
+                        "from": "dsl",
+                        "kind": "access",
+                        "entity": access.entity,
+                        "op": rule.op,
+                    }),
+                })?;
+                add_rule_field_edges(&mut graph, &project, &uri, &access.entity, &rule.expr);
+            }
+            // 字段级策略：规则 → 目标字段
+            for fp in &access.field_policies {
+                let uri = rule_uri(&project, &access.entity, &format!("field:{}", fp.field));
+                if !graph.has(&uri) {
+                    graph.add_node(SemanticNode {
+                        uri: uri.clone(),
+                        kind: NodeKind::Rule,
+                        name: format!("{}.field:{}", access.entity, fp.field),
+                        standard: Standard::Core,
+                        source: SourceRef {
+                            file: rules.file.clone().unwrap_or_default(),
+                            line: Some(rules.line),
+                        },
+                        data: serde_json::json!({
+                            "from": "dsl",
+                            "kind": "field-policy",
+                            "entity": access.entity,
+                            "field": fp.field,
+                        }),
+                    })?;
+                }
+                let f_uri = entity_field_uri(&project, &access.entity, &fp.field);
+                if graph.has(&f_uri) {
+                    graph.add_edge(SemanticEdge {
+                        from: uri.clone(),
+                        to: f_uri,
+                        kind: EdgeKind::References,
+                    })?;
+                }
+            }
+        }
+        for g in &rules.guards {
+            // guard 与 access 可能同 op（如 update）→ URI 加前缀区分
+            let uri = rule_uri(&project, &g.entity, &format!("guard:{}", g.op));
+            graph.add_node(SemanticNode {
+                uri: uri.clone(),
+                kind: NodeKind::Rule,
+                name: format!("{}.{}", g.entity, g.op),
+                standard: Standard::Core,
+                source: SourceRef {
+                    file: rules.file.clone().unwrap_or_default(),
+                    line: Some(rules.line),
+                },
+                data: serde_json::json!({
+                    "from": "dsl",
+                    "kind": "guard",
+                    "entity": g.entity,
+                    "op": g.op,
+                }),
+            })?;
+            for deny in &g.denies {
+                add_rule_field_edges(&mut graph, &project, &uri, &g.entity, &deny.expr);
+            }
+        }
+        for check in &rules.checks {
+            let uri = rule_uri(&project, &check.entity, "check");
+            if graph.has(&uri) {
+                continue; // 同实体多条 check 合并为一个规则节点
+            }
+            graph.add_node(SemanticNode {
+                uri: uri.clone(),
+                kind: NodeKind::Rule,
+                name: format!("{}.check", check.entity),
+                standard: Standard::Core,
+                source: SourceRef {
+                    file: rules.file.clone().unwrap_or_default(),
+                    line: Some(rules.line),
+                },
+                data: serde_json::json!({
+                    "from": "dsl",
+                    "kind": "check",
+                    "entity": check.entity,
+                }),
+            })?;
+            add_rule_field_edges(&mut graph, &project, &uri, &check.entity, &check.expr);
+        }
+        for fr in &rules.field_rules {
+            let uri = rule_uri(&project, &fr.entity, &format!("field:{}", fr.field));
+            graph.add_node(SemanticNode {
+                uri: uri.clone(),
+                kind: NodeKind::Rule,
+                name: format!("{}.field:{}", fr.entity, fr.field),
+                standard: Standard::Core,
+                source: SourceRef {
+                    file: rules.file.clone().unwrap_or_default(),
+                    line: Some(rules.line),
+                },
+                data: serde_json::json!({
+                    "from": "dsl",
+                    "kind": "field-rule",
+                    "entity": fr.entity,
+                    "field": fr.field,
+                }),
+            })?;
+            let f_uri = entity_field_uri(&project, &fr.entity, &fr.field);
+            if graph.has(&f_uri) {
+                graph.add_edge(SemanticEdge {
+                    from: uri.clone(),
+                    to: f_uri,
+                    kind: EdgeKind::References,
+                })?;
+            }
+        }
+    }
+
     Ok(LoweredGraph {
         graph,
         ir_version: program.ir_version.clone(),
         project,
     })
+}
+
+/// 规则表达式引用的字段 → `rule → field` 引用边（表达式级依赖）。
+fn add_rule_field_edges(
+    graph: &mut crate::graph::UnifiedSemanticGraph,
+    project: &str,
+    rule_uri_str: &str,
+    entity: &str,
+    expr: &crate::dsl::Expr,
+) {
+    for path in crate::dsl::expr_refs(expr) {
+        let Some(field) = path.first() else {
+            continue;
+        };
+        // `role` 等绑定变量不是实体字段
+        if crate::dsl::ACCESS_VARS.contains(&field.as_str()) {
+            continue;
+        }
+        let f_uri = entity_field_uri(project, entity, field);
+        if graph.has(&f_uri) {
+            let _ = graph.add_edge(SemanticEdge {
+                from: rule_uri_str.to_string(),
+                to: f_uri,
+                kind: EdgeKind::References,
+            });
+        }
+    }
 }
 
 fn page_body_kind(body: &PageBody) -> &'static str {

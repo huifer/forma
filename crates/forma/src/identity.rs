@@ -49,6 +49,12 @@ pub fn chart_uri(project: &str, chart_name: &str) -> String {
 }
 
 /// 定时任务（M10/P1：`job` 块；调度目标域）。
+/// 规格规则节点 URI（RFC-0003 §18 表达式级依赖）。
+/// `op` 为原始操作名（read 不展开，避免与 list/get 冲突）；字段规则用 `field:{name}`。
+pub fn rule_uri(project: &str, entity: &str, op: &str) -> String {
+    format!("forma://project/{project}/rule/{entity}/{op}")
+}
+
 pub fn job_uri(project: &str, job_name: &str) -> String {
     format!("{}/job/{job_name}", project_root_uri(project))
 }

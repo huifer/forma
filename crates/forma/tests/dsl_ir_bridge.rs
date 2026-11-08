@@ -585,3 +585,91 @@ fn lowering_output_is_byte_identical_across_runs() {
     assert_eq!(a, b, "lower_to_graph must be deterministic");
     assert!(a.contains("entity"), "{a}");
 }
+
+// ── RFC-0003 §18：表达式级依赖（规则 → 引用字段）─────────────────
+
+const RULE_FM: &str = r#"
+app irbridge {
+  version = "0.1.0"
+}
+
+auth module { provider jwt roles [admin, teacher] }
+
+entity Student {
+  id     Uuid       @id @default(uuid)
+  name   String(50) @required
+  status String(20)
+}
+
+api Students {
+  entity Student
+  operations [list get create update delete]
+}
+
+rules AccessRules {
+  access Student {
+    update → role in ["admin", "teacher"]
+  }
+  guard Student.update { deny status == "locked" reason { en "locked" } }
+  field Student.name { required { en "required" } }
+}
+"#;
+
+#[test]
+fn rules_are_nodes_and_reference_their_fields() {
+    let dir = tmp_dir("expr-deps");
+    write_project(&dir, RULE_FM);
+    let (_p, graph) = lowered(&dir);
+
+    // 规则节点存在（access / guard / field-rule）
+    let rule_uris: Vec<&str> = graph
+        .nodes_by_kind(forma::graph::NodeKind::Rule)
+        .into_iter()
+        .map(|n| n.uri.as_str())
+        .collect();
+    assert!(
+        rule_uris
+            .iter()
+            .any(|u| u.ends_with("/rule/Student/update")),
+        "{rule_uris:?}"
+    );
+    assert!(
+        rule_uris
+            .iter()
+            .any(|u| u.ends_with("/rule/Student/field:name")),
+        "{rule_uris:?}"
+    );
+
+    // 表达式级依赖：改 name 字段 → 引用它的规则节点受影响
+    let affected = graph.affected_by("forma://project/irbridge/entity/Student/field/name");
+    let uris: Vec<&str> = affected.iter().map(|n| n.uri.as_str()).collect();
+    assert!(
+        uris.iter().any(|u| u.ends_with("/rule/Student/field:name")),
+        "{uris:?}"
+    );
+
+    // 改 status 字段 → guard 规则受影响（guard 的 deny 引用 status）
+    let affected = graph.affected_by("forma://project/irbridge/entity/Student/field/status");
+    let uris: Vec<&str> = affected.iter().map(|n| n.uri.as_str()).collect();
+    assert!(
+        uris.iter()
+            .any(|u| u.ends_with("/rule/Student/guard:update")),
+        "{uris:?}"
+    );
+}
+
+#[test]
+fn mcp_impact_includes_rules_that_reference_the_field() {
+    let dir = tmp_dir("expr-deps-mcp");
+    write_project(&dir, RULE_FM);
+    let out = forma::mcp::call_tool(
+        &dir,
+        "forma_impact",
+        serde_json::json!({ "target": "Student.name" })
+            .as_object()
+            .unwrap(),
+    )
+    .unwrap();
+    let text = serde_json::to_string(&out).unwrap();
+    assert!(text.contains("/rule/Student/field:name"), "{text}");
+}

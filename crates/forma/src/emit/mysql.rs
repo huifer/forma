@@ -128,6 +128,8 @@ fn audit_log_plan() -> TablePlan {
             col("entity", "VARCHAR(191)", false),
             col("entity_id", "CHAR(36)", false),
             col("actor", "VARCHAR(191)", true),
+            // 命令幂等键（spec:protocols §10.5）：客户端 Idempotency-Key 头落库，供对账识别重复提交
+            col("idempotency_key", "CHAR(36)", true),
             col("payload", "JSON", true),
             col("created_at", "DATETIME(3)", false),
         ],

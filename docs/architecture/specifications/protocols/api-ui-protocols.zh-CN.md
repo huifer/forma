@@ -313,9 +313,33 @@ api Orders {
 
 ## 8. 开放问题
 
-- 错误响应体是否统一到 [RFC-0005](../../rfc/RFC-0005-application-runtime.zh-CN.md) 的统一错误契约。
-- 是否需要批量操作协议（`bulk`）。
-- 命令的幂等键约定。
+> 收口（2026-11-08）：1 项关闭、1 项决议、1 项本阶段落地（命令幂等键约定）。
+
+- [x] ~~错误响应体是否统一到 RFC-0005 的统一错误契约。~~
+  **已落地**：E1–E5 即 RFC-0005 契约（`ErrorBody { error, code, fields?, requestId }` +
+  `FORMA_*` 稳定错误码 + `status_for` 单点映射）；Web / Flutter / OpenAPI 同形解析。
+- [x] ~~是否需要批量操作协议（`bulk`）。~~
+  **已决议**：v0.3 不做。批量属客户端循环（`Promise.all` / 并行请求）或未来协议扩展；
+  服务端批量会引入事务边界与错误语义的复杂度。
+- [x] 命令的幂等键约定。
+  **已落地（2026-11-08）**：约定 `Idempotency-Key` 请求头（客户端生成 UUID）；生成的命令
+  handler 读取该头并写入审计（`audit_logs.idempotency_key`），重复提交可被对账识别。
+  详见 §10.5。
+
+## 10.5 命令幂等键（Idempotency-Key）
+
+命令类操作（§5）支持**幂等键**约定（2026-11-08 落地）：
+
+| 层 | 行为 |
+|---|---|
+| 客户端（Web / Flutter） | 每次命令执行生成唯一键（Web `crypto.randomUUID()`；Flutter `newIdempotencyKey()`），随 `Idempotency-Key` 头发送 |
+| 生成后端 | 命令 handler 读取该头，写入审计：`audit_logs.idempotency_key`（CHAR(36)，可空） |
+| 对账语义 | 同一键的重复提交可在审计中识别（v1 不做服务端去重——客户端保证键唯一；服务端记录以供对账） |
+
+**边界**：幂等键**不构成**服务端去重保证；它解决「重复提交的可识别性」，
+不解决「重复执行的业务副作用」。需要强去重时由业务侧用状态机（command 的 `pre`）保证。
+
+回归：`tests/seed_flutter.rs`（客户端生成）、`tests/backend_contract.rs`（审计列与 handler）。
 
 ## 9. 参考
 

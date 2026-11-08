@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **spec 层开放问题收口 + 三项工程落地**（RFC §18 之后的下一站）：
+  - **表达式级依赖（RFC-0003 §18）**：桥接图新增 `Rule` 节点（access 条件 / guards / checks /
+    field rules / 字段级策略），边 `rule → 引用字段`（references）——`forma impact` 现在能回答
+    「改字段 → 哪些规则受影响」；回归 `tests/dsl_ir_bridge.rs`（节点 + 闭包 + MCP impact）。
+  - **命令幂等键（spec:protocols §10.5）**：客户端每次命令执行生成 `Idempotency-Key`
+    （Web `crypto.randomUUID()` / Flutter `newIdempotencyKey()`），生成后端读取并写入
+    `audit_logs.idempotency_key`（新增迁移列），供对账识别重复提交；spec:protocols 新增 §10.5；
+    回归 `tests/idempotency.rs`（3 项）。
+  - **spec 开放问题批量收口**：serialization §13（canonical JSON / 迁移哈希依赖）、
+    compatibility §11（diff↔风险联动已核、多 IR 版本决议）、protocols §8（错误体已统一 /
+    bulk 决议不做）、manifests §5（provides 版本决议）、types §8（实验类型 / Decimal 上限 /
+    数组类型决议）。
+  - **语义 diff ↔ 迁移风险联动核实**：`forma_plan` 的 `migrations.pendingOps` 已把语义变更
+    （实体/字段增删改）纳入同一风险分级（spec:compatibility §11-2 标注为已落地）。
+  - 验证门：`cargo test` **436 项 / 73 套件**（2 连跑）、clippy `-D warnings`、fmt、
+    docs 四门全绿、school 三端（backend `cargo check` / Web `tsc` + vitest / Flutter analyze + test）全绿。
+
 - **RFC §18 开放问题收口（10 份 RFC 逐条处置）**：
   - **策略即测试（RFC-0008 §18 / RFC-0005 §18 运行时行为向量）**：`validation_vectors::access_vectors`
     从 DSL 的 api 级 `auth` + 实体级 `access` 规则派生权限向量；Web（vitest `access.test.ts`）与

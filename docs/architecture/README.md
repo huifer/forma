@@ -371,7 +371,7 @@ RFC-0004 的可扩容机制**已落地为代码**，不是纸面设计：
 | 9 | Specification System（RFC-0002） | 规格领域与标准互通契约 | ✅ 文档已交付 |
 | 10 | Security & Governance（RFC-0008） | 权限、密钥、审计、验证门槛 | ✅ 文档已交付 |
 | 11 | Developer Experience（RFC-0009） | CLI 契约、Studio | ✅ 文档已交付 |
-| 12 | Conformance Suite | 兼容性测试 | ✅ 已建（[conformance/](conformance/README.md)：语义/适配器/运行时/兼容性四层矩阵，承诺 → 证明测试映射；72 套件 / 431 测试全绿） |
+| 12 | Conformance Suite | 兼容性测试 | ✅ 已建（[conformance/](conformance/README.md)：语义/适配器/运行时/兼容性四层矩阵，承诺 → 证明测试映射；73 套件 / 436 测试全绿） |
 | 13 | Reference Application | 用真实应用验证架构 | ✅ 已满足：`examples/school`（多版本迁移链 + 种子 + 三端产物）+ `examples/access-depth` / `cursor-pagination` + [case-protocol](../case-protocol.zh-CN.md) V1–V16 矩阵 + CI `e2e`（真 MySQL 8）/ `flutter` / `web` / `generated-backend` |
 
 > 基础 RFC（0001–0009）状态已于 2026-11-08 逐份核实：0001/0010 为 `Accepted`，

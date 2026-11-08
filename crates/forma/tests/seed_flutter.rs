@@ -447,15 +447,16 @@ fn flutter_commands_generate_client_and_ui() {
         .find(|f| f.path.ends_with("api/api.dart"))
         .unwrap();
     // 空输入：execute(id)；有输入：execute(id, input)
+    // 命令执行带幂等键（spec:protocols §10.5）
     assert!(api.content.contains(
-        "Future<void> execute(String id) => client.post('/enrollments/$id/approve', const {});"
+        "client.post('/enrollments/$id/approve', const {}, headers: {'Idempotency-Key': newIdempotencyKey()})"
     ));
     assert!(api
         .content
         .contains("execute(String id, EnrollmentRejectInput input)"));
-    assert!(api
-        .content
-        .contains("client.post('/enrollments/$id/reject', input.toJson());"));
+    assert!(api.content.contains(
+        "client.post('/enrollments/$id/reject', input.toJson(), headers: {'Idempotency-Key': newIdempotencyKey()})"
+    ));
 
     let list = files
         .iter()

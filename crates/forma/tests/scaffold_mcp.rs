@@ -146,7 +146,8 @@ fn mcp_migrate_reports_version_chain() {
         .iter()
         .map(|e| e["version"].as_str().unwrap())
         .collect();
-    assert_eq!(versions, vec!["0.3.0", "0.2.0", "0.3.0", "0.3.0"]); // 基线版本号不可从文件恢复 → 回退当前版本
+    // 基线版本号不可从文件恢复 → 回退当前版本；audit_logs.idempotency_key 产生第 5 条迁移
+    assert_eq!(versions, vec!["0.3.0", "0.2.0", "0.3.0", "0.3.0", "0.3.0"]);
 }
 
 // ── MCP：联邦工程向后兼容 ─────────────────────────────────

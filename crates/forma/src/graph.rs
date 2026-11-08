@@ -48,6 +48,9 @@ pub enum NodeKind {
     Migration,
     /// 定时任务（M10/P1：DSL `job` 块；调度域）
     Job,
+    /// 规格规则（RFC-0003 §18：access 条件 / guards / field rules / checks）——
+    /// 表达式级依赖的载体（规则 → 引用字段）
+    Rule,
 }
 
 impl NodeKind {
@@ -67,6 +70,7 @@ impl NodeKind {
             NodeKind::Chart => "chart",
             NodeKind::Migration => "migration",
             NodeKind::Job => "job",
+            NodeKind::Rule => "rule",
         }
     }
 }
