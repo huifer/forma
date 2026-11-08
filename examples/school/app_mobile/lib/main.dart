@@ -76,10 +76,10 @@ class SchoolApp extends StatelessWidget {
 }
 
 /// DSL 路由模式匹配：{id} → :id 通配段。
-bool _match(List<String> segments, List<String> pattern) {
+bool _match(List<String> segments, List<String> pattern) {{
   if (segments.length != pattern.length) return false;
-  for (var i = 0; i < pattern.length; i++) {
+  for (var i = 0; i < pattern.length; i++) {{
     if (pattern[i] != ':id' && pattern[i] != segments[i]) return false;
-  }
+  }}
   return true;
-}
+}}

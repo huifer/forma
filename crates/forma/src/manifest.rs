@@ -74,6 +74,8 @@ pub struct TargetConfig {
     pub uses_rhf: bool,
     /// M9/P1：客户端状态库（zustand，列表过滤/搜索从页面数据依赖派生）；缺省 = 局部 useState
     pub uses_zustand: bool,
+    /// 适配层选择（visualization target：echarts | antv；缺省 echarts = 零变化）
+    pub adapter: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -86,6 +88,8 @@ pub struct Targets {
     pub mobile: Option<TargetConfig>,
     /// API 风格 target（graphql：schema + resolvers；无则零产物）
     pub api: Option<TargetConfig>,
+    /// 可视化 Adapter target（RFC-0010 V0.6）：`adapter: echarts|antv`，缺省 echarts（零变化）
+    pub visualization: Option<TargetConfig>,
 }
 
 /// 部署产物配置（M11 / P1）：`deployment:` 段 opt-in，默认零产物。
@@ -320,6 +324,7 @@ fn normalize_manifest(
         for (name, slot) in [
             ("backend", &mut targets.backend),
             ("frontend", &mut targets.frontend),
+            ("visualization", &mut targets.visualization),
             ("api", &mut targets.api),
         ] {
             if let Some(cfg) = t
@@ -414,6 +419,10 @@ fn parse_target_config(cfg: &serde_yaml::Mapping) -> TargetConfig {
             .or_else(|| cfg.get(serde_yaml::Value::String("uses_zustand".into())))
             .and_then(|v| v.as_bool())
             .unwrap_or(false),
+        adapter: cfg
+            .get(serde_yaml::Value::String("adapter".into()))
+            .and_then(|v| v.as_str())
+            .map(String::from),
     }
 }
 

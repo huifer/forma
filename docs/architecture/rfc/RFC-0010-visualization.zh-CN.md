@@ -821,7 +821,7 @@ V0.5（theme + preview + 浏览器渲染门）已落地；V0.4 / V0.6 待排期�
 | V0.3 | Dashboard IR、Grid/Flex 布局、响应式断点 | **已落地**（dashboard grid + 筛选联动；Flex / 响应式断点未做，见 §16 未决） |
 | V0.4 | Tooltip/Legend/Filter/Drill-down/联动事件模型 | **已落地**（2026-11-08）：Tooltip/Legend 已有；**联动**——图表点击 → dashboard 筛选器（其他图表重取）；**Drill-down**——`drilldown "/route"` 声明 → 点击跳转列表页 + URL query 初始筛选（列表页读 URLSearchParams）；目标路由必须已声明（`dsl-dashboard-unknown-drilldown`）；回归 `tests/visualization_v04.rs` 5 项 |
 | V0.5 | Theme、Preview、Runtime Verification（浏览器渲染门） | **已落地**（theme dark/data-screen + preview + 浏览器渲染门，回归 `tests/visualization_v05.rs`） |
-| V0.6 | AntV Adapter、领域图表扩展（GIS / 金融 / 工业监控）、移动端图表 | 规划（BI 语义建模单独立项；目标扩栈已撤销，不排期） |
+| V0.6 | AntV Adapter、领域图表扩展（GIS / 金融 / 工业监控）、移动端图表 | **部分落地**（2026-11-08）：AntV（G2Plot）适配层（`targets.visualization.adapter: antv`，与 echarts 共享 ChartSpec/变换，验证适配层无关性）；移动端图表 bar/line/pie（fl_chart，按需依赖）；领域图表评估结论见 §16-6 |
 
 ### V0.1 落地记录（实现与 RFC 的偏差均已回写正文）
 
@@ -887,6 +887,15 @@ V0.5（theme + preview + 浏览器渲染门）已落地；V0.4 / V0.6 待排期�
    `drilldown "/route"` → 点击图表元素跳转该路由，携带 x 维度值作为 URL query；
    列表页从 URLSearchParams 读取初始筛选（非 zustand 分支）。目标路由必须已声明
    （检查层 `dsl-dashboard-unknown-drilldown`）。
+
+6. **领域图表（GIS / 金融 / 工业监控）评估（2026-11-08）**：
+   - **GIS/地图**：需要 GeoJSON 数据源 + 地图渲染（ECharts map / L7）——DSL 目前无地图数据构造，
+     属于 RFC 级扩展（数据从哪来、如何绑定）。**结论：v1 不做**，需先立 `geo` 数据契约。
+   - **金融 K 线**：ECharts 无内置（需 custom series），G2Plot 有 Candlestick——
+     需要新 chart type `candlestick` + 开高低收的数据字段约定（数据契约先行）。
+     **结论：待真实场景**，触发条件明确（有金融数据源时）。
+   - **工业监控（时序告警）**：本质是 line + 阈值线（markLine/markArea）——
+     **可基于现有 line 扩展**（加 threshold 通道），是三者中最易落地的；待需求。
 
 ## 17. 架构上下文与边界（Architectural Context）
 

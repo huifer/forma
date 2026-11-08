@@ -273,14 +273,26 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
                     .as_ref()
                     .map(|t| t.uses_zustand)
                     .unwrap_or(false),
+                targets
+                    .visualization
+                    .as_ref()
+                    .and_then(|v| v.adapter.clone())
+                    .as_deref()
+                    .unwrap_or("echarts"),
             ),
         )?;
     }
-    // viz runtime 面向 web-react（echarts 依赖 + client 组件）；Next.js 暂不接图表（后续增强）
+    // viz runtime 面向 web-react；Next.js 暂不接图表（后续增强）
     if frontend_framework != "nextjs" && frontend_framework != "next" {
+        // RFC-0010 V0.6：Adapter 选择（echarts 默认，零变化；antv → G2Plot）
+        let viz_adapter = targets
+            .visualization
+            .as_ref()
+            .and_then(|v| v.adapter.clone())
+            .unwrap_or_else(|| "echarts".into());
         push(
             "viz-web",
-            crate::emit::emit_visualization(&dir, &program, &web_out),
+            crate::emit::emit_visualization_with_adapter(&dir, &program, &web_out, &viz_adapter),
         )?;
     }
     push(

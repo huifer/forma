@@ -100,6 +100,7 @@ fn emit_all(dir: &Path, fm: &str) -> (String, String, String, String) {
         "cursordemo",
         false,
         false,
+        "echarts",
     )
     .unwrap();
     forma::emit::emit_openapi(
@@ -268,6 +269,7 @@ page EventList {
         "cursordemo",
         false,
         false,
+        "echarts",
     )
     .unwrap();
     let page = fs::read_to_string(out.join("src/pages/EventList.tsx")).unwrap();
@@ -337,6 +339,7 @@ fn cursor_api_types_include_cursor_page_envelope() {
         "cursordemo",
         false,
         false,
+        "echarts",
     )
     .unwrap();
     let types = fs::read_to_string(out.join("src/types.ts")).unwrap();

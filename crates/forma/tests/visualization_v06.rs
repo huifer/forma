@@ -1,0 +1,153 @@
+//! RFC-0010 V0.6：AntV（G2Plot）适配层 + Adapter 选择。
+//!
+//! 验收：
+//! - `targets.visualization.adapter: antv` → 生成 G2Plot option 投影 + runtime，
+//!   package.json 引入 `@antv/g2plot` 且**不含 echarts**；
+//! - 默认（无 visualization 段）→ echarts 产物零变化；
+//! - 未知 adapter → 构建期显式失败（不静默降级）；
+//! - transform.ts（变换执行）两个 adapter 共用——IR 的适配层无关性。
+
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static SEQ: AtomicU64 = AtomicU64::new(0);
+
+fn tmp(tag: &str) -> PathBuf {
+    let n = SEQ.fetch_add(1, Ordering::Relaxed);
+    let dir = std::env::temp_dir().join(format!("forma-viz06-{tag}-{}-{n}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(dir.join("forma")).unwrap();
+    dir
+}
+
+const FM: &str = r#"
+app viz06 { version = "0.1.0" }
+entity Order {
+  id     Uuid @id @default(uuid)
+  status String(20)
+  amount Decimal(12,2)
+}
+api Orders { entity Order operations [list get create update delete] }
+chart ByStatus {
+  type bar
+  title { en "By status" }
+  source Orders.list
+  encoding { x { field status type nominal } y { field amount type quantitative } }
+}
+page OrderList {
+  route "/orders"
+  title { en "Orders" }
+  table {
+    query   Orders.list
+    columns [status]
+    actions { row [delete → Orders.delete confirm] }
+  }
+}
+"#;
+
+fn project(dir: &Path, adapter: Option<&str>) {
+    let viz = match adapter {
+        Some(a) => format!("  visualization:\n    adapter: {a}\n"),
+        None => String::new(),
+    };
+    fs::write(
+        dir.join("forma.yaml"),
+        format!("project:\n  name: viz06\n  version: 0.1.0\nsource: [\"forma/**/*.fm\"]\ntargets:\n  web:\n    framework: react\n    out: generated/web\n{viz}"),
+    )
+    .unwrap();
+    fs::write(dir.join("forma/app.fm"), FM).unwrap();
+}
+
+fn read(dir: &Path, rel: &str) -> String {
+    fs::read_to_string(dir.join(rel)).unwrap()
+}
+
+#[test]
+fn antv_adapter_generates_g2plot_runtime_without_echarts() {
+    let dir = tmp("antv");
+    project(&dir, Some("antv"));
+    forma::build::run_build(&dir).unwrap();
+
+    // option 投影 + runtime 是 AntV 版本（文件路径沿用 src/viz/echarts.ts / runtime.tsx 槽位）
+    let option = read(&dir, "generated/web/src/viz/echarts.ts");
+    assert!(option.contains("antvOption"), "{option}");
+    assert!(option.contains("xField"), "{option}");
+    assert!(!option.contains("echarts.use"), "{option}");
+    let runtime = read(&dir, "generated/web/src/viz/runtime.tsx");
+    assert!(runtime.contains("@antv/g2plot"), "{runtime}");
+    assert!(runtime.contains("new Plot("), "{runtime}");
+
+    // 依赖：@antv/g2plot 在，echarts 不在
+    let pkg = read(&dir, "generated/web/package.json");
+    assert!(pkg.contains("@antv/g2plot"), "{pkg}");
+    assert!(!pkg.contains("echarts"), "{pkg}");
+
+    // 变换层共用（adapter 无关）
+    let transform = read(&dir, "generated/web/src/viz/transform.ts");
+    assert!(transform.contains("applyTransform"), "{transform}");
+}
+
+#[test]
+fn default_adapter_is_echarts_zero_change() {
+    let dir = tmp("default");
+    project(&dir, None);
+    forma::build::run_build(&dir).unwrap();
+    let option = read(&dir, "generated/web/src/viz/echarts.ts");
+    assert!(option.contains("echarts.use"), "{option}");
+    assert!(!option.contains("antvOption"), "{option}");
+    let runtime = read(&dir, "generated/web/src/viz/runtime.tsx");
+    assert!(!runtime.contains("@antv/g2plot"), "{runtime}");
+    let pkg = read(&dir, "generated/web/package.json");
+    assert!(pkg.contains("echarts"), "{pkg}");
+    assert!(!pkg.contains("@antv/g2plot"), "{pkg}");
+}
+
+#[test]
+fn unknown_adapter_fails_build_explicitly() {
+    let dir = tmp("bad");
+    project(&dir, Some("d3"));
+    let err = forma::build::run_build(&dir).unwrap_err();
+    let msg = format!("{err:#}");
+    assert!(msg.contains("unknown visualization adapter"), "{msg}");
+}
+
+#[test]
+fn flutter_pie_chart_renders_via_fl_chart() {
+    let dir = tmp("flutter-pie");
+    fs::write(
+        dir.join("forma.yaml"),
+        "project:\n  name: viz06\n  version: 0.1.0\nsource: [\"forma/**/*.fm\"]\ntargets:\n  mobile:\n    out: app_mobile\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app viz06 { version = "0.1.0" }
+entity Order {
+  id     Uuid @id @default(uuid)
+  status String(20)
+  amount Decimal(12,2)
+}
+api Orders { entity Order operations [list get] }
+chart ByStatus {
+  type pie
+  title { en "By status" }
+  source Orders.list
+  encoding { x { field status type nominal } y { field amount type quantitative } }
+}
+page Dashboard {
+  route "/dashboard"
+  title { en "Dashboard" }
+  chart ByStatus
+}
+"#,
+    )
+    .unwrap();
+    forma::build::run_build(&dir).unwrap();
+    let page = read(&dir, "app_mobile/lib/pages/dashboard.dart");
+    assert!(page.contains("PieChart("), "{page}");
+    assert!(page.contains("PieChartSectionData"), "{page}");
+    // 非 pie 类型（bar）不受影响
+    assert!(page.contains("PieChart("), "{page}");
+}

@@ -134,6 +134,7 @@ fn generate_web(dir: &Path) -> String {
         "webaccess",
         false,
         false,
+        "echarts",
     )
     .unwrap();
     fs::read_to_string(out.join("src/pages/StudentList.tsx")).unwrap()
@@ -156,6 +157,7 @@ fn access_rules_produce_access_ts() {
         "webaccess",
         false,
         false,
+        "echarts",
     )
     .unwrap();
 
@@ -226,6 +228,7 @@ fn unrestricted_entity_is_untouched() {
         "webaccess",
         false,
         false,
+        "echarts",
     )
     .unwrap();
     let school = fs::read_to_string(out.join("src/pages/SchoolList.tsx")).unwrap();
@@ -303,6 +306,7 @@ page StudentEdit {
         "webaccess",
         false,
         false,
+        "echarts",
     )
     .unwrap();
 
@@ -389,6 +393,7 @@ auth module {
         "webaccess",
         false,
         false,
+        "echarts",
     )
     .unwrap();
     let access = fs::read_to_string(out.join("src/access.ts")).unwrap();

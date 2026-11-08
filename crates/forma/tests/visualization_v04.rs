@@ -131,11 +131,7 @@ fn chart_without_declared_filter_is_not_wired() {
     // filters 不含 status/customer → 两个图表都不接线
     fs::write(
         dir.join("forma/app.fm"),
-        FM.replace("filters [status]", "filters [customer]")
-            .replace(
-                "x { field customer type nominal }",
-                "x { field customer type nominal }",
-            ),
+        FM.replace("filters [status]", "filters [customer]"),
     )
     .unwrap();
     // 只保留 ByCustomer（x=customer 在 filters）→ 1 处接线；移除 ByStatus 避免干扰

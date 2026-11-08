@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **可视化 V0.6：AntV（G2Plot）适配层 + 移动端图表扩展（RFC-0010 §13）**：
+  - `targets.visualization.adapter: antv|echarts`（缺省 echarts，零变化）；未知 adapter 构建期显式失败；
+  - AntV 运行时（G2Plot `Plot`/`Pie`）与 echarts **共享 ChartSpec 与 transform.ts**——
+    验证 IR 的适配层无关性（RFC-0010 §2 分层）；package.json 按 adapter 引入
+    `@antv/g2plot` 或 `echarts`（互斥）；
+  - 移动端图表扩展：Flutter `pie`（fl_chart PieChart）加入最小集（bar/line/pie），
+    按需依赖；修两个存量问题（`with_charts` 漏 pie、无表格页时 `home` 空占位）；
+  - 领域图表（GIS / 金融 K 线 / 工业监控）评估结论写入 RFC-0010 §16-6（均需 RFC 级数据契约，
+    v1 不做）；
+  - 回归 `tests/visualization_v06.rs` 4 项；全量 `cargo test` **450 项 / 74 套件**。
+
 - **可视化 V0.4：联动事件模型 + drill-down（RFC-0010 §13/§16）**：
   - `select` 事件载荷带类目名；dashboard 页把图表点击接到筛选器（x 字段在 `filters`
     中声明时）→ 其他图表经既有 filters-dependent source 重取；

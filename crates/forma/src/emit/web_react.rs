@@ -12,6 +12,7 @@ pub fn emit_web_react(
     app_name: &str,
     uses_rhf: bool,
     uses_zustand: bool,
+    viz_adapter: &str,
 ) -> Result<Vec<crate::generators::GeneratedFile>> {
     if program.entities.is_empty() || program.pages.is_empty() {
         return Ok(vec![]);
@@ -26,7 +27,13 @@ pub fn emit_web_react(
     files.push(file(
         out_dir,
         "package.json",
-        package_json(app_name, needs_echarts(program), uses_rhf, uses_zustand),
+        package_json(
+            app_name,
+            needs_echarts(program),
+            uses_rhf,
+            uses_zustand,
+            viz_adapter,
+        ),
         "gen-web",
     ));
     files.push(file(out_dir, "vite.config.ts", vite_config(), "gen-web"));
@@ -171,7 +178,13 @@ fn needs_echarts(program: &Program) -> bool {
         .any(|c| !matches!(c.chart_type.as_str(), "metric" | "table"))
 }
 
-fn package_json(app: &str, has_charts: bool, uses_rhf: bool, uses_zustand: bool) -> String {
+fn package_json(
+    app: &str,
+    has_charts: bool,
+    uses_rhf: bool,
+    uses_zustand: bool,
+    viz_adapter: &str,
+) -> String {
     let mut s = String::from("{\n");
     s.push_str(&format!("  \"name\": \"{}-web\",\n", app.to_lowercase()));
     s.push_str(
@@ -190,9 +203,13 @@ fn package_json(app: &str, has_charts: bool, uses_rhf: bool, uses_zustand: bool)
     "react": "^18.3.1",
     "react-dom": "^18.3.1""#,
     );
-    // 有 chart 时引入 echarts（可视化适配层）
+    // 有 chart 时引入适配层（RFC-0010 §2 分层）：echarts（默认）或 antv（G2Plot）
     if has_charts {
-        s.push_str(",\n    \"echarts\": \"^5.5.1\"");
+        if viz_adapter == "antv" {
+            s.push_str(",\n    \"@antv/g2plot\": \"^2.4.31\"");
+        } else {
+            s.push_str(",\n    \"echarts\": \"^5.5.1\"");
+        }
     }
     // M9/P1：React Hook Form（opt-in：targets.frontend.usesRhf）
     if uses_rhf {

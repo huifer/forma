@@ -107,6 +107,7 @@ fn generate(dir: &Path) -> (PathBuf, String) {
         "errc",
         false,
         false,
+        "echarts",
     )
     .unwrap();
     forma::emit::emit_openapi(

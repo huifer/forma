@@ -51,7 +51,7 @@ pub use replay::{replay_sql, schema_diff, schema_from_plans, SimSchema, SimTable
 pub use rust_backend::emit_rust_backend;
 pub use seed::{emit_seed, render_seed_bundle, verify_seed, SeedBundle, SeedVerifyReport};
 pub use sqlite::{emit_sqlite, emit_sqlite_migration, sqlite_type};
-pub use visualization::emit_visualization;
+pub use visualization::{emit_visualization, emit_visualization_with_adapter};
 pub use vue::emit_vue;
 pub use web_react::emit_web_react;
 

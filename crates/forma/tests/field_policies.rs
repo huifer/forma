@@ -244,7 +244,16 @@ fn frontend_hides_fields_by_role() {
     fs::write(dir.join("forma/app.fm"), FRONTEND_FM).unwrap();
     let (program, diags) = forma::dsl::load_program(&dir, &["forma/**/*.fm".into()]).unwrap();
     assert!(diags.is_empty(), "{diags:?}");
-    forma::emit::emit_web_react(&dir, &program, "generated/web", "fp", false, false).unwrap();
+    forma::emit::emit_web_react(
+        &dir,
+        &program,
+        "generated/web",
+        "fp",
+        false,
+        false,
+        "echarts",
+    )
+    .unwrap();
     forma::emit::emit_flutter(&dir, &program, "generated/mobile", "fp").unwrap();
 
     // ── Web：access.ts 提供字段规则 + canSeeField ──
@@ -344,7 +353,16 @@ page ItemList {
     )
     .unwrap();
     let (program, _) = forma::dsl::load_program(&dir, &["forma/**/*.fm".into()]).unwrap();
-    forma::emit::emit_web_react(&dir, &program, "generated/web", "fp", false, false).unwrap();
+    forma::emit::emit_web_react(
+        &dir,
+        &program,
+        "generated/web",
+        "fp",
+        false,
+        false,
+        "echarts",
+    )
+    .unwrap();
     assert!(
         !dir.join("generated/web/src/access.ts").exists(),
         "no policies → no access.ts"

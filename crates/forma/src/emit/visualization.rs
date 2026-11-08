@@ -17,6 +17,9 @@ const SPEC_TS: &str = include_str!("templates/viz/spec.ts");
 const TRANSFORM_TS: &str = include_str!("templates/viz/transform.ts");
 const ECHARTS_TS: &str = include_str!("templates/viz/echarts.ts");
 const RUNTIME_TSX: &str = include_str!("templates/viz/runtime.tsx");
+/// AntV（G2Plot）Adapter 运行时（RFC-0010 V0.6 / 2026-11-08）
+const ANTV_OPTION_TS: &str = include_str!("templates/viz/antv_option.ts");
+const ANTV_RUNTIME_TSX: &str = include_str!("templates/viz/antv_runtime.tsx");
 const VIZ_CSS: &str = include_str!("templates/viz/viz.css");
 const THEME_TSX: &str = include_str!("templates/viz/theme.tsx");
 
@@ -26,6 +29,20 @@ pub fn emit_visualization(
     program: &Program,
     out_dir: &str,
 ) -> Result<Vec<GeneratedFile>> {
+    emit_visualization_with_adapter(project_dir, program, out_dir, "echarts")
+}
+
+/// 按 Adapter 生成可视化运行时（RFC-0010 §2 分层：IR/变换 adapter 无关）。
+/// `adapter`: "echarts"（默认）| "antv"（G2Plot）。
+pub fn emit_visualization_with_adapter(
+    project_dir: &Path,
+    program: &Program,
+    out_dir: &str,
+    adapter: &str,
+) -> Result<Vec<GeneratedFile>> {
+    if !matches!(adapter, "echarts" | "antv") {
+        anyhow::bail!("unknown visualization adapter '{adapter}' (expected echarts|antv)");
+    }
     let mut charts: Vec<ChartSpec> = Vec::new();
     for decl in &program.charts {
         // 语义错误已由 check_program 报出；此处跳过无法降级的图表。
@@ -37,11 +54,33 @@ pub fn emit_visualization(
         return Ok(Vec::new());
     }
 
+    // echarts adapter 需要按图表类型生成 use() 注册；antv 用通用 option 投影
+    let echarts_code = if adapter == "antv" {
+        String::new()
+    } else {
+        echarts_runtime(&charts)
+    };
     let mut files: Vec<GeneratedFile> = vec![
         file(out_dir, "src/viz/spec.ts", SPEC_TS),
         file(out_dir, "src/viz/transform.ts", TRANSFORM_TS),
-        file(out_dir, "src/viz/echarts.ts", &echarts_runtime(&charts)),
-        file(out_dir, "src/viz/runtime.tsx", RUNTIME_TSX),
+        file(
+            out_dir,
+            "src/viz/echarts.ts",
+            if adapter == "antv" {
+                ANTV_OPTION_TS
+            } else {
+                &echarts_code
+            },
+        ),
+        file(
+            out_dir,
+            "src/viz/runtime.tsx",
+            if adapter == "antv" {
+                ANTV_RUNTIME_TSX
+            } else {
+                RUNTIME_TSX
+            },
+        ),
         file(out_dir, "src/viz/theme.tsx", THEME_TSX),
         file(out_dir, "src/viz/viz.css", VIZ_CSS),
         // V0.5 预览与浏览器渲染验证门：全部图表 + mock 数据 + 主题切换 + 自检标记
