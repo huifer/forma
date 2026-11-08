@@ -288,3 +288,117 @@ pub fn is_optional_input(program: &Program, field: &FieldDecl) -> bool {
     }
     field.optional || has_attr(field, "default") || has_attr(field, "readonly")
 }
+
+// ── 策略即测试（RFC-0008 §18 / RFC-0005 §18 运行时行为向量）──────────
+
+/// 一条权限行为向量：`entity.op` 在 `role` 下应当允许 / 拒绝。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AccessVector {
+    pub entity: String,
+    pub op: String,
+    pub role: String,
+    pub allowed: bool,
+}
+
+/// 从 DSL 授权规则派生权限向量（与 `frontend_access_rules` / `access_conditions` 同一语义）。
+///
+/// 只处理可判定的简单形式：`role in ["a","b"]` 与 `role == "a"`；
+/// `read` 展开为 `list` + `get`（与 `access_conditions` 一致）。
+/// 角色全集来自 `auth module { roles [...] }`——无 auth module 时无向量。
+pub fn access_vectors(program: &Program) -> Vec<AccessVector> {
+    let Some(auth) = program.auth.as_ref() else {
+        return Vec::new();
+    };
+    if auth.roles.is_empty() {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    // api 级（操作级授权）：api.auth[] → operations × roles
+    for api in &program.apis {
+        for rule in &api.auth {
+            for op in &rule.operations {
+                for role in &auth.roles {
+                    out.push(AccessVector {
+                        entity: api.entity.clone(),
+                        op: op.clone(),
+                        role: role.clone(),
+                        allowed: rule.roles.contains(role),
+                    });
+                }
+            }
+        }
+    }
+    // 实体级（rules { access }）：可判定的 role in / role == 形式
+    for rules in &program.rules {
+        for access in &rules.access {
+            for rule in &access.rules {
+                let Some(allowed_roles) = extract_role_set(&rule.expr) else {
+                    continue;
+                };
+                for op in expand_op(&rule.op) {
+                    for role in &auth.roles {
+                        out.push(AccessVector {
+                            entity: access.entity.clone(),
+                            op: op.clone(),
+                            role: role.clone(),
+                            allowed: allowed_roles.contains(role),
+                        });
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// 从表达式提取角色集合（仅支持 `role in [...]` / `role == "..."`）。
+fn extract_role_set(expr: &crate::dsl::Expr) -> Option<std::collections::HashSet<String>> {
+    use crate::dsl::{BinOp, Expr};
+    match expr {
+        Expr::Bin(BinOp::In, left, right) => {
+            let crate::dsl::Expr::Ref { path, .. } = &**left else {
+                return None;
+            };
+            if path.len() != 1 || path[0] != "role" {
+                return None;
+            }
+            let Expr::List(items) = &**right else {
+                return None;
+            };
+            let mut set = std::collections::HashSet::new();
+            for it in items {
+                match it {
+                    Expr::Str(s) => {
+                        set.insert(s.clone());
+                    }
+                    _ => return None,
+                }
+            }
+            Some(set)
+        }
+        Expr::Bin(BinOp::Eq, left, right) => {
+            let crate::dsl::Expr::Ref { path, .. } = &**left else {
+                return None;
+            };
+            if path.len() != 1 || path[0] != "role" {
+                return None;
+            }
+            let Expr::Str(s) = &**right else {
+                return None;
+            };
+            let mut set = std::collections::HashSet::new();
+            set.insert(s.clone());
+            Some(set)
+        }
+        _ => None,
+    }
+}
+
+/// 操作名展开（与 `access_conditions` 的 read 语义一致）。
+fn expand_op(op: &str) -> Vec<String> {
+    if op == "read" {
+        vec!["list".to_string(), "get".to_string()]
+    } else {
+        vec![op.to_string()]
+    }
+}

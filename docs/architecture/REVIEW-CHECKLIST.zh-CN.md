@@ -71,3 +71,20 @@
 | **是否触碰 Tier 1 契约** | ☐ 否 ☐ 是（需人工审批） |
 
 审查人：__________  日期：__________  决策：☐ Accepted ☐ In Review ☐ Rejected
+
+---
+
+## 附录：`forma docs` 命令 ↔ 清单条目映射（RFC-0009 §18，2026-11-08）
+
+| docs 命令 | 检查内容 | 对应清单条目 |
+|---|---|---|
+| `docs validate` | frontmatter / ID 唯一 / 状态合法 / 依赖存在 / 无循环 | 「元数据完整」「依赖闭合」 |
+| `docs lint` | 模板章节完整性（核心章节缺失 = error） | 「结构完整」 |
+| `docs graph` | 依赖图（节点 + 边，`--json` 可机读） | 「依赖可视化」 |
+| `docs check-compatibility` | 破坏性变更检测（spec 删除 / major bump / MUST 弱化） | 「兼容性」 |
+| `docs check-dependencies` | 引用存在 / 自依赖 / 循环 | 「依赖闭合」 |
+| `docs check-links` | 内部相对链接有效 | 「链接有效」 |
+| `capability check` | 注册表 / 依赖闭包 / 版本兼容（需工程目录） | 「能力契约」 |
+
+CI `docs` job 强制执行 `validate` + `lint` + `capability check` + `check-compatibility`（PR 基线）。
+

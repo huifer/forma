@@ -371,7 +371,7 @@ RFC-0004 的可扩容机制**已落地为代码**，不是纸面设计：
 | 9 | Specification System（RFC-0002） | 规格领域与标准互通契约 | ✅ 文档已交付 |
 | 10 | Security & Governance（RFC-0008） | 权限、密钥、审计、验证门槛 | ✅ 文档已交付 |
 | 11 | Developer Experience（RFC-0009） | CLI 契约、Studio | ✅ 文档已交付 |
-| 12 | Conformance Suite | 兼容性测试 | ✅ 已建（[conformance/](conformance/README.md)：语义/适配器/运行时/兼容性四层矩阵，承诺 → 证明测试映射；71 套件 / 428 测试全绿） |
+| 12 | Conformance Suite | 兼容性测试 | ✅ 已建（[conformance/](conformance/README.md)：语义/适配器/运行时/兼容性四层矩阵，承诺 → 证明测试映射；72 套件 / 431 测试全绿） |
 | 13 | Reference Application | 用真实应用验证架构 | ✅ 已满足：`examples/school`（多版本迁移链 + 种子 + 三端产物）+ `examples/access-depth` / `cursor-pagination` + [case-protocol](../case-protocol.zh-CN.md) V1–V16 矩阵 + CI `e2e`（真 MySQL 8）/ `flutter` / `web` / `generated-backend` |
 
 > 基础 RFC（0001–0009）状态已于 2026-11-08 逐份核实：0001/0010 为 `Accepted`，
@@ -382,6 +382,11 @@ RFC-0004 的可扩容机制**已落地为代码**，不是纸面设计：
 > **7 项收口、2 项显式保留**（RFC-0004 §16-3「未知扩展」无适用对象——DSL 无 extensions 语法，
 > 已按 fail-closed 锁定；RFC-0008 §16-3 由 [ADR-0005](adr/accepted/ADR-0005-list-authorization-boundary.zh-CN.md) 取代）。
 > gap-backlog 的 **G-1…G-11 已全部收口**（实现 / 决议 / 显式保留），`docs lint` 0 warning / 0 info。
+>
+> **RFC §18 开放问题收口（2026-11-08 续）**：10 份 RFC 的 §18/§16 未决项逐条处置——
+> ~20 项关闭（附实现证据）、3 项本阶段落地（**策略即测试**：权限向量跨端同源执行；
+> 多租户默认值决议；docs 命令 ↔ REVIEW-CHECKLIST 映射）、~8 项显式保留（含 G-4
+> Secret Provider、RFC-0007 产物签名、RFC-0003 表达式级依赖）。
 
 **Phase 1 完成标准不是文档数量，而是**：
 

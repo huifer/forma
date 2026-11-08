@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **RFC §18 开放问题收口（10 份 RFC 逐条处置）**：
+  - **策略即测试（RFC-0008 §18 / RFC-0005 §18 运行时行为向量）**：`validation_vectors::access_vectors`
+    从 DSL 的 api 级 `auth` + 实体级 `access` 规则派生权限向量；Web（vitest `access.test.ts`）与
+    Flutter（flutter_test `access_vector_test.dart`）**跨端同源执行**；两端新增纯函数
+    `canForRole(entity, op, role)` 供测试直调（`useCan` / `can` 复用）；回归 `tests/access_vectors.rs`（3 项）。
+    school 实测：Web 3/3、Flutter 3/3 通过。
+  - **修复存量 bug**：`lib/access.dart`（lib/ 根）误用 pages 的 `../api/api.dart` 相对路径 →
+    改为 `api/api.dart`；`flutter analyze` 恢复零 issue。
+  - **多租户默认值决议（RFC-0005 §18）**：单租户 → 不过滤；@tenant → 服务端绑定，None → 空集。
+  - **docs 命令 ↔ REVIEW-CHECKLIST 映射表**（RFC-0009 §18）。
+  - **§18 批量收口**：~20 项关闭（附证据）、3 项落地、~8 项显式保留（G-4 Secret Provider、
+    产物签名、表达式级依赖、三方合并、补丁草案落盘、配置 trait 同构、诊断 i18n、Flutter 图表）。
+  - 验证门：`cargo test` **431 项 / 72 套件**（2 连跑）、clippy `-D warnings`、fmt、
+    docs validate/lint/check-links/check-dependencies 全绿、school Web vitest + Flutter test 全绿。
+
 - **Phase 1 §16 未覆盖项 G-1…G-11 全部收口（RFC 入口驱动）**：
   - **G-1**：治理依赖图 Tier 反向边自动断言（`tests/docs_tier.rs`，Tier 映射完整性锁定）；
   - **G-2**：Capability Manifest `Deprecation { reason, successor }` 结构化 + resolve 构建期强制

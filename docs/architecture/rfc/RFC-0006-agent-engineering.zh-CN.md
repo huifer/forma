@@ -379,10 +379,17 @@ Commit / Report     →  证据报告
 
 ## 18. Open Questions
 
-- `expected` 前置条件是否需要表达式形式（当前设想是字段级匹配），还是限定为结构化声明？
-- 补丁是否需要支持跨实体/跨文件的原子操作（如「加字段 + 改页面 + 改规则」）？当前设计允许，但回滚粒度是文件级，需确认可接受。
-- `forma_plan` 的输出是否应直接作为 CI 的变更评审材料？
-- 是否需要「补丁草案」在磁盘上落盘（供人审阅后再 apply），还是始终内存态？
+> 收口（2026-11-08）：3 项关闭、1 项保留。
+
+- [x] ~~`expected` 前置条件是否需要表达式形式？~~
+  **已决议**：限定为结构化声明（`expected: [{entity, sha256}]`），支持 `patchId` 幂等；表达式形式不做。
+- [x] ~~补丁是否需要支持跨实体/跨文件的原子操作？~~
+  **已支持**：`DslPatchDocument.operations` 多操作按当前磁盘状态组合应用；失败整体回滚（事务）。
+- [x] ~~`forma_plan` 的输出是否应直接作为 CI 的变更评审材料？~~
+  **已支持**：JSON 报告含 verdict / baseRevision / operations / migrations（风险分级）/ expected / impact / build。
+- [ ] 是否需要「补丁草案」在磁盘上落盘（供人审阅后再 apply）？
+  ⏸ **保留**：当前为内存态（`forma_plan` 副本试运行）；落盘属 Studio 审阅流增强。
+
 
 ## 19. References
 

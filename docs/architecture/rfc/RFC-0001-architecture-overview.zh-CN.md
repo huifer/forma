@@ -191,8 +191,13 @@ Stable Identity 是跨版本稳定的标识符，由 IR 节点承载（`NodeKind
 
 ## 18. Open Questions
 
-- `forma docs` 自动化工具的具体实现归属（CLI crate 还是独立 bin）。
-- 项目锁文件格式（`forma.yaml` 扩展 vs `.forma/lock.json`）。
+> 收口（2026-11-08，RFC §18 开放问题收口）：两项均已关闭。
+
+- [x] ~~`forma docs` 自动化工具的具体实现归属（CLI crate 还是独立 bin）。~~
+  **已定**：CLI crate 内（`crates/forma/src/docs.rs`），随 `forma` 单一二进制分发；`docs validate/lint/graph/check-*` 命令族共用该模块。
+- [x] ~~项目锁文件格式（`forma.yaml` 扩展 vs `.forma/lock.json`）。~~
+  **已决议（P1-8）**：`forma.yaml` 的 `capabilities:` 段即锁（声明 + pin）；`.forma/capability-lock.json`（解析快照）为 v2 增强。
+
 
 ## 19. References
 

@@ -387,11 +387,25 @@ Runtime Module 清单随产物分发（可置于产物目录的 `runtime.manifes
 
 ## 18. Open Questions
 
-- Runtime Module 清单的载体：随产物分发（`runtime.manifest.yaml`）还是独立包索引？前者简单但升级需重生成产物。
-- 配置接口是否需要跨语言同构（Rust / TS / Dart 三份 trait 定义）？如何保证语义一致？
-- 是否需要「运行时行为向量」测试集（类似规则跨语言一致性向量 F-004），覆盖错误映射、配置解析、字段裁剪？
-- Secret Provider 的 `resolve` 是否需要缓存层？缓存会引入密钥驻留风险，需权衡。
-- 多租户配置（Tenant 层）在单租户部署中的默认值如何定义？
+> 收口（2026-11-08）：2 项关闭、1 项本阶段落地、2 项保留。
+
+- [x] ~~Runtime Module 清单的载体：随产物分发还是独立包索引？~~
+  **已决议**：随产物分发——本机清单 `.forma/artifacts.json`（含来源规格）；生成工程不额外携带
+  `runtime.manifest.yaml`（避免双源）。
+- [ ] 配置接口是否需要跨语言同构（Rust / TS / Dart 三份 trait 定义）？
+  ⏸ **保留**：当前各目标独立读取环境变量，语义一致由 spec:protocols 契约文档保证；
+  trait 化属增强，待多目标配置项增多再评估。
+- [x] ~~是否需要「运行时行为向量」测试集（错误映射、配置解析、字段裁剪）？~~
+  **已落地（2026-11-08）**：权限行为向量从 DSL 规则派生，Web（vitest）与 Flutter（flutter_test）
+  跨端同源执行（`validation_vectors::access_vectors` + `canForRole`）；错误码映射向量见
+  `tests/error_contract.rs`（E1–E5 三端）。
+- [ ] Secret Provider 的 `resolve` 是否需要缓存层？
+  ⏸ **保留**（跟随 G-4：Secret Provider 抽象未建模，缓存无从谈起）。
+- [x] ~~多租户配置（Tenant 层）在单租户部署中的默认值如何定义？~~
+  **已决议（2026-11-08）**：单租户部署（无 `@tenant`）→ `tenant_arg = None`，repo **不过滤**；
+  `@tenant` 工程 → 服务端绑定当前租户，`None` → `col = NULL` 恒不命中（空集，fail-closed）；
+  tenant 列保持 nullable（兼容存量行）。与 `tests/tenant_admin_ui.rs` / `access_relation_depth.rs` 一致。
+
 
 ## 19. References
 

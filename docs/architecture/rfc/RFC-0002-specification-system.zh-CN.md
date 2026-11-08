@@ -330,10 +330,20 @@ RFC-0001 规定了**系统边界**，但不规定**表达体系**。「规格如
 
 ## 18. Open Questions
 
-- Query / Metric / Workflow / Integration / Media 五个规划领域的顶层构造形态尚未确定；是否需要独立的 `metric` 顶层构造，还是扩展 `rules`？
-- 损失报告的机器可读格式（JSON？）与消费方（CI / Studio / Agent）如何对接？
-- 往返测试的「语义等价」是否需要形式化定义，还是以 fixture 快照比对为充分？
-- `forma.yaml` 是否应承担规格领域到目录的显式映射，还是继续依赖 glob 约定？
+> 收口（2026-11-08）：4 项中 3 项关闭、1 项收窄决议。
+
+- [x] ~~Query / Metric / Workflow / Integration / Media 五个规划领域的顶层构造形态尚未确定。~~
+  **收窄决议**：`metric` 已由 `chart { type metric }` 覆盖（V0.2）；**Workflow 属轨道 B（已撤销）**；
+  Query / Integration / Media 不排期——DSL v0.3 覆盖 Data / UI / Visualization 三领域，其余待真实需求。
+- [x] ~~损失报告的机器可读格式与消费方如何对接？~~
+  **已落地**：`LossReport`（`format/source/entities/items[]`）+ `forma import … --loss-report <path>`（JSON）；
+  CI / Studio / Agent 可直接消费；同时写入 `.fm` 头部注释。
+- [x] ~~往返测试的「语义等价」是否需要形式化定义？~~
+  **已决议**：以「**可表达部分**等价 + 损失报告显式列出不可表达部分」为充分判据（S3 落地，
+  `tests/adapter_roundtrip.rs`）；形式化定义待外部工具链需要时再补。
+- [x] ~~`forma.yaml` 是否应承担规格领域到目录的显式映射？~~
+  **已决议**：继续依赖 glob 约定；显式映射属未来增强（当前 `source: ["forma/**/*.fm"]` 足够）。
+
 
 ## 19. References
 

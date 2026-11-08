@@ -242,8 +242,14 @@ extensions:
 
 ## 18. Open Questions
 
-- Registry 是编译期静态 Manifest 还是运行时发现？本 RFC 倾向编译期静态。
-- Capability 版本与 IR 版本的兼容矩阵如何自动化校验？
+> 收口（2026-11-08）：两项均已关闭。
+
+- [x] ~~Registry 是编译期静态 Manifest 还是运行时发现？~~
+  **已定**：编译期静态 Manifest（`CapabilityRegistry::with_builtins()` + 项目 `capabilities/*.yaml`）。
+- [x] ~~Capability 版本与 IR 版本的兼容矩阵如何自动化校验？~~
+  **已落地**：构建期校验 `compatibility.ir` / `runtime` / pin（`capability-ir-incompatible` 等诊断，
+  错误阻断构建）；回归 `tests/capability.rs`。
+
 
 ## 19. References
 

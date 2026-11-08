@@ -48,6 +48,7 @@ breaking_change: false
 | 每个规格领域都有专属诊断码并被测试覆盖（17 领域） | `tests/domain_validators.rs` |
 | 未知顶层构造 fail-closed（无静默忽略） | `tests/domain_validators.rs::unknown_top_level_construct_is_fail_closed_not_preserved` |
 | IR 机器可读契约与实现一致（schema 漂移锁定） | `tests/ir_schema.rs`（4 项） |
+| 策略即测试：权限向量跨端同源执行（Web + Flutter） | `tests/access_vectors.rs` + 生成 `access.test.ts` / `access_vector_test.dart` |
 | @tenant 行级隔离 + 管理端点（未设 token → 403 关闭） | `tests/backend_contract.rs` |
 
 ## 可视化语义（RFC-0010）
