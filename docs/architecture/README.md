@@ -371,15 +371,17 @@ RFC-0004 的可扩容机制**已落地为代码**，不是纸面设计：
 | 9 | Specification System（RFC-0002） | 规格领域与标准互通契约 | ✅ 文档已交付 |
 | 10 | Security & Governance（RFC-0008） | 权限、密钥、审计、验证门槛 | ✅ 文档已交付 |
 | 11 | Developer Experience（RFC-0009） | CLI 契约、Studio | ✅ 文档已交付 |
-| 12 | Conformance Suite | 兼容性测试 | ✅ 已建（[conformance/](conformance/README.md)：语义/适配器/运行时/兼容性四层矩阵，承诺 → 证明测试映射；67 套件 / 414 测试全绿） |
+| 12 | Conformance Suite | 兼容性测试 | ✅ 已建（[conformance/](conformance/README.md)：语义/适配器/运行时/兼容性四层矩阵，承诺 → 证明测试映射；71 套件 / 428 测试全绿） |
 | 13 | Reference Application | 用真实应用验证架构 | ✅ 已满足：`examples/school`（多版本迁移链 + 种子 + 三端产物）+ `examples/access-depth` / `cursor-pagination` + [case-protocol](../case-protocol.zh-CN.md) V1–V16 矩阵 + CI `e2e`（真 MySQL 8）/ `flutter` / `web` / `generated-backend` |
 
 > 基础 RFC（0001–0009）状态已于 2026-11-08 逐份核实：0001/0010 为 `Accepted`，
 > 0002–0009 为 `Implemented`（0002 的 S4、0004 的 Deprecation 等未覆盖项在各 RFC §16 保留 `[ ]`）。
 > **文档齐备 ≠ 架构可扩容**——Phase 1 的三条完成标准靠实现与 Conformance 测试证明：
-> 2026-11-08 已把 10 份 RFC 的 §16 验收项逐条对照回归：本阶段核实的 6 份共 35 项，
-> **27 项补上证据并勾选、8 项如实保留 `[ ]`** 并登记
-> [gap-backlog](roadmap/gap-backlog.zh-CN.md)「Phase 1 §16 未覆盖项」（G-1…G-8）。
+> 2026-11-08 已把 10 份 RFC 的 §16 验收项逐条对照回归：35 项未勾项中 **28 项补上证据并勾选**
+> （RFC-0007 7/7、RFC-0004 §16-2、RFC-0002 §16-1、RFC-0001 §16-2、RFC-0005 §16-8 等），
+> **7 项收口、2 项显式保留**（RFC-0004 §16-3「未知扩展」无适用对象——DSL 无 extensions 语法，
+> 已按 fail-closed 锁定；RFC-0008 §16-3 由 [ADR-0005](adr/accepted/ADR-0005-list-authorization-boundary.zh-CN.md) 取代）。
+> gap-backlog 的 **G-1…G-11 已全部收口**（实现 / 决议 / 显式保留），`docs lint` 0 warning / 0 info。
 
 **Phase 1 完成标准不是文档数量，而是**：
 

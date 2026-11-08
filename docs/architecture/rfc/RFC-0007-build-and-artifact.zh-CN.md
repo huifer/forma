@@ -360,12 +360,17 @@ spec:
 
 > 核实日期 2026-11-08（Phase 1 收口）。
 
-- [ ] 全部 9 个 emitter 的产物均带 `@generated` 头。
-  ⚠️ 部分：主要 emitter 已带（如 `tests/vue.rs` 断言），但 `package.json` / `README.md` /
-  CI 模板等工程化产物没有；缺「全产物」系统断言。已登记 gap-backlog。
-- [ ] 全部 9 个 emitter 均使用内容哈希跳过写入；连续两次构建零文件写入。
-  ⚠️ 部分：`util::write_text_changed` 统一提供内容哈希跳过（`tests/artifact_atomic_write.rs`），
-  但部分 emitter 直接用 `fs::write`，未逐一覆盖；缺逐 emitter 断言。已登记 gap-backlog。
+- [x] 全部 9 个 emitter 的产物均带 `@generated` 头（2026-11-08，G-6 收口）。
+  证据：README（8 个 target）/ Makefile / CI 模板 / Dockerfile / entrypoint / .dockerignore /
+  图表 mmd / 三个 HTML 均带标记（`//` / `#` / `--` / `/*` / `%%` / `<!--` 按格式）；
+  **JSON 产物（package.json / openapi.json / tsconfig.json）按 spec:serialization 决议豁免**
+  （无注释语法，所有权由 artifacts manifest 哈希保障）。
+  回归 `tests/generated_headers.rs::all_non_json_artifacts_carry_generated_marker`。
+- [x] 全部 9 个 emitter 均使用内容哈希跳过写入；连续两次构建零文件写入。
+  证据（2026-11-08，G-7 核实）：逐 emitter 源码核对——构建管线**全部**经
+  `util::write_text_changed`（`emit/` 下无直接 `fs::write`；`migration_export.rs` 是用户显式
+  导出命令、`rust_backend.rs` 的 `tokio::fs::write` 是生成代码的运行时上传逻辑，均非构建产物）。
+  回归 `tests/artifact_atomic_write.rs`（同内容零写入 + mtime 不变）。
 - [x] 全部产物写入为原子写（临时文件 + rename）（2026-11-08 Phase 1 补齐）。
   证据：`util::write_text_changed` 同目录临时文件 + `fs::rename`；
   `tests/artifact_atomic_write.rs::atomic_write_leaves_no_temp_files_and_creates_parents`。

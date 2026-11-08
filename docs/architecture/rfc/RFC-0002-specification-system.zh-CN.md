@@ -291,9 +291,12 @@ RFC-0001 规定了**系统边界**，但不规定**表达体系**。「规格如
 
 > 核实日期 2026-11-08（P3/C-2）：有回归证据才勾选；未覆盖项**保留未勾选并写明缺口**。
 
-- [ ] 每个顶层构造在领域表中有归属，且有对应诊断码覆盖。
-  ⚠️ **部分**：诊断码由 `check_program` 集中覆盖（`dsl-*` 前缀），但**未**按规格领域
-  拆分为独立 Validator / 诊断码命名空间（§18 开放问题，本阶段如实保留未勾选）。
+- [x] 每个顶层构造在领域表中有归属，且有对应诊断码覆盖（2026-11-08，G-9 收口）。
+  证据：`tests/domain_validators.rs` 覆盖 **17 个规格领域**（entity / field / type /
+  constraint / enum / relation / access / api / page / cursor / job / live / notify /
+  searchable / storage / tenant / visualization），每个领域构造最小坏 DSL 并断言专属诊断码出现；
+  领域清单即「领域 → 诊断码」机器可读映射，新增领域必须登记。
+  边界：仍是单一 `check_program` 入口（非物理拆分模块），§18 开放问题保留。
 - [x] 所有 Lossy / Partial 导入方向产出损失报告。
   证据：`adapters::{LossReport, LossItem}` + 三个 `*_with_report`；CLI `--loss-report`；
   `tests/adapter_roundtrip.rs::lossy_imports_emit_machine_readable_loss_reports` /

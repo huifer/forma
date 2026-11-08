@@ -73,7 +73,15 @@ pub fn emit_nestjs(
             module_source(entity),
         ));
     }
-    files.push(file(out_dir, "README.md", readme(app_name)));
+    files.push(file(
+        out_dir,
+        "README.md",
+        format!(
+            "{}{}",
+            crate::emit::generated_md_header("gen-nestjs"),
+            readme(app_name)
+        ),
+    ));
     for generated in &files {
         crate::util::write_text(&project_dir.join(&generated.path), &generated.content)?;
     }

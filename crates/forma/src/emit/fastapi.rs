@@ -28,7 +28,15 @@ pub fn emit_fastapi(
     files.push(file(out_dir, "src/schemas.py", schemas_py(program)));
     files.push(file(out_dir, "src/routes.py", routes_py(program)));
     files.push(file(out_dir, "src/main.py", main_py()));
-    files.push(file(out_dir, "README.md", readme(&pkg)));
+    files.push(file(
+        out_dir,
+        "README.md",
+        format!(
+            "{}{}",
+            crate::emit::generated_md_header("gen-fastapi"),
+            readme(&pkg)
+        ),
+    ));
 
     for f in &files {
         crate::util::write_text(&project_dir.join(&f.path), &f.content)?;

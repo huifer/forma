@@ -328,3 +328,75 @@ spec:
         assert_eq!(baseline_web, after_web, "core artifact changed");
     }
 }
+
+// ── RFC-0004 §8.4 / G-2：10 项契约的结构化断言 + Deprecation 契约 ──
+
+#[test]
+fn builtin_manifests_cover_the_ten_contracts() {
+    // RFC-0004 §8.4 的 10 项契约 → Manifest 结构化字段 / Registry 行为的映射断言：
+    // Discovery/Registration/Versioning/Dependency/Permissions/Validation 由 Registry 与
+    // 其余 capability.rs 测试承担；此处逐 manifest 断言字段面齐备。
+    let reg = CapabilityRegistry::with_builtins();
+    assert!(reg.ids().len() >= 10);
+    for m in reg.manifests() {
+        // Manifest 面存在（serde 结构化，而非自由文本）
+        assert_eq!(m.api_version, "forma.dev/v1");
+        assert_eq!(m.kind, "Capability");
+        // Versioning：semver + IR 兼容范围
+        assert!(forma::capability::Version::parse(&m.metadata.version).is_some());
+        assert!(m.spec.compatibility.ir.is_some() || m.spec.compatibility.runtime.is_some());
+        // Dependency：dependencies 字段存在（可空列表），且 registry 闭包可解析
+        let _ = &m.spec.dependencies;
+        // Permissions：字段存在且可汇总
+        let _ = &m.spec.permissions;
+        // Adapter / Runtime / Provides / Consumes：字段存在
+        let _ = &m.spec.adapters;
+        let _ = &m.spec.runtime;
+        let _ = &m.spec.provides;
+        let _ = &m.spec.consumes;
+        // Conformance：声明 suite
+        assert!(
+            m.spec.conformance.is_some(),
+            "{} must declare conformance suite",
+            m.metadata.id
+        );
+    }
+}
+
+#[test]
+fn deprecation_requires_registered_successor() {
+    let reg = CapabilityRegistry::with_builtins();
+    // 弃用但无 successor → error（spec:compatibility §9）
+    let mut m = reg.manifests().next().unwrap().clone();
+    m.spec.deprecated = Some(forma::capability::Deprecation {
+        reason: "test".into(),
+        successor: None,
+    });
+    let mut r = CapabilityRegistry::new();
+    r.register(m, "test".into()).unwrap();
+    let res = r.resolve(&[], &[]);
+    assert!(
+        res.errors()
+            .iter()
+            .any(|d| d.code == "capability-deprecation-missing-successor"),
+        "{:?}",
+        res.errors()
+    );
+
+    // successor 未注册 → error
+    let mut m = reg.manifests().next().unwrap().clone();
+    m.spec.deprecated = Some(forma::capability::Deprecation {
+        reason: "test".into(),
+        successor: Some("no.such".into()),
+    });
+    let mut r = CapabilityRegistry::new();
+    r.register(m, "test".into()).unwrap();
+    let res = r.resolve(&[], &[]);
+    assert!(
+        res.errors()
+            .iter()
+            .any(|d| d.code == "capability-deprecation-successor-unknown"),
+        "{:?}",
+        res.errors()
+    );
+}

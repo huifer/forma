@@ -44,3 +44,4 @@ breaking_change: false
 | 能力模块端点语义（jobs/live/uploads/export） | `tests/jobs.rs` / `tests/live.rs` / `tests/storage.rs` / `tests/export.rs` |
 | 多租户管理端点 + UI（吊销/迁移，`x-admin-token`） | `tests/tenant_admin_ui.rs` + 生成 Web `tsc --noEmit` |
 | 构建报告携带 IR 版本（CLI 打印 / MCP `irVersion`） | `tests/adapter_roundtrip.rs::build_report_exposes_ir_version` + `tests/cli_version.rs` |
+| 配置 / 连接失败结构化 fail-closed（错误码 + 非零退出，非 panic） | `tests/runtime_probes.rs::config_failures_are_structured_fail_closed_not_panics` |

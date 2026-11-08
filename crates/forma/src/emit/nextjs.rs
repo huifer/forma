@@ -94,7 +94,15 @@ pub fn emit_nextjs(
         }
     }
     files.push(file(out_dir, ".github/workflows/ci.yml", ci_yaml()));
-    files.push(file(out_dir, "README.md", readme(&title)));
+    files.push(file(
+        out_dir,
+        "README.md",
+        format!(
+            "{}{}",
+            crate::emit::generated_md_header("gen-nextjs"),
+            readme(&title)
+        ),
+    ));
 
     for f in &files {
         crate::util::write_text(&project_dir.join(&f.path), &f.content)?;

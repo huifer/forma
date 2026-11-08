@@ -1,0 +1,227 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://forma.dev/schemas/ir/v1/program.schema.json",
+  "title": "Forma IR — Program（机器可读契约，RFC-0003 §15 阶段 3 / G-10）",
+  "description": "由 DSL 编译产出的语义表示（Program）的 JSON 结构契约。字段名与 serde 序列化一致（snake_case）。内建类型词表（BUILTIN_TYPES）内嵌于此。",
+  "type": "object",
+  "required": [
+    "ir_version",
+    "entities",
+    "enums",
+    "rules",
+    "apis",
+    "pages"
+  ],
+  "properties": {
+    "ir_version": {
+      "type": "string",
+      "description": "IR 版本，等于编译器 IR_VERSION"
+    },
+    "app": {
+      "type": "object",
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "locale": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Entity"
+      }
+    },
+    "enums": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Enum"
+      }
+    },
+    "rules": {
+      "type": "array"
+    },
+    "apis": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Api"
+      }
+    },
+    "pages": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Page"
+      }
+    },
+    "jobs": {
+      "type": "array"
+    },
+    "lives": {
+      "type": "array"
+    },
+    "exports": {
+      "type": "array"
+    },
+    "charts": {
+      "type": "array"
+    },
+    "commands": {
+      "type": "array"
+    },
+    "auth": {
+      "type": [
+        "object",
+        "null"
+      ]
+    }
+  },
+  "$defs": {
+    "BuiltinType": {
+      "type": "string",
+      "enum": [
+        "Uuid",
+        "String",
+        "Email",
+        "Text",
+        "Int",
+        "Float",
+        "Decimal",
+        "Bool",
+        "Timestamp",
+        "Date",
+        "Json",
+        "Attachment"
+      ]
+    },
+    "Field": {
+      "type": "object",
+      "required": [
+        "name",
+        "type_name",
+        "optional"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type_name": {
+          "type": "string"
+        },
+        "optional": {
+          "type": "boolean"
+        },
+        "line": {
+          "type": "integer"
+        },
+        "file": {
+          "type": "string"
+        }
+      }
+    },
+    "Entity": {
+      "type": "object",
+      "required": [
+        "name",
+        "fields"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Field"
+          }
+        },
+        "line": {
+          "type": "integer"
+        },
+        "file": {
+          "type": "string"
+        }
+      }
+    },
+    "Enum": {
+      "type": "object",
+      "required": [
+        "name",
+        "variants"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "variants": {
+          "type": "array"
+        },
+        "line": {
+          "type": "integer"
+        },
+        "file": {
+          "type": "string"
+        }
+      }
+    },
+    "Api": {
+      "type": "object",
+      "required": [
+        "entity",
+        "operations"
+      ],
+      "properties": {
+        "entity": {
+          "type": "string"
+        },
+        "operations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "auth": {
+          "type": "array"
+        },
+        "line": {
+          "type": "integer"
+        },
+        "file": {
+          "type": "string"
+        }
+      }
+    },
+    "Page": {
+      "type": "object",
+      "required": [
+        "name",
+        "route"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "route": {
+          "type": "string"
+        },
+        "line": {
+          "type": "integer"
+        },
+        "file": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

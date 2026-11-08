@@ -24,7 +24,15 @@ pub fn emit_hono(
         file(out_dir, "src/types.ts", types_ts(program)),
         file(out_dir, "src/validators.ts", validators_ts(program)),
         file(out_dir, "src/index.ts", index_ts(program, app_name)),
-        file(out_dir, "README.md", readme(app_name)),
+        file(
+            out_dir,
+            "README.md",
+            format!(
+                "{}{}",
+                crate::emit::generated_md_header("gen-hono"),
+                readme(app_name)
+            ),
+        ),
     ];
 
     for f in &files {

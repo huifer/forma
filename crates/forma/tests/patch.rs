@@ -2,12 +2,17 @@ use forma::engine::load_project;
 use forma::patch::{apply_patch, PatchDocument, PatchFieldSpec, PatchOperation};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
 
 /// `forma init` 现在生成 v0.3 DSL 工程；语义补丁（联邦管线）的测试
 /// 用仓库里的 order-management 原型（Order 实体）作 fixture。
 fn tmp_project() -> PathBuf {
+    // pid + 纳秒不足以多线程唯一（同名目录互相覆盖）：加进程内序号兑底
+    let seq = TMP_SEQ.fetch_add(1, Ordering::Relaxed);
     let dir = std::env::temp_dir().join(format!(
-        "forma-patch-{}-{:?}",
+        "forma-patch-{}-{seq}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

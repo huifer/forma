@@ -93,6 +93,9 @@ compatibility:
 ### 6.2 向前兼容
 
 - 未知扩展字段（`extensions.<capabilityId>`）**MUST** 被**保留**、**MUST NOT** 被擅解释。
+  **现状（2026-11-08，G-3）**：DSL v0.3 尚无 `extensions` 语法——未知顶层构造按**fail-closed**
+  显式报错（`dsl-parse`，回归 `tests/domain_validators.rs`）。本条的「保留」语义待 extensions
+  语法引入时生效，届时的实现必须附带保留性回归。
 - Adapter **MUST** 只处理自己声明支持的扩展。
 - 扩展字段 **MUST NOT** 覆盖核心语义；扩展升级 **MUST** 有迁移策略。
 

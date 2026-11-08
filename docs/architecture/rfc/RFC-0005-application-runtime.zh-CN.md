@@ -373,9 +373,10 @@ Runtime Module 清单随产物分发（可置于产物目录的 `runtime.manifes
 - [x] 产物可在无 Forma 环境下独立构建（CI 断言）。
   证据：生成工程自带 `Cargo.toml` / `package.json`；CI `generated-backend` job 与 `web` job
   在生成目录内独立执行 `cargo check` / npm build。
-- [ ] 配置 / 密钥解析失败时 fail-closed。
-  ⚠️ 部分：`/ready`（503）与 `TENANT_ADMIN_TOKEN` 未设置（403）已 fail-closed；
-  但 `DATABASE_URL` 缺失仍是启动期 `expect` panic，不是优雅降级。已登记 gap-backlog。
+- [x] 配置 / 密钥解析失败时 fail-closed（2026-11-08，G-5 收口）。
+  证据：`DATABASE_URL` 缺失 / 为空、连接失败均输出稳定错误码（`FORMA_CONFIG_MISSING` /
+  `FORMA_DB_UNREACHABLE`）+ 非零退出，不再 panic；细节只写日志（E5）。
+  回归 `tests/runtime_probes.rs::config_failures_are_structured_fail_closed_not_panics`。
 
 ## 17. Acceptance Criteria
 

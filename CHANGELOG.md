@@ -8,6 +8,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Phase 1 §16 未覆盖项 G-1…G-11 全部收口（RFC 入口驱动）**：
+  - **G-1**：治理依赖图 Tier 反向边自动断言（`tests/docs_tier.rs`，Tier 映射完整性锁定）；
+  - **G-2**：Capability Manifest `Deprecation { reason, successor }` 结构化 + resolve 构建期强制
+    「弃用必须指向已注册 successor」（`capability-deprecation-*` 诊断）+ 10 项契约逐项断言；
+  - **G-3**：核实为「无适用对象」——DSL 无 extensions 语法，未知顶层构造 fail-closed
+    （测试锁定）；spec:compatibility §8 标注「保留」语义待 extensions 语法引入后生效；
+  - **G-4**：明确为 §18 开放问题（Secret Provider 接口归属未决），保留未勾；
+  - **G-5**：生成后端配置 / 连接失败结构化 fail-closed（`FORMA_CONFIG_MISSING` /
+    `FORMA_DB_UNREACHABLE` + 非零退出，不再 panic；细节只写日志，E5）；
+  - **G-6**：README ×8 / Makefile / CI / Dockerfile / entrypoint / .dockerignore / 图表 mmd /
+    三个 HTML 均带 `@generated` 标记（按格式选注释语法）；JSON 产物按 spec:serialization
+    决议豁免（无注释语法，所有权靠 manifest 哈希）；全产物标记回归
+    `tests/generated_headers.rs`；
+  - **G-7**：逐 emitter 源码核实——构建管线全部经 `util::write_text_changed`（无直接
+    `fs::write`；`migration_export` 是用户命令、`rust_backend` 的 `tokio::fs::write` 是
+    生成代码运行时逻辑）；
+  - **G-8**：**ADR-0005** 把「列表不做行级 WHERE 过滤」固化为显式语言边界（选项 A），
+    RFC-0008 §16 对应项由 ADR 取代，未改安全语义；
+  - **G-9**：17 个规格领域哨兵诊断回归（`tests/domain_validators.rs`，每领域构造最小坏
+    DSL 断言专属诊断码）；RFC-0002 §16-1 可勾选；
+  - **G-10**：机器可读 IR 契约 `specifications/ir/program.schema.json`（draft-07，含内建
+    类型词表）+ 最小校验器回归（`tests/ir_schema.rs` 4 项）；
+  - **G-11**：RFC-0010 补齐 6 个标准模板章节（指向已有内容），`docs lint` 从 6 条 info
+    降为 **0 warning / 0 info**。
+  - **并行竞态修复**：`patch.rs::tmp_project` 的 pid+纳秒目录加进程内序号（同名目录
+    互相覆盖导致偶发 `patch.rs` 断言失败）；全量测试连跑 3 次稳定。
+  - 验证门：`cargo test` **428 项 / 71 套件**（连跑 3 次）、clippy `-D warnings`、fmt、
+    docs validate / lint / check-links / check-dependencies 全绿、CI YAML 解析、
+    生成后端 `cargo check`（school / access-depth / entity-only）零错误零警告。
+
 - **Phase 1 收口（以 RFC 为入口，不再自创阶段名）**：依据治理总入口 §10「落地顺序」与
   各 RFC §16 Conformance Requirements，把「已实现」变成「有证据」：
   - **§16 证据化**：核实 6 份 RFC（0001/0003/0004/0005/0007/0008）共 35 项验收，

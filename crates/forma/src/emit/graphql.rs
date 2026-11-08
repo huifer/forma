@@ -40,7 +40,15 @@ pub fn emit_graphql(
     ));
     files.push(file(out_dir, "package.json", package_json(app_name)));
     files.push(file(out_dir, "tsconfig.json", tsconfig()));
-    files.push(file(out_dir, "README.md", readme(app_name)));
+    files.push(file(
+        out_dir,
+        "README.md",
+        format!(
+            "{}{}",
+            crate::emit::generated_md_header("gen-graphql"),
+            readme(app_name)
+        ),
+    ));
 
     for f in &files {
         crate::util::write_text(&project_dir.join(&f.path), &f.content)?;

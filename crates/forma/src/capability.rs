@@ -68,6 +68,8 @@ pub struct CapabilitySpec {
     pub compatibility: Compatibility,
     #[serde(default)]
     pub conformance: Option<Conformance>,
+    #[serde(default)]
+    pub deprecated: Option<Deprecation>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -76,6 +78,21 @@ pub struct Compatibility {
     pub ir: Option<String>,
     #[serde(default)]
     pub runtime: Option<String>,
+}
+
+/// RFC-0004 §8.4 / spec:compatibility §9：弃用契约的结构化字段。
+///
+/// 语义（随 resolve 构建期强制）：声明 `deprecated` 时 **MUST** 提供 `successor`——
+/// 否则产出 `capability-deprecation-missing-successor` 错误并阻断构建；
+/// 指向的 successor 必须已注册（`capability-deprecation-successor-unknown`）。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Deprecation {
+    /// 弃用原因（人读）
+    #[serde(default)]
+    pub reason: String,
+    /// 继任能力 id（必填，spec:compatibility §9）
+    #[serde(default)]
+    pub successor: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -432,6 +449,40 @@ impl CapabilityRegistry {
         }
         res.permissions = permissions.into_iter().collect();
 
+        // RFC-0004 §8.4 / spec:compatibility §9：弃用契约（G-2 收口）
+        for m in self.manifests() {
+            let Some(dep) = &m.spec.deprecated else {
+                continue;
+            };
+            let Some(successor) = &dep.successor else {
+                res.diagnostics.push(Diagnostic {
+                    severity: "error".into(),
+                    code: "capability-deprecation-missing-successor".into(),
+                    message: format!(
+                        "capability `{}` is deprecated but declares no `successor` (spec:compatibility §9)",
+                        m.metadata.id
+                    ),
+                    file: None,
+                    line: None,
+                    nodes: None,
+                });
+                continue;
+            };
+            if self.get(successor).is_none() {
+                res.diagnostics.push(Diagnostic {
+                    severity: "error".into(),
+                    code: "capability-deprecation-successor-unknown".into(),
+                    message: format!(
+                        "capability `{}` deprecates to unknown successor `{successor}`",
+                        m.metadata.id
+                    ),
+                    file: None,
+                    line: None,
+                    nodes: None,
+                });
+            }
+        }
+
         for id in &order {
             let m = self.get(id).expect("resolved capability exists");
             res.active.push(ResolvedCapability {
@@ -583,6 +634,7 @@ fn manifest(s: BuiltinSpec) -> CapabilityManifest {
             conformance: Some(Conformance {
                 suite: Some(s.suite.to_string()),
             }),
+            deprecated: None,
         },
     }
 }

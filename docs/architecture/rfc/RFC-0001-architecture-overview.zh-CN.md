@@ -179,8 +179,9 @@ Stable Identity 是跨版本稳定的标识符，由 IR 节点承载（`NodeKind
 
 - [x] `forma docs validate` 对所有 RFC 通过（工具就绪后）。
   证据：CI `docs` job + `tests/docs_validate.rs`；当前 29 篇治理文档 0 error / 0 warning。
-- [ ] 依赖图无 Tier 反向边（见 §7.3）。
-  ⚠️ 未覆盖：`forma docs graph` 输出依赖图，但没有「Tier 反向边」的自动断言；已登记 gap-backlog。
+- [x] 依赖图无 Tier 反向边（见 §7.3）。
+  证据（2026-11-08，G-1 收口）：`tests/docs_tier.rs` 解析 `forma docs graph --json`，按 Tier 映射
+  断言 T1 文档不 `depends_on` T2 文档（当前 0 违规）；映射完整性由同文件第二项测试锁定。
 - [x] 新增 Capability 的 PR 不修改 Semantic Core。
   证据：`tests/capability.rs::adding_a_capability_requires_no_core_change`（核心产物 byte 级不变）。
 

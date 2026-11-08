@@ -55,6 +55,13 @@ AI 今天要做一个数据大屏，必须自己写 ECharts option、Tooltip/Leg
 
 ---
 
+## Metadata（元信息）
+
+- RFC 编号：RFC-0010；状态：`Accepted`（实现分期 V0.1–V0.3 / V0.5 已落地，见 §13）
+- 分层：可视化属 **Tier 2 可扩展层**（RFC-0001 §7.3），不进入 Semantic Core
+- 关联：[RFC-0001](../rfc/RFC-0001-architecture-overview.zh-CN.md)、[RFC-0004](../rfc/RFC-0004-capability-system.zh-CN.md)、
+  [ADR-0002](../adr/accepted/ADR-0002-canonical-ir-program-over-federation-graph.zh-CN.md)
+
 ## 1. 动机与问题陈述
 
 ### 1.1 现状缺口
@@ -93,6 +100,13 @@ Forma 的六个 emitter（mysql / rust_backend / web_react / flutter / openapi /
 - 不做可视化编辑器（拖拽 Studio）——Studio v2（M9）之后可能消费本 IR，但不在本 RFC 范围。
 
 ---
+
+## Non-goals（明确不做）
+
+- 不做 BI 语义建模（多维数据集、语义层、指标口径管理）——V0.6 之后单独立项（§16 未决问题）
+- 不把 ECharts 配置格式泄漏为 DSL 词汇（分层红线：DSL 只有语义，Adapter 才认识 ECharts，见 §2 / §7）
+- 不让图表类型扩展修改 Semantic Core（Tier 2 边界，见 §17）
+- 不覆盖移动端复杂图表（V0.6 之后评估，§16）
 
 ## 2. 分层模型与术语
 
@@ -783,6 +797,21 @@ V0.1 已落地的断言见 `crates/forma/tests/visualization.rs`。
 
 ---
 
+## Implementation Plan（实施计划）
+
+按 §13 分期推进：V0.1 已落地（Chart IR + 十类图表 + Adapter + React Runtime）；
+V0.2（metric/table + cursor 源）与 V0.3（dashboard grid + 筛选联动）已落地；
+V0.5（theme + preview + 浏览器渲染门）已落地；V0.4 / V0.6 待排期（§13）。
+每个切片的验收判据见 §12 验收测试矩阵。
+
+## Conformance Requirements（一致性验收）
+
+- [x] chart / dashboard 语义错误（viz-* / dsl-dashboard-*）在 Emit 前硬失败（§6 / §12）
+- [x] 确定性：同一 Program 两次构建 byte 级一致（`tests/visualization.rs`）
+- [x] 零变化：无 chart 声明工程不产生 viz 产物与 echarts 依赖（`tests/visualization_v02.rs`）
+- [x] 浏览器渲染门：preview 页面 + mock API 断言渲染状态（V0.5，`tests/visualization_v05.rs`）
+- [x] 回归锚点：`tests/visualization.rs` / `visualization_v02.rs` / `dashboard.rs` / `visualization_v05.rs`
+
 ## 13. 里程碑
 
 | 版本 | 交付内容 | 状态 |
@@ -827,6 +856,12 @@ V0.1 已落地的断言见 `crates/forma/tests/visualization.rs`。
 | AI 生成的 chart 规格与实体字段不匹配 | 编译期报错阻断 | `viz-unknown-field` / `viz-type-mismatch` 在 Check 阶段硬失败，并给出候选字段 |
 
 ---
+
+## Performance and Reliability（性能与可靠性）
+
+- 图表数据取数走后端 `list` 接口（复用分页 / 过滤 / 游标协议，见 §8）；服务端聚合阈值属 §16 未决问题
+- 变换在运行时按视图数据量执行（filter/bucket/aggregate/sort/limit），超限由 §16 的阈值策略约束
+- 可靠性：渲染门（V0.5 preview）在构建后自检；图表不进入核心编译路径，失败不影响其它产物（零变化原则）
 
 ## 16. 未决问题
 
@@ -885,6 +920,14 @@ V0.1 已落地的断言见 `crates/forma/tests/visualization.rs`。
 - 既有 `diagrams` 产出（Mermaid）遵循其自身的「一渲染块一 diagram 文档」约束，不受本 RFC 影响。
 
 ---
+
+## References（参考）
+
+- [RFC-0001：架构总览](../rfc/RFC-0001-architecture-overview.zh-CN.md)（Tier 分层 / 依赖红线）
+- [RFC-0004：能力系统](../rfc/RFC-0004-capability-system.zh-CN.md)（`extensions.visualization.echarts` Manifest）
+- [ADR-0002：DSL Program 为规范 IR](../adr/accepted/ADR-0002-canonical-ir-program-over-federation-graph.zh-CN.md)
+- 实现位置：`crates/forma/src/visualization/`、`crates/forma/src/emit/visualization.rs`
+- 回归：`crates/forma/tests/visualization.rs` / `visualization_v02.rs` / `dashboard.rs` / `visualization_v05.rs`
 
 ## 附录 A：完整示例（V0.1 语法）
 

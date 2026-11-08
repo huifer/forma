@@ -45,6 +45,9 @@ breaking_change: false
 | 补丁操作语义（图表/看板节点，错误变换事务回滚） | `tests/patch_visual_nodes.rs` |
 | GraphQL 逆向关系（每请求 DataLoader 防 N+1） | `tests/graphql.rs` + 生成工程 `tsc --noEmit` / SDL `buildSchema` |
 | 逆向导入骨架通过 `check_program`（不引用不存在的实体/非法类型） | `tests/adapter_roundtrip.rs` + `tests/import_reverse.rs` |
+| 每个规格领域都有专属诊断码并被测试覆盖（17 领域） | `tests/domain_validators.rs` |
+| 未知顶层构造 fail-closed（无静默忽略） | `tests/domain_validators.rs::unknown_top_level_construct_is_fail_closed_not_preserved` |
+| IR 机器可读契约与实现一致（schema 漂移锁定） | `tests/ir_schema.rs`（4 项） |
 | @tenant 行级隔离 + 管理端点（未设 token → 403 关闭） | `tests/backend_contract.rs` |
 
 ## 可视化语义（RFC-0010）

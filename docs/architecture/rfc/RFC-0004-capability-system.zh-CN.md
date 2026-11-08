@@ -225,13 +225,15 @@ extensions:
 
 - [x] 新增 Capability 的 PR 不修改 Semantic Core（Tier 1 红线）。
   证据：`tests/capability.rs::adding_a_capability_requires_no_core_change`。
-- [ ] 每个 Capability 提供 Manifest 且含 §8.4 全部 10 项契约。
-  ⚠️ 部分：`CapabilityManifest` / `CapabilitySpec` 已覆盖 provides、consumes、adapters、runtime、
-  dependencies、permissions、compatibility、conformance；Discovery / Registration / Versioning 由
-  `CapabilityRegistry` 承担（`tests/capability.rs`），但 **Deprecation 尚无结构化字段**，且没有
-  「10 项契约逐项」自动断言。已登记 gap-backlog。
+- [x] 每个 Capability 提供 Manifest 且含 §8.4 全部 10 项契约。
+  证据（2026-11-08，G-2 收口）：`CapabilitySpec.deprecated`（`Deprecation { reason, successor }`）
+  已结构化；resolve 构建期强制「弃用必须指向已注册 successor」（`capability-deprecation-*` 诊断）；
+  `tests/capability.rs::builtin_manifests_cover_the_ten_contracts` 逐 manifest 断言字段面，
+  `deprecation_requires_registered_successor` 锁定契约。
 - [ ] 未知 IR 扩展被保留且不被擅解释（测试覆盖）。
-  ⚠️ 未覆盖：spec:compatibility §8 与 spec:ir §X3 有规范性约束，但无自动断言；已登记 gap-backlog。
+  ⚠️ 已核实（2026-11-08，G-3）：DSL v0.3 **无 `extensions` 语法**——未知顶层构造按 fail-closed
+  显式报错（`dsl-parse`，回归 `tests/domain_validators.rs`）；spec:compatibility §8 已标注
+  「保留」语义待 extensions 语法引入后生效。本条保留未勾选，避免为不存在的语法假绿。
 
 ## 17. Acceptance Criteria
 

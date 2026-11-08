@@ -46,6 +46,8 @@ breaking_change: false
 | 非 Web 目标显式拒绝 dashboard（宪法 6.2 不静默降级） | `tests/dashboard.rs::non_web_targets_reject_dashboard_pages` |
 | 仅 `@tenant` 工程生成 `TenantAdmin.tsx`（普通工程零变化） | `tests/tenant_admin_ui.rs` |
 | 迁移链导出 SQL 正文逐字复制（三种目录约定） | `tests/migration_export.rs` |
+| 非 JSON 产物全部带 `@generated` 标记（JSON 按决议豁免） | `tests/generated_headers.rs` |
+| 产物写入统一走内容哈希跳过 + 原子写 | `tests/artifact_atomic_write.rs` |
 | NestJS/Hono/FastAPI 对不支持的语义显式拒绝 | `tests/nestjs.rs` / `tests/hono.rs` / `tests/fastapi.rs` |
 
 ## 能力扩展不改核心（Phase 1 标准一）

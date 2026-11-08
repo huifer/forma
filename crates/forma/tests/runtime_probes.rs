@@ -100,6 +100,26 @@ fn entity_only_backend_also_exposes_probes_and_has_no_dead_code_warnings() {
 }
 
 #[test]
+fn config_failures_are_structured_fail_closed_not_panics() {
+    // RFC-0005 §16：配置 / 连接失败 → 结构化错误码 + 非零退出，而非 panic
+    let dir = tmp("failclosed");
+    project(&dir, FULL);
+    forma::build::run_build(&dir).unwrap();
+    let main = fs::read_to_string(dir.join("generated/backend/src/main.rs")).unwrap();
+    assert!(
+        !main.contains("expect(\"DATABASE_URL"),
+        "配置缺失不得 panic: {main}"
+    );
+    assert!(
+        !main.contains("expect(\"failed to connect"),
+        "连接失败不得 panic: {main}"
+    );
+    assert!(main.contains("FORMA_CONFIG_MISSING"), "{main}");
+    assert!(main.contains("FORMA_DB_UNREACHABLE"), "{main}");
+    assert!(main.contains("std::process::exit(1)"), "{main}");
+}
+
+#[test]
 fn generated_artifacts_do_not_hardcode_secret_values() {
     let dir = tmp("secrets");
     project(&dir, FULL);

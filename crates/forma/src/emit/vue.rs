@@ -63,7 +63,15 @@ pub fn emit_vue(
             page_vue(program, page),
         ));
     }
-    files.push(file(out_dir, "README.md", readme(app_name)));
+    files.push(file(
+        out_dir,
+        "README.md",
+        format!(
+            "{}{}",
+            crate::emit::generated_md_header("gen-vue"),
+            readme(app_name)
+        ),
+    ));
 
     for f in &files {
         crate::util::write_text(&project_dir.join(&f.path), &f.content)?;

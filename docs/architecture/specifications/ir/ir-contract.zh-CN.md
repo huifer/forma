@@ -177,7 +177,7 @@ pub enum EdgeKind {
 
 ```rust
 /// IR 契约版本。与 Specification Version、Project Version、Compiler Version 独立。
-pub const IR_VERSION: &str = "1.0.0";
+pub const IR_VERSION: &str = "1.2.0";
 ```
 
 | 编号 | 规则 |
@@ -202,7 +202,17 @@ pub const IR_VERSION: &str = "1.0.0";
 
 ---
 
-## 8. 扩展字段
+## 7.2 机器可读契约（G-10）
+
+本规范的机器可读版本：[program.schema.json](program.schema.json)（JSON Schema draft-07）。
+
+- 覆盖 IR 的**稳定字段面**：`ir_version`、`app` / `entities` / `enums` / `rules` / `apis` / `pages` /
+  `jobs` / `lives` / `exports` / `charts` / `commands` / `auth`；
+- 内建类型词表（`BUILTIN_TYPES`，12 型）作为 `$defs.BuiltinType.enum` 内嵌，与代码单一来源；
+- 一致性回归：`tests/ir_schema.rs` 用真实 `Program` 的契约视图校验 schema（schema 漂移会被测试抓住）。
+
+> 说明：`Program` 未启用 serde 直出（避免把内部声明结构暴露为公开契约），
+> schema 描述的是 IR 契约视图（stable field surface），而非 `Program` 的完整内存布局。
 
 ```rust
 pub struct ExtensionMap {

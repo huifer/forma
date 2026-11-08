@@ -46,6 +46,8 @@ breaking_change: false
 | patchId 幂等（重复提交零二次变更） | `tests/studio.rs::studio_v2_bidirectional_patch` |
 | 失败补丁零写入（事务回滚） | `tests/dsl_patch.rs` + `tests/studio.rs` + `tests/patch_visual_nodes.rs` |
 | 迁移链导出到既有体系（Flyway / Liquibase / golang-migrate） | `tests/migration_export.rs` |
+| Capability 弃用契约（successor 必填且已注册） | `tests/capability.rs::deprecation_requires_registered_successor` |
+| 列表权限边界为显式语言边界（ADR-0005，未改语义） | `docs/architecture/adr/accepted/ADR-0005-list-authorization-boundary.zh-CN.md` + RFC-0008 §16 |
 
 ## 弃用窗口（spec:compatibility §9–10）
 
