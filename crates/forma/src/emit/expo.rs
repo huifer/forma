@@ -24,6 +24,17 @@ pub fn emit_expo(
     if program.entities.is_empty() {
         return Ok(vec![]);
     }
+    // 宪法 6.2：spec 已声明但未实现的构造必须写盘前显式报错（不静默降级）。
+    // 看板（dashboard）页暂仅 Web 支持（移动端图表/看板投影 V0.6+）。
+    if program
+        .pages
+        .iter()
+        .any(|p| matches!(p.body, crate::dsl::PageBody::Dashboard(_)))
+    {
+        anyhow::bail!(
+            "Expo target does not support dashboard pages yet (web-only; mobile dashboard projection is V0.6+)"
+        );
+    }
     let pkg = to_snake_case(app_name).replace('_', "-");
     let title = program
         .app
@@ -226,6 +237,8 @@ fn page_rn(program: &Program, page: &crate::dsl::PageDecl) -> String {
         crate::dsl::PageBody::Form(cfg) => edit_page_rn(program, page, cfg),
         crate::dsl::PageBody::Detail(cfg) => detail_page_rn(program, page, cfg),
         crate::dsl::PageBody::Chart(cfg) => chart_page_rn(program, page, cfg),
+        // 不可达：emit_expo 已在生成前拒绝 dashboard（见函数头）
+        crate::dsl::PageBody::Dashboard(_) => String::new(),
     }
 }
 

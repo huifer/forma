@@ -456,6 +456,12 @@ pub fn lower_to_graph(program: &Program) -> anyhow::Result<LoweredGraph> {
             PageBody::Chart(cfg) => {
                 bound_charts.push(cfg.chart.clone());
             }
+            PageBody::Dashboard(cfg) => {
+                // V0.3：看板挂载多个图表（引用边）
+                for item in &cfg.items {
+                    bound_charts.push(item.chart.clone());
+                }
+            }
         }
         graph.add_node(SemanticNode {
             uri: form_uri.clone(),
@@ -556,6 +562,7 @@ fn page_body_kind(body: &PageBody) -> &'static str {
         PageBody::Form(_) => "form",
         PageBody::Detail(_) => "detail",
         PageBody::Chart(_) => "chart",
+        PageBody::Dashboard(_) => "dashboard",
     }
 }
 

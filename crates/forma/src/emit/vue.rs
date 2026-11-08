@@ -14,6 +14,16 @@ pub fn emit_vue(
     if program.entities.is_empty() || program.pages.is_empty() {
         return Ok(vec![]);
     }
+    // 宪法 6.2：看板（dashboard）页暂仅 Web 支持
+    if program
+        .pages
+        .iter()
+        .any(|p| matches!(p.body, crate::dsl::PageBody::Dashboard(_)))
+    {
+        anyhow::bail!(
+            "Vue target does not support dashboard pages yet (web-only in React adapter)"
+        );
+    }
     let mut files = vec![
         file(out_dir, "package.json", package_json(app_name)),
         file(out_dir, "vite.config.ts", vite_config()),
@@ -247,6 +257,8 @@ fn page_vue(program: &Program, page: &crate::dsl::PageDecl) -> String {
         PageBody::Form(cfg) => form_vue(program, page, cfg),
         PageBody::Detail(cfg) => detail_vue(program, page, cfg),
         PageBody::Chart(_) => simple_vue(page, "chart"),
+        // 不可达：emit_vue 已在生成前拒绝 dashboard（见函数头）
+        PageBody::Dashboard(_) => String::new(),
     }
 }
 

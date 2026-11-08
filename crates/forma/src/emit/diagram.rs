@@ -162,6 +162,23 @@ pub fn dataflow_mermaid(program: &Program) -> String {
                     }
                 }
             }
+            crate::dsl::PageBody::Dashboard(dash) => {
+                // V0.3：看板→每个条目图表一条引用边
+                for item in &dash.items {
+                    let cid = sanitize_id(&format!("C_{}", item.chart));
+                    out.push_str(&format!("    {cid}[\"图表 {}\"]\n", item.chart));
+                    out.push_str(&format!("    {pid} --> {cid}\n"));
+                    if let Some(chart) = program.charts.iter().find(|ch| ch.name == item.chart) {
+                        if let Some((api_name, _op)) = &chart.source {
+                            if let Some(api) = program.apis.iter().find(|a| a.name == *api_name) {
+                                let qid = sanitize_id(&format!("Q_{}", api.name));
+                                out.push_str(&format!("    {cid} --> {qid}\n"));
+                                link_api_to_entity(program, &mut out, &qid, &api.entity);
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 

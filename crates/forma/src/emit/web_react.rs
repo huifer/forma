@@ -85,6 +85,7 @@ pub fn emit_web_react(
         let content = match &page.body {
             crate::dsl::PageBody::Table(t) => list_page(program, page, t, uses_zustand),
             crate::dsl::PageBody::Form(f) => edit_page(program, page, f, uses_rhf),
+            crate::dsl::PageBody::Dashboard(d) => dashboard_page(program, page, d),
             crate::dsl::PageBody::Detail(d) => detail_page(program, page, d),
             crate::dsl::PageBody::Chart(c) => chart_page(program, page, c),
         };
@@ -2670,4 +2671,177 @@ export const {store} = create<{{
         return None;
     }
     Some(out)
+}
+
+/// 看板页（RFC-0010 V0.3 / M9 P1-#8）：CSS Grid 布局 + 筛选器联动。
+///
+/// 联动事件模型：筛选值变化 → `useMemo` 重建各条目的 source（引用稳定，仅筛选变化时
+/// 重新取数）→ FormaChart 依 source 变化重取数。筛选字段仅注入其值类型匹配的绑定实体。
+fn dashboard_page(
+    program: &Program,
+    page: &crate::dsl::PageDecl,
+    cfg: &crate::dsl::DashboardCfg,
+) -> String {
+    let title = super::pick_message(&page.title, &page.name);
+    let gap = cfg.gap.unwrap_or(16);
+
+    struct Item {
+        chart: String,
+        api: String,
+        entity: String,
+        cursor: bool,
+        w: u32,
+        h: u32,
+    }
+    let mut items: Vec<Item> = Vec::new();
+    let mut api_imports: Vec<String> = Vec::new();
+    for item in &cfg.items {
+        let Some(decl) = program.charts.iter().find(|c| c.name == item.chart) else {
+            continue;
+        };
+        let Some((api_name, _)) = &decl.source else {
+            continue;
+        };
+        let Some(api) = program.apis.iter().find(|a| a.name == *api_name) else {
+            continue;
+        };
+        let cursor = api.list.as_ref().and_then(|l| l.paginate.as_deref()) == Some("cursor");
+        let import_name = format!("{}Api", api.name);
+        if !api_imports.contains(&import_name) {
+            api_imports.push(import_name);
+        }
+        items.push(Item {
+            chart: item.chart.clone(),
+            api: api.name.clone(),
+            entity: api.entity.clone(),
+            cursor,
+            w: item.w.unwrap_or(12).clamp(1, 12),
+            h: item.h.unwrap_or(240),
+        });
+    }
+
+    let chart_imports: String = items
+        .iter()
+        .map(|it| {
+            format!(
+                "import {{ {c}Spec, {c}Option, {c}Source }} from \"../viz/charts/{c}\";\n",
+                c = it.chart
+            )
+        })
+        .collect();
+    let api_imports_str = api_imports.join(", ");
+
+    let mut filter_inputs = String::new();
+    for f in &cfg.filters {
+        let known = items.iter().any(|it| {
+            program
+                .entities
+                .iter()
+                .find(|e| e.name == it.entity)
+                .map(|e| e.fields.iter().any(|fd| &fd.name == f))
+                .unwrap_or(false)
+        });
+        if !known {
+            continue;
+        }
+        let col = crate::identity::to_snake_case(f);
+        let label = humanize(f);
+        filter_inputs.push_str(&format!(
+            "          <Input placeholder=\"{label}\" value={{filters[\"{col}\"] ?? \"\"}} onChange={{(e) => setFilters((p) => ({{ ...p, {col}: e.target.value }}))}} />\n"
+        ));
+    }
+
+    let mut sources = String::new();
+    let mut grid_items = String::new();
+    for it in &items {
+        let mut params: Vec<String> = Vec::new();
+        // 只注入该 api.list 声明过的 filters（保证与生成的 ListParams 类型一致）
+        let api_filters: Vec<String> = program
+            .apis
+            .iter()
+            .find(|a| a.name == it.api)
+            .and_then(|a| a.list.as_ref())
+            .map(|l| l.filters.iter().map(|(k, _)| k.clone()).collect())
+            .unwrap_or_default();
+        for f in &cfg.filters {
+            if api_filters.contains(f) {
+                let col = crate::identity::to_snake_case(f);
+                params.push(format!("\"{col}\": filters[\"{col}\"] || null"));
+            }
+        }
+        let params_str = params.join(", ");
+        let fetch = if it.cursor {
+            format!(
+                "() =>\n        {api}Api.list({{ cursor: null, pageSize: 200{params_sep} }}).then((p: any) => p.items ?? [])",
+                api = it.api,
+                params_sep = if params_str.is_empty() {
+                    String::new()
+                } else {
+                    format!(", {params_str}")
+                }
+            )
+        } else {
+            format!(
+                "() =>\n        {api}Api.list({{{params_str}}}) as unknown as Promise<Row[]>",
+                api = it.api
+            )
+        };
+        let chart_lower = crate::identity::to_snake_case(&it.chart);
+        sources.push_str(&format!(
+            "  const {chart_lower}Source = React.useMemo(\n    () => ({{\n      ...{chart}Source,\n      fetch: {fetch},\n    }}),\n    [filters],\n  );\n",
+            chart_lower = chart_lower,
+            chart = it.chart,
+            fetch = fetch,
+        ));
+        grid_items.push_str(&format!(
+            "          <div style={{{{ gridColumn: \"span {w}\", minHeight: {h} }}}}>\n            <FormaChart spec={{{c}Spec}} option={{{c}Option}} source={{{src}Source}} />\n          </div>\n",
+            w = it.w,
+            h = it.h,
+            c = it.chart,
+            src = chart_lower,
+        ));
+    }
+
+    format!(
+        r#"// @generated by Forma (gen-web) — do not edit manually.
+import React from "react";
+import type {{ Row }} from "../viz/spec";
+import {{ Button, Card, Input }} from "../ui";
+import {{ {api_imports_str} }} from "../api";
+import {{ FormaChart }} from "../viz/runtime";
+{chart_imports}
+const title = "{title}";
+
+const GRID_COLS = 12;
+const GRID_GAP = {gap};
+
+export function {page_name}() {{
+  const [filters, setFilters] = React.useState<Record<string, string>>({{}});
+{sources}
+  return (
+    <div>
+      <div className="page-header"><h1>{{title}}</h1></div>
+      <Card>
+        <div className="dashboard-filters" style={{{{ display: "flex", gap: 8, marginBottom: GRID_GAP }}}}>
+{filter_inputs}          <Button variant="secondary" onClick={{() => setFilters({{}})}}>重置</Button>
+        </div>
+        <div
+          className="dashboard-grid"
+          style={{{{ display: "grid", gridTemplateColumns: `repeat(${{GRID_COLS}}, minmax(0, 1fr))`, gap: GRID_GAP }}}}
+        >
+{grid_items}        </div>
+      </Card>
+    </div>
+  );
+}}
+"#,
+        api_imports_str = api_imports_str,
+        chart_imports = chart_imports,
+        title = escape_ts(&title),
+        page_name = page.name,
+        gap = gap,
+        sources = sources,
+        filter_inputs = filter_inputs,
+        grid_items = grid_items,
+    )
 }

@@ -29,6 +29,16 @@ pub fn emit_flutter(
     if program.entities.is_empty() {
         return Ok(vec![]);
     }
+    // 宪法 6.2：看板（dashboard）页暂仅 Web 支持（移动端图表/看板投影 V0.6+）
+    if program
+        .pages
+        .iter()
+        .any(|p| matches!(p.body, PageBody::Dashboard(_)))
+    {
+        anyhow::bail!(
+            "Flutter target does not support dashboard pages yet (web-only; mobile dashboard projection is V0.6+)"
+        );
+    }
     // 游标分页（P1-6 / spec:protocols §3.4.1）：Flutter 端支持
     // ListParams.cursor + CursorPage 信封 + 列表页「加载更多」。
     let _cursor_apis: Vec<&str> = program
@@ -74,6 +84,8 @@ pub fn emit_flutter(
             PageBody::Form(cfg) => edit_page_dart(program, page, cfg),
             PageBody::Detail(cfg) => detail_page_dart(program, page, cfg),
             PageBody::Chart(cfg) => chart_page_dart(program, page, cfg),
+            // 不可达：emit_flutter 已在生成前拒绝 dashboard（见函数头）
+            PageBody::Dashboard(_) => String::new(),
         };
         files.push(file(out_dir, &rel, content));
     }
@@ -3425,6 +3437,8 @@ fn main_dart(program: &Program, pkg: &str) -> String {
     for p in &program.pages {
         let has_param = p.route.contains("{id}");
         match &p.body {
+            // 不可达：emit_flutter 已在生成前拒绝 dashboard（见 emit_flutter 头部）
+            PageBody::Dashboard(_) => {}
             PageBody::Table(_) => {
                 if !has_param {
                     routes.push_str(&format!(

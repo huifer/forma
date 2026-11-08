@@ -466,6 +466,26 @@ pub enum PageBody {
     Detail(DetailCfg),
     /// 可视化图表页面（RFC-0001 §3.3）
     Chart(ChartPageCfg),
+    /// 看板页（RFC-0010 V0.3）：Grid 布局的多图表页面 + 筛选器联动
+    Dashboard(DashboardCfg),
+}
+
+/// 看板页配置（V0.3）：图表网格 + 筛选器（筛选值注入所有绑定图的取数参数）。
+#[derive(Debug, Clone)]
+pub struct DashboardCfg {
+    pub items: Vec<DashboardItemCfg>,
+    /// 筛选器字段（实体字段名）：变更时所有绑定图重新取数（联动事件模型）
+    pub filters: Vec<String>,
+    /// 网格间距（px，缺省 16）
+    pub gap: Option<u32>,
+}
+
+/// 看板条目：引用的图表 + 栅格跨度（12 列制；w/h 缺省自适应）。
+#[derive(Debug, Clone)]
+pub struct DashboardItemCfg {
+    pub chart: String,
+    pub w: Option<u32>,
+    pub h: Option<u32>,
 }
 
 /// 页面挂载的图表：引用顶层 `chart` 块名。
@@ -2418,6 +2438,12 @@ impl<'a> Parser<'a> {
                         decl.body = PageBody::Chart(ChartPageCfg { chart: c });
                     }
                 }
+                "dashboard" if tok.kind == TokKind::Ident => {
+                    self.next();
+                    if let Some(d) = self.parse_dashboard() {
+                        decl.body = PageBody::Dashboard(d);
+                    }
+                }
                 other => {
                     self.error_at(&tok, format!("unknown page entry '{other}'"));
                     self.next();
@@ -2430,6 +2456,89 @@ impl<'a> Parser<'a> {
         }
         self.expect_punct("}");
         Some(decl)
+    }
+
+    /// `dashboard { grid { <Chart> w 6 h 260 ... } filters [status] gap 16 }`
+    ///
+    /// V0.3：Grid 布局（12 列制）+ 筛选器联动（筛选值注入所有图的取数参数）。
+    fn parse_dashboard(&mut self) -> Option<DashboardCfg> {
+        let mut cfg = DashboardCfg {
+            items: Vec::new(),
+            filters: Vec::new(),
+            gap: None,
+        };
+        if !self.expect_punct("{") {
+            return Some(cfg);
+        }
+        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+            if self.eat_punct(";") {
+                continue;
+            }
+            let tok = self.peek().clone();
+            match tok.value.as_str() {
+                "grid" if tok.kind == TokKind::Ident => {
+                    self.next();
+                    if !self.expect_punct("{") {
+                        continue;
+                    }
+                    while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+                        if self.eat_punct(";") {
+                            continue;
+                        }
+                        // 条目：<ChartName> [w N] [h N]
+                        let Some(chart) = self.expect_ident() else {
+                            self.next();
+                            continue;
+                        };
+                        let mut item = DashboardItemCfg {
+                            chart,
+                            w: None,
+                            h: None,
+                        };
+                        while self.peek().kind == TokKind::Ident
+                            && matches!(self.peek().value.as_str(), "w" | "h")
+                        {
+                            let key = self.next().value;
+                            let n = self.parse_number().max(0.0) as u32;
+                            if key == "w" {
+                                item.w = Some(n);
+                            } else {
+                                item.h = Some(n);
+                            }
+                        }
+                        // 容错：跳过行尾多余 token（到下一个条目）
+                        while !self.is_punct("}")
+                            && !self.is_punct(";")
+                            && self.peek().kind != TokKind::Eof
+                            && self.peek().kind != TokKind::Ident
+                        {
+                            self.next();
+                        }
+                        self.eat_punct(";");
+                        cfg.items.push(item);
+                    }
+                    self.expect_punct("}");
+                }
+                "filters" if tok.kind == TokKind::Ident => {
+                    self.next();
+                    cfg.filters = self.parse_ident_list();
+                }
+                "gap" if tok.kind == TokKind::Ident => {
+                    self.next();
+                    cfg.gap = Some(self.parse_number().max(0.0) as u32);
+                }
+                other => {
+                    self.error_at(&tok, format!("unknown dashboard entry '{other}'"));
+                    self.next();
+                    if self.is_punct("{") {
+                        self.next();
+                        self.skip_to_block_end();
+                    }
+                }
+            }
+        }
+        self.expect_punct("}");
+        Some(cfg)
     }
 
     fn parse_table(&mut self) -> Option<TableCfg> {

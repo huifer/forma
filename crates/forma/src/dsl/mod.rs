@@ -10,9 +10,10 @@ pub mod patch;
 
 pub use parser::{
     AccessDecl, ApiDecl, Attr, BinOp, ChannelDecl, ChartDecl, ChartPageCfg, CheckRule, CommandDecl,
-    CommandInput, DetailCfg, Effect, EffectValue, EncodingDecl, EntityDecl, EnumDecl, Expr,
-    FieldAccess, FieldConstraint, FieldDecl, FieldRule, FormCfg, FormFieldCfg, GuardDecl, ListCfg,
-    Message, PageBody, PageDecl, Program, TableCfg, TransformDecl,
+    CommandInput, DashboardCfg, DashboardItemCfg, DetailCfg, Effect, EffectValue, EncodingDecl,
+    EntityDecl, EnumDecl, Expr, FieldAccess, FieldConstraint, FieldDecl, FieldRule, FormCfg,
+    FormFieldCfg, GuardDecl, ListCfg, Message, PageBody, PageDecl, Program, TableCfg,
+    TransformDecl,
 };
 
 use crate::validate::Diagnostic;
@@ -1503,6 +1504,68 @@ pub fn check_program(program: &Program) -> Vec<Diagnostic> {
                         line: ctx.line,
                         nodes: None,
                     });
+                }
+            }
+            PageBody::Dashboard(dash) => {
+                // V0.3：条目图表必须存在；至少一个条目；筛选字段必须至少被一个绑定实体拥有
+                if dash.items.is_empty() {
+                    d.push(Diagnostic {
+                        severity: "error".into(),
+                        code: "dsl-dashboard-empty".into(),
+                        message: format!("page '{}' dashboard has no grid items", page.name),
+                        file: ctx.file.clone(),
+                        line: ctx.line,
+                        nodes: None,
+                    });
+                }
+                for item in &dash.items {
+                    if !program.charts.iter().any(|ch| ch.name == item.chart) {
+                        d.push(Diagnostic {
+                            severity: "error".into(),
+                            code: "viz-unknown-chart".into(),
+                            message: format!(
+                                "page '{}' dashboard references unknown chart '{}'",
+                                page.name, item.chart
+                            ),
+                            file: ctx.file.clone(),
+                            line: ctx.line,
+                            nodes: None,
+                        });
+                    }
+                }
+                // 筛选字段必须是至少一个绑定图 api 的 list filter
+                //（保证生成的取数参数与 ListParams 类型一致；字段存在性由 list filters 保证）
+                let bound_api_filters: Vec<Vec<String>> = dash
+                    .items
+                    .iter()
+                    .filter_map(|item| program.charts.iter().find(|ch| ch.name == item.chart))
+                    .filter_map(|ch| ch.source.as_ref())
+                    .filter_map(|(api_name, _)| {
+                        program.apis.iter().find(|a| &a.name == api_name).map(|a| {
+                            a.list
+                                .as_ref()
+                                .map(|l| l.filters.iter().map(|(k, _)| k.clone()).collect())
+                                .unwrap_or_default()
+                        })
+                    })
+                    .collect();
+                for filter in &dash.filters {
+                    let known = bound_api_filters
+                        .iter()
+                        .any(|keys| keys.iter().any(|k| k == filter));
+                    if !known {
+                        d.push(Diagnostic {
+                            severity: "error".into(),
+                            code: "dsl-dashboard-unknown-filter".into(),
+                            message: format!(
+                                "page '{}' dashboard filter '{}' is not a field of any bound chart entity",
+                                page.name, filter
+                            ),
+                            file: ctx.file.clone(),
+                            line: ctx.line,
+                            nodes: None,
+                        });
+                    }
                 }
             }
         }

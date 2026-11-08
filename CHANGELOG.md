@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **可视化 V0.3：Dashboard IR（RFC-0010 / P1）**：
+  - 新 PageBody 变体：`page { dashboard { grid { <Chart> w N h N } filters [...] gap N } }`
+    （12 列 CSS Grid + 栅格跨度/行高 + 筛选器）；
+  - 联动事件模型：筛选值变化 → `useMemo` 重建条目 source（引用稳定）→ 图表带参重取数；
+    筛选参数只注入该 api.list 声明过的 filters（与生成的 ListParams 类型一致）；
+  - 检查层：`dsl-dashboard-empty` / `viz-unknown-chart`（条目）/ `dsl-dashboard-unknown-filter`
+    （筛选字段必须是绑定 api 的 list filter）；
+  - IR 桥接：dashboard → 每条目图表 references 边（graph/impact 可见）；
+  - 非 Web 目标（Flutter/Vue/Expo）显式拒绝（宪法 6.2，移动端看板投影 V0.6+）；
+  - 回归 `tests/dashboard.rs`（3 项：校验 + 生成 + 非 Web 拒绝）；
+  - 验证：tsc 0 错 + vite build + 浏览器联动断言（筛选 `active` → 请求带
+    `status=active`、metric ¥2,233 → ¥1,234）通过。
+
+### Added
 - **可视化 V0.2：Data Binding 完整化 + Metric Card + Table widget（RFC-0010 / P1）**：
   - `type metric`（指标卡）与 `type table`（数据表）加入 Chart 类型词表（10→12）；
   - metric：无编码通道，恰一个 aggregate 变换；`axis.y { field value format ... }` 携带

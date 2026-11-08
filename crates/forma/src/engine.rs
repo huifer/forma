@@ -609,6 +609,7 @@ pub fn dsl_model_summary(program: &crate::dsl::Program) -> serde_json::Value {
                     crate::dsl::PageBody::Form(_) => "form",
                     crate::dsl::PageBody::Detail(_) => "detail",
                     crate::dsl::PageBody::Chart(_) => "chart",
+                    crate::dsl::PageBody::Dashboard(_) => "dashboard",
                 },
             })
         })
