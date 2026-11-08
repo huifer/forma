@@ -35,8 +35,8 @@ M11 Spring/Go/.NET、原生移动、小程序、工作流运行时、支付
 | 优先级 | 技术 | 里程碑 | 说明 |
 |---|---|---|---|
 | ✅ 首批 | **MySQL 8** | M2 | InnoDB/utf8mb4；DDL + 基线迁移 → IR diff 增量迁移 |
-| 🔨 P1 | **PostgreSQL** | M10 | jsonb/数组/丰富约束，与 MySQL 共享映射逻辑 |
-| 🔨 P1 | **SQLite** | M10 | 嵌入式/本地场景 |
+| ✅ 已完成 | **PostgreSQL** | M10 | PostgreSQL 15+ DDL target：UUID / JSONB / BOOLEAN / TIMESTAMPTZ / NUMERIC；独立 `db-postgres` + `postgres-migrate` 构建步骤；与 MySQL 共享 DSL/拓扑语义但独立方言渲染，MySQL 产物零变化 |
+| ✅ 已完成 | **SQLite** | M10 | SQLite 3 DDL target：TEXT/NUMERIC/INTEGER 亲和性映射 + PRAGMA foreign_keys；独立 `db-sqlite` + `sqlite-migrate` 构建步骤；与 MySQL/PostgreSQL 共享表拓扑但独立方言渲染 |
 | 🔨 P1 | **Redis**（键设计派生） | M9 | 会话/缓存/限流 |
 | 👁 P2 | SQL Server / Oracle / MongoDB | M11 | 企业遗留 / 文档模型专项设计 |
 
@@ -45,9 +45,10 @@ M11 Spring/Go/.NET、原生移动、小程序、工作流运行时、支付
 | 优先级 | 技术 | 里程碑 | 说明 |
 |---|---|---|---|
 | ✅ 首批 | **Rust：axum + sqlx** | M3 | models / validators / routes / repositories |
-| 🔨 P1 | **Node：NestJS** | M10 | TypeORM 或 Prisma |
-| 🔨 P1 | **Node：Hono** | M10 | 轻量、边缘友好 |
-| 🔨 P1 | **Python：FastAPI** | M10 | SQLAlchemy 2.0 + Pydantic（与规则校验同构） |
+| ✅ 已完成 | **Node：NestJS** | M10 | NestJS 10 + TypeORM 0.3 + MySQL + class-validator；CRUD 子集（标量字段/枚举/Decimal/必填/min/max）；auth/access/tenant/commands 显式拒绝（不静默降级安全语义）；`backend.language: typescript` + `framework: nestjs` 路由到 `backend-nestjs` 构建步骤；npm run build + tsc --noEmit 通过 |
+| ✅ 已完成 | **Node：Hono** | M10 | Hono 4 + @hono/node-server + mysql2 + zod；轻量 CRUD（list/get/create/update/delete、offset 分页、字段 min/max/required）；auth/access/tenant/commands/cross-field rules 显式拒绝；`backend.language: typescript` + `framework: hono` 路由到 `backend-hono` 构建步骤 |
+| ✅ 已完成 | **Python：FastAPI** | M10 | FastAPI + SQLAlchemy 2.0 + Pydantic 2 + PyMySQL；`models.py`（Mapped/mapped_column）/`schemas.py`（Create/Read DTO + ge/le）/`routes.py`（CRUD router）；auth/access/tenant/commands/cross-field rules 显式拒绝；`backend.language: python` + `framework: fastapi` → `backend-fastapi` 构建步骤；`python -m compileall` 通过 |
+| ✅ 已完成 | **Vue 3 前端** | M10 | Vue 3 + Vite + TypeScript + Vue Router + Pinia + Element Plus；`frontend.framework: vue`（或 `vue3`）路由到 `frontend-vue` 构建步骤；复用 web_react 的 `types_ts`/`validators_ts`/`format_ts`/`access` 契约；auth（`AuthApi`）+ 命令操作（`XxxApi.execute`）+ 角色感知（`access.ts` 用 `@tanstack/vue-query` 的 Vue 原生 `useCurrentRole`/`useCan`）；`vue-tsc --noEmit && vite build` 通过；默认（无 framework 或 `react`）仍生成 React，产物零变化 |
 | 👁 P2 | Java：Spring Boot | M11 | JPA + Spring Security |
 | 👁 P2 | Go：Gin + GORM / PHP：Laravel / .NET | M11 | |
 
@@ -58,7 +59,7 @@ M11 Spring/Go/.NET、原生移动、小程序、工作流运行时、支付
 | ✅ 首批 | REST | M3 | `api` 块 → REST 路由 |
 | ✅ 首批 | **OpenAPI 3.1 导出 + Swagger UI** | M7 | 生成视图 + 本地文档站 |
 | 🔨 P1 | **OpenAPI 导入** | M7 | 既有 Swagger 项目 → DSL（逆向工程） |
-| 🔨 P1 | GraphQL（schema + resolver） | M10 | |
+| ✅ 已完成 | **GraphQL（schema + resolver 网关）** | M10 | `targets.api.framework: graphql` → `api-graphql` 构建步骤（无 `targets.api` 零产物）；DSL → `schema.graphql`（枚举/实体/正向对象关系/Create·Update Input/Query/Mutation，按各 api operations 裁剪；Decimal→String 同后端序列化契约）+ `src/schema.ts`（typeDefs 同源）+ `src/rest.ts`（服务端 REST 客户端，`REST_BASE` 可指向任意后端 target）+ `src/resolvers.ts`（委托 REST + 关系 resolver）+ `src/server.ts`（graphql-yoga 可运行）；安全语义由 REST 后端权威执行、网关透传 token；逆向关系留 v2（过滤器依赖与 N+1） |
 | 👁 P2 | gRPC（Protobuf 导出）/ tRPC | M11 | |
 
 ### 2.4 前端 Web
@@ -69,8 +70,8 @@ M11 Spring/Go/.NET、原生移动、小程序、工作流运行时、支付
 | ✅ 首批 | **i18n 资源生成**（react-i18next） | M4 | DSL 内 message → 语言包 |
 | 🔨 P1 | React Hook Form 适配 | M9 | 复杂表单 |
 | 🔨 P1 | 状态管理生成（Zustand / Pinia） | M9 | 从页面数据依赖派生 |
-| 🔨 P1 | **Vue 3 + Vue Router + Pinia + Element Plus/Naive UI** | M10 | |
-| 🔨 P1 | Next.js（SSR 变体） | M10 | |
+| ✅ 已完成 | **Vue 3 + Vue Router + Pinia + Element Plus** | M10 | `frontend.framework: vue` → 复用 React 契约；auth/命令/角色感知双端对齐 |
+| ✅ 已完成 | **Next.js（App Router / SSR 变体）** | M10 | `frontend.framework: nextjs`（或 `next`）→ `frontend-nextjs` 构建步骤；复用 web_react 的 `types_ts`/`validators_ts`/`api_ts`/`format_ts`；列表页 = Server Component（`src/api-server.ts` + `API_BASE` env + `force-dynamic`）；变更/命令 = Server Actions（`app/actions.ts` + `revalidatePath`）；表单 = client 组件复用 validators 同源校验；new/[id] 页按 api operations 裁剪；`next.config.mjs` rewrites `/api/*`；自带 CI（tsc + next build，无 vitest）；`tsc --noEmit` + `next build` 通过；默认（react）零变化 |
 | 👁 P2 | SvelteKit / Angular | M11 | |
 | 👁 P2 | 桌面：Tauri / Electron | M11 | |
 
@@ -91,7 +92,7 @@ M11 Spring/Go/.NET、原生移动、小程序、工作流运行时、支付
 
 | 优先级 | 技术 | 里程碑 | 说明 |
 |---|---|---|---|
-| 🔨 P1 | **Expo（React Native）** | M10 | 与 React emitter 复用度最高 |
+| ✅ 已完成 | **Expo（React Native）** | M10 | `targets.mobile.framework: expo` → `mobile-expo` 构建步骤；复用 web_react 的 `types_ts`/`validators_ts`/`api_ts`/`format_ts`/`access_ts`（react-query 在 RN 可用）；React Native 侧 `View/Text/FlatList/TextInput` 渲染 + 轻量手写栈导航（无 react-navigation）；auth（`Login.tsx` + `setAuthToken`）+ 列表页内嵌编辑视图；`tsc --noEmit` 通过；默认（无 framework）仍生成 Flutter，产物零变化 |
 | ✅ 已交付（提前于 M11） | Flutter | gen-flutter：models/api/validators/pages 四件套，与 Rust 后端 serde 契约严格对齐；school 案例 app_mobile/ 已入库 |
 | 👁 P2 | 原生 SwiftUI / Jetpack Compose | M11 | |
 | 👁 P2 | 微信小程序 / uni-app | M11 | 国内场景 |
@@ -104,11 +105,11 @@ M11 Spring/Go/.NET、原生移动、小程序、工作流运行时、支付
 | ✅ 首批 | 审计日志 | M7 | `audit { action "…" }` |
 | 🔨 P1 | 文件上传 | M9 | `field Attachment` + `storage s3\|oss\|local` |
 | 🔨 P1 | 导入导出 | M9 | `export Order as csv\|xlsx` |
-| 🔨 P1 | 消息通知 | M10 | `notify email\|sms\|webhook` |
-| 🔨 P1 | 全文搜索 | M10 | `searchable [...]` → Meilisearch/ES |
-| 🔨 P1 | 定时任务 | M10 | `job { cron "…" { … } }` |
-| 🔨 P1 | 实时推送 | M10 | `live OrderList` → WebSocket/SSE |
-| 🔨 P1 | 多租户 | M10 | `@tenant` 行级隔离 |
+| ✅ 已完成 | **消息通知** | M10 | 字段属性 `@notify(channel, target, event)`（email/sms/webhook/log 四渠道；属性参数必须括号形式）；检查层 `dsl-notify-unknown-channel` / `dsl-notify-missing-target`（email/sms/webhook 必填）/ `dsl-notify-unknown-event`（事件引用已声明 command）；Rust 后端 `src/notify.rs`：NotifyRule 静态展开（运行时零 DSL 依赖）+ `fire(entity, event, id)`；command handler 成功后自动触发；v1 驱动：log 真实输出（tracing），email/sms/webhook 为占位集成点 |
+| ✅ 已完成 | **全文搜索（基线）** | M10 | 实体级 `searchable [f1, f2]` → MySQL `FULLTEXT KEY ft_{t}_{cols} WITH PARSER ngram`（MySQL 8 内置 ngram 分词，中文 bigram 可用）；检查层 `dsl-searchable-unknown-field` / `dsl-searchable-field-type`（仅 String/Text/Email）；迁移链 `add_fulltext`/`drop_fulltext`（风险 Low/Medium）+ 重放模拟器支持；应用层 q 搜索保持 LIKE 子串语义（对中文友好，零行为变化）。**余项**：外部引擎（Meilisearch/ES）适配与 MATCH AGAINST 查询模式为后续增强 |
+| ✅ 已完成 | **定时任务** | M10 | DSL `job <name> { cron "0 2 * * *" label {...} op Command }`；检查层 `dsl-job-cron-format`（5 字段/范围/列表/范围区间）+ `dsl-job-unknown-op`（api/command 名）+ `dsl-job-input-effect`（InputRef effect 拒绝——调度器无输入来源）+ `dsl-job-pre-unsupported`（复杂 pre 拒绝——fail-safe 不做全表 UPDATE）；MySQL `forma_jobs` 表（迁移链自动增量）+ 确定性 seed；Rust 后端 `jobs.rs`：进程内 30s 轮询调度器（cron 求值零依赖）、TARGETS 由 DSL 静态展开（运行时零 DSL 依赖）、管理端点 GET /api/jobs + POST trigger/enable/disable（挂受保护路由组）；IR bridge `Job` 节点 + job→command references 边 |
+| ✅ 已完成 | **实时推送（live → SSE）** | M10 | DSL `live <name> { api <Api>.list; events [create update delete] }`；检查层 `dsl-live-unknown-api` / `dsl-live-unknown-event`（仅 create/update/delete）；Rust 后端 `src/live.rs`：SSE 通道（`GET /api/live/{name}`，axum SSE + tokio broadcast）+ `publish(table, event)`；CRUD handler 成功后自动广播；**Web 订阅**（EventSource → react-query invalidate）+ **Flutter 订阅**（`LiveSubscriber` + dart:io HttpClient 流式 SSE）；无 live → 零产物 |
+| ✅ 已完成 | **多租户（@tenant 行级隔离 + 管理）** | M10 | DSL `@tenant` 字段（检查层 dsl-tenant-multiple/optional/type/no-auth）；MySQL users 表带 tenant + disabled 列；Rust 后端：JWT claim → CurrentUser.tenant → **list/get/update/delete 查询按租户过滤**（`WHERE tenant = ?`，None → NULL 恒不命中→空集）+ **create 绑定当前租户**（覆盖输入体）；租户管理端点 `POST /api/admin/tenants/:tenant/revoke|transfer`（TENANT_ADMIN_TOKEN env 授权，未设置时 403 关闭）；吊销 = 停用租户全部用户（disabled=1 + login 拒绝）；迁移 = 业务行改绑新租户（可回滚）；无 @tenant → 全部产物零变化 |
 | 👁 P2 | 工作流运行时 / 支付 | M11 | |
 
 ### 2.7 工程化
@@ -117,9 +118,12 @@ M11 Spring/Go/.NET、原生移动、小程序、工作流运行时、支付
 |---|---|---|
 | ✅ 首批 | 生成代码可编译验证（cargo check / tsc） | M3 / M4 |
 | ✅ 首批 | 各目标工程自带 CI 模板（lint/test/build） | M4 |
-| 🔨 P1 | Docker / docker-compose 产物 | M9 |
+| ✅ 已完成 | Docker / docker-compose 产物 | M9 | `generated/backend/Dockerfile`（多阶段 Rust build → debian-slim）、`docker-compose.yml`（MySQL 8 healthcheck + backend + 可选 Web）、`entrypoint.sh`（等待库就绪 → 迁移 → 启动）、`.dockerignore`；环境变量 `DATABASE_URL` / `PORT` 可覆盖 |
+
 | 🔨 P1 | K8s / Helm / Terraform | M11 |
-| 🔨 P1 | OpenTelemetry + 结构化日志 | M10 |
+| ✅ 已完成 | Makefile + GitHub Actions CI 模板 | M9 | 后端 Makefile（build/check/test/run/migrate/seed/docker）、后端 CI（cargo check/test/build）、Web CI（npm install + tsc + vitest + build）|
+| ✅ 已完成 | 结构化日志基础（RUST_LOG + LOG_FORMAT=json） | M10 | `tracing-subscriber`（env-filter + json features）统一初始化——默认 human-readable，`LOG_FORMAT=json` 输出 JSON Lines；错误/审计/请求 id 统一走 `tracing::` 宏；**余项**：OTLP exporter 接入（外部 collector 依赖，按需立项） |
+
 | 👁 P2 | Playwright e2e 生成 / Token Benchmark | M11 |
 
 ## 3. 可视化路线（Forma Studio）
@@ -179,7 +183,7 @@ MIGRATIONS.md + SQL 重放模拟器）。验收：DDL 在 MySQL 8 直接执行�
 
 **M6 Studio v1 / M7 生态互通 / M8 AI 语义补丁闭环（diff 可视化 ✅ 已随 M1 交付：`forma diff` HTML/JSON 报告）**：见 §3、§4；AI 闭环验收——「Order 加付款状态」一条补丁，MySQL + Rust + React 三处同步 + 测试绿，AI 全程不接触目标代码。
 
-**M9 工程化 + Studio v2**：Docker、上传/导出/审计、RHF/Zustand、迁移对接、Studio 双向编辑。
+**M9 工程化 + Studio v2**：Docker（✅ 已完成：Dockerfile + compose + entrypoint + MySQL healthcheck）、上传/导出/审计、RHF/Zustand、迁移对接、Studio 双向编辑。
 
 **M10 横向扩栈 / M11 企业级**：见 §2 矩阵标注。
 

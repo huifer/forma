@@ -99,10 +99,10 @@ breaking_change: false
 | # | 缺口 | 现状 |
 |---|---|---|
 | ~~1~~ | ~~`Json` 未纳入词汇表~~ | **已关闭（2026-11-05）**：`Json` 已纳入 `BUILTIN_TYPES`（11 型），四个目标均有映射；回归测试 `tests/dsl_validate.rs` 保证「生成层支持的类型必须检查层也可用」 |
-| 2 | 参数化边界未校验 | `String(n)` 的 `n`、`Decimal(p,s)` 的 `p/s` 取值范围**未**在 Check 阶段判定 |
-| ~~3~~ | ~~枚举跨端一致性向量缺失~~ **已关闭（2026-11-05）**：共享语义向量落地——`tests/rule_vectors.rs` 断言同一规则的边界字面量与比较方向在 Rust / TS / Dart 三端**一致**；参考应用 `app_mobile/test/rule_vector_test.dart`（12 条行为用例）在 Flutter CI 真实执行 Dart 校验器。**余项**：Web 端无测试运行器（package.json 无 vitest/jest），TS 侧行为验证暂缺（结构性断言已覆盖） |
-| 4 | **无 `api` 的工程生成物有未使用导入** | 只有实体、没有 api 声明时，生成的后端会出现一批 `unused_imports` 警告（导入逻辑由 api 操作驱动） |
-| 5 | `min`/`max` 的类型约束 | 已加 `dsl-invalid-constraint`（非数值类型禁止 min/max）；但属性形式 `@min`/`@max` 尚未做同等校验 |
+| 2 | ~~参数化边界未校验~~ **已关闭（2026-11-05，P1-2）** | `dsl-invalid-type-arg`：String 0<n≤65535 / Decimal 0<p≤65 且 s≤p / 非参数化类型带参 |
+| ~~3~~ | ~~枚举跨端一致性向量缺失~~ **已关闭（2026-11-05，F-004 全量收口）**：共享语义向量落地——`tests/rule_vectors.rs` 断言同一规则的边界字面量与比较方向在 Rust / TS / Dart 三端**一致**；行为向量从 DSL **派生**（`validation_vectors.rs`），生成两端测试文件并在各自 CI 真实执行：`validators.test.ts`（vitest，Web 测试运行器已补齐）与 `rule_vector_test.dart`（flutter_test）——由同一派生函数产出（同源保证），任何一端校验器漂移都会在 CI 变红 |
+| ~~4~~ | ~~**无 `api` 的工程生成物有未使用导入**~~ **已关闭（2026-11-05，P2-4）** | routes / repo / validators 导入全按需（提取器逐符号判定）；实体-only 工程 0 警告；回归测试 `backend_contract.rs`（entity_only / list_only / auth_module_only） |
+| 5 | ~~`min`/`max` 的类型约束~~ **已关闭（2026-11-05，P2-5）** | 属性形式 `@min`/`@max` 与 rules 同源校验：仅数值类型 + 恰好 1 个数值参数（`dsl-invalid-constraint`） |
 
 ## 8. 开放问题
 

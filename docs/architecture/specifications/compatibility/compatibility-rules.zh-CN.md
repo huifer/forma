@@ -134,11 +134,11 @@ compatibility:
 | ~~1~~ | ~~项目锁文件格式未定~~ **已决议（2026-11-05，v1）**：`forma.yaml` 的 `capabilities:` 段即为锁（声明 + 可选版本 pin）；解析闭包由 Registry 在构建期**确定性导出**（同编译器版本 → 同闭包）。`.forma/capability-lock.json`（解析快照，用于跨编译器版本比对）作为 v2 增强，需要时再立项 |
 | ~~2~~ | ~~Capability ↔ IR 兼容矩阵无自动校验~~ **已关闭（2026-11-05）**：随 Capability Registry 落地——构建期 `registry.resolve()` 校验 `compatibility.ir` / `compatibility.runtime` / 版本 pin（`capability-ir-incompatible` / `capability-runtime-incompatible` / `capability-pin-mismatch`），**错误阻断构建**；回归测试 `incompatible_ir_version_is_rejected` |
 | ~~3~~ | ~~破坏性变更的自动检测未实现~~ **已部分关闭（2026-11-05）**：`forma docs check-compatibility --base <git-ref>` 自动检测 major version bump 未声明（error）、spec 删除（error）、规范性 MUST 条款或带反引号标识的契约表行删除/弱化候选（warning）；CI 对 PR 基线执行检测。自然语言语义等价仍需人工审查——启发式只发候选，不替代架构审批 |
-| 4 | 弃用到移除的最短兼容窗口未定 |
+| ~~4~~ | ~~弃用到移除的最短兼容窗口未定~~ **已决议（2026-11-05，P2-2）**：弃用 → 移除的最短窗口 = **≥ 2 个次版本（minor）且 ≥ 6 个月**（取更晚者）。弃用期 MUST：继续产出产物、在构建输出中携带弃用警告、保留迁移路径；正式移除 MUST `breaking_change: true` + ADR + 迁移计划。文档层沿用本规范 §9（`Deprecated` + `superseded_by` + 依赖告警） | ✅ 已决议 |
 
 ## 11. 开放问题
 
-- 是否为 Capability 引入语义版本化的弃用窗口（建议 ≥ 2 个次版本）。
+- ~~是否为 Capability 引入语义版本化的弃用窗口（建议 ≥ 2 个次版本）~~ **已决议（2026-11-05，见 §10.4）**：弃用窗口 = ≥ 2 个次版本且 ≥ 6 个月，适用于 Capability 与受管文档。
 - 语义 diff 如何与迁移风险分级联动（自动给出 requires_approval 建议）。
 - 多 IR 版本并存（v1 / v2）时的产物兼容矩阵表达。
 

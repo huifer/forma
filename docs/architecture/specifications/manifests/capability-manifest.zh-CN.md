@@ -111,10 +111,19 @@ capabilities:
 
 ## 5. 开放问题
 
-- `apiVersion` 的演进与 `forma.dev/v1` 之外的版本如何声明？
-- 多 runtime 下 `permissions` 的作用域粒度（capability 级 vs 操作级）？
-- Manifest 是否应携带 `provides` 的能力级语义版本（如 `chart.bar@1`）？
-- 项目锁文件是否应从 `forma.yaml` 迁出到 `.forma/lock.json`。
+以下问题已在 2026-11-05 决议（P2-3）；其余仍开放：
+
+- ~~`apiVersion` 的演进与 `forma.dev/v1` 之外的版本如何声明？~~ **已决议**：
+  `forma.dev/v1` 内仅允许向后兼容演进（新增可选字段）；新的 `apiVersion`（如 `forma.dev/v2`）
+  由注册表按 apiVersion 分命名空间并存，并存期 **≥ 1 个编译器次版本**；
+  未识别的 apiVersion **拒绝注册**（现状不变，`unsupported apiVersion`）。
+- ~~多 runtime 下 `permissions` 的作用域粒度（capability 级 vs 操作级）？~~ **已决议**：
+  v1 保持 **capability 级**——manifest 的 `permissions` 在构建期汇总为并集；
+  操作级 / 实体级授权由 DSL 的 `api { auth }` / `rules { access }` 承担（服务端权威执行），
+  manifest **不重复建模**操作级权限。
+- ~~项目锁文件是否应从 `forma.yaml` 迁出到 `.forma/lock.json`~~ **已决议（P1-8，v1）**：
+  `forma.yaml` 的 `capabilities:` 段即锁；`.forma/capability-lock.json` 为 v2 增强。
+- Manifest 是否应携带 `provides` 的能力级语义版本（如 `chart.bar@1`）？（仍开放）
 
 ## 6. 参考
 

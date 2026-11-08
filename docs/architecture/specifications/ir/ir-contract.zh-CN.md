@@ -86,7 +86,7 @@ pub struct SourceRef {
 
 | 领域 | 载荷类型 | 定义位置 |
 |---|---|---|
-| 数据 | `EntityNode` / `FieldNode` / `EnumNode` / `EnumVariantNode` / `RelationNode` / `IndexNode` | `spec:ir`（本文档） |
+| 数据 | `EntityNode` / `FieldNode` / `EnumNode` / `EnumVariantNode` / `RelationNode` / `IndexNode` / `MigrationNode`（版本化迁移链，schema 变更的物化载体） | `spec:ir`（本文档） |
 | 规则 | `FieldRuleNode` / `CheckRuleNode` / `GuardNode` / `AccessNode` | `spec:ir`（本文档） |
 | API | `ApiNode` / `OperationNode` / `CommandNode` | `spec:ir`（本文档） |
 | UI | `PageNode` / `TableNode` / `FormNode` / `DetailNode` | `spec:ir`（本文档） |
@@ -305,13 +305,13 @@ lint-*   风格与最佳实践
 
 | 编号 | 差距 | 影响 | 修复步骤 |
 |---|---|---|---|
-| G-1 | DSL 侧无稳定标识 | 影响闭包与可寻址补丁无法建立 | RFC-0003 M3 |
-| G-2 | DSL 侧无依赖边 | 无法计算影响面 | RFC-0003 M3 |
-| G-3 | 来源追踪仅覆盖字段与图表 | 诊断无法精确定位到实体 / API / 页面 | RFC-0003 M1 |
-| G-4 | IR 无版本 | 无法判定契约版本与兼容范围 | RFC-0003 M2 |
+| ~~G-1~~ | ~~DSL 侧无稳定标识~~ **已关闭（2026-11-05，M3）**：桥接产出 `forma://project/{p}/entity/{E}` 等稳定 URI，与联邦侧**同一套** URI 构造函数（`identity.rs`） | ~~影响闭包与可寻址补丁无法建立~~ → 影响闭包已可用 | ✅ 已完成 |
+| ~~G-2~~ | ~~DSL 侧无依赖边~~ **已关闭（2026-11-05，M3）**：桥接产出 `defines` / `references` / `belongs-to` 边，覆盖实体↔字段、字段↔关系/枚举、操作↔实体、页面↔操作/实体、页面↔控件 | ~~无法计算影响面~~ → `forma impact` 对 DSL 工程可用 | ✅ 已完成 |
+| ~~G-3~~ | ~~来源追踪仅覆盖字段与图表~~ **已关闭（2026-11-05，M1）**：声明级 `file` + `line` 覆盖实体 / 枚举 / 规则 / api / 命令 / 页面，诊断逐条携带位置 | ~~诊断无法精确定位~~ → `dsl-*` 诊断全部可定位到 `file:line` | ✅ 已完成 |
+| ~~G-4~~ | ~~IR 无版本~~ **已关闭（2026-11-05，M2）**：`IR_VERSION = "1.0.0"` + `Program.ir_version`，CLI/MCP 可见 | ~~无法判定契约版本~~ → 版本可观测、可比对 | ✅ 已完成 |
 | ~~G-5~~ | ~~`Json` 在生成层被识别但不在检查层内建清单~~ | **已关闭（2026-11-05）**：`Json` 已纳入 `BUILTIN_TYPES`（11 型），四目标映射齐备 | ✅ 已完成 |
 | ~~G-6~~ | ~~`access` / `auth` 被解析但检查层与生成层均不消费~~ | **已关闭（2026-11-05）**：检查层新增 7 条 `dsl-auth-*` / `dsl-access-*` 诊断；生成层在服务端强制执行（401/403）；`api { auth }` 与 `rules { access }` 均已落地 | ✅ 已完成 |
-| G-7 | 无 DSL → 语义图降级 | 两条路径语义能力割裂（**M4 已完成**：CLI/MCP 对 DSL 工程统一走 `check_program`，假绿已消除） | ADR-0002 / RFC-0003 M3 |
+| ~~G-7~~ | ~~无 DSL → 语义图降级~~ **已关闭（2026-11-05，M3 + M4）**：M3 落地 `Program → UnifiedSemanticGraph` 单向桥接（`dsl::lower`），M4 已让 CLI/MCP 对 DSL 工程统一走 `check_program`（假绿消除） | ~~两条路径语义能力割裂~~ → DSL 工程与联邦工程共用同一套图 API | ✅ 已完成 |
 
 ---
 
@@ -320,9 +320,9 @@ lint-*   风格与最佳实践
 实现必须通过的检查：
 
 - [ ] 同一规格两次降级 / 检查结果**字节级一致**。
-- [ ] 全部 `dsl-*` 诊断携带 `file` + `line`。
-- [ ] 检查层与各生成层的类型集合一致（新增类型须三端同步，否则测试失败）。
-- [ ] DSL 侧节点/边集合与联邦语义图**同构**（同一实体得到同一标识串）。
+- [x] 全部 `dsl-*` 诊断携带 `file` + `line`（M1；回归 `tests/dsl_ir_bridge.rs`）。
+- [x] 检查层与各生成层的类型集合一致（新增类型须三端同步，否则测试失败；M2 回归逐类型断言四目标映射）。
+- [x] DSL 侧节点/边集合与联邦语义图**同构**（同一实体得到同一标识串；M3 回归断言 URI 与边集合）。
 - [ ] 依赖图**无环**。
 - [ ] 含 `error` 诊断时构建被阻断。
 - [ ] 未支持的语义产生显式诊断（无静默忽略）。
@@ -338,6 +338,8 @@ lint-*   风格与最佳实践
 |---|---|---|
 | 1.0 | 2026-11-04 | 初版：定义节点结构、稳定标识、依赖边、来源追踪、版本、扩展、类型系统、语义检查与序列化契约；记录 7 项现状差距 |
 | 1.0.0 | 2026-11-05 | 状态提升为 Accepted（契约定稿）；关闭 G-6（权限声明不再为空承诺）、G-5（`Json` 入内建清单）；补 §15 双 IR 桥接路径；M4 完成（CLI/MCP 对 DSL 工程统一走 `check_program`，消除假绿） |
+| 1.1.0 | 2026-11-05 | **M1–M3 落地**：M1 声明级来源位置（`file`/`line`）与逐条定位的诊断；M2 `IR_VERSION` + `Program.ir_version` + 内建类型单一权威清单（四个目标映射一致性回归）；M3 `Program → UnifiedSemanticGraph` 单向桥接（稳定标识 + 依赖边 + 来源追踪），`forma graph` / `forma impact` 对 DSL 工程可用。关闭 G-1 / G-2 / G-3 / G-4 / G-7；**不改变** DSL 语法、IR 语义与目标产物（非破坏性变更） |
+| 1.2.0 | 2026-11-05 | **P3 收尾（RFC-0006）**：`NodeKind` 增加 `chart`（可视化域 `ChartNode`）与 `migration`（数据域 `MigrationNode`）；桥接图并入图表节点（chart → api 操作 / 编码通道字段，页面 → chart）与迁移链节点（表 → 迁移链，`generates` 向前传播）。**影响闭包含齐五类目标**：表列 / 模型 / 表单 / 图表 / 迁移。`IR_VERSION` → `1.2.0`（节点结构变更 ⇒ minor 递增，spec:ir §7）。回归 `tests/dsl_ir_bridge.rs`（chart_and_migration / impact_closure_covers_all_five_target_kinds） |
 
 ---
 
@@ -356,12 +358,12 @@ lint-*   风格与最佳实践
 
 ### 15.1 四步渐进（与 RFC-0003 §14 的 M1–M3 对齐）
 
-| 步 | 交付物 | 依赖 | 验收 |
-|---|---|---|---|
-| **M1** | 补 `EntityDecl` / `ApiDecl` / `PageDecl` / `CommandDecl` 的 `line`；诊断携带精确 file/line | 无 | 全部 `dsl-*` 诊断可定位到规格行 |
-| **M2** | 引入 `IR_VERSION` 与 `Program.ir_version`；补 `Json` 等内建类型到**单一权威清单** | 无 | 检查层与生成层类型集合一致；`Json` 字段可通过 `forma check` |
-| **M3** | 引入 `StableId` 与 `SourceRef`；为 DSL 实体/字段/API/页面/命令**构造节点与边** | M1、M2 | DSL 工程可导出与联邦**同构**的节点/边集合 |
-| **M4** | 修正 CLI/MCP 一致性：`validate` / `doctor` / `graph` 对 DSL 工程走 `check_program` 路径 | 无 | 含语义错误的 DSL 工程 `forma validate` **必须非零退出** |
+| 步 | 交付物 | 依赖 | 验收 | 状态 |
+|---|---|---|---|---|
+| **M1** | 补 `EntityDecl` / `EnumDecl` / `RulesDecl` / `ApiDecl` / `PageDecl` / `CommandDecl` 的 `line` + `file`；诊断携带精确 file/line | 无 | 全部 `dsl-*` 诊断可定位到规格行 | ✅ 已完成（2026-11-05） |
+| **M2** | 引入 `IR_VERSION` 与 `Program.ir_version`；内建类型**单一权威清单**（`BUILTIN_TYPES`）与四目标映射一致性回归 | 无 | 检查层与生成层类型集合一致；`Json` 字段可通过 `forma check` | ✅ 已完成（2026-11-05） |
+| **M3** | `StableId`（`forma://` URI）与 `SourceRef`；`dsl::lower` 为 DSL 实体/字段/枚举/API/命令/页面**构造节点与边** | M1、M2 | DSL 工程可导出与联邦**同构**的节点/边集合 | ✅ 已完成（2026-11-05） |
+| **M4** | 修正 CLI/MCP 一致性：`validate` / `doctor` / `graph` 对 DSL 工程走 `check_program` 路径 | 无 | 含语义错误的 DSL 工程 `forma validate` **必须非零退出** | ✅ 已完成（2026-11-05，`engine::check_project` 共享管线） |
 
 > M4 是**安全相关**修复：当前「假绿」会让 CI 在带错误的规格上通过——优先于 M3 落地。
 
@@ -385,8 +387,10 @@ DSL .fm ──parse──▶ Program（当前规范表示）
 - **桥接是单向的**：`Program → 图`。联邦图**不得**反向成为规范表示（ADR-0002）。
 - 迁移期间既有 emitter 继续消费 `Program`（M1–M3 **不改变** `Program` 既有字段语义），
   因此**无需同步改动任何 emitter**——这是「不改核心也能补齐契约」的关键。
-- 桥接完成后，`forma impact` / `forma patch` 对 DSL 工程**不再被拒绝**
-  （当前被 `reject_dsl_only_tool` 显式拒绝）。
+- 桥接完成后，`forma impact` 对 DSL 工程**不再被拒绝**（已实现：MCP `forma_impact`
+  对 DSL 工程走 `dsl::lower` 投影的图）。
+- `forma patch` 对 DSL 工程**仍限联邦工程**——补丁需要声明级可寻址定位与快照/回滚，
+  属后续里程碑（见 §15.4）。
 
 ### 15.3 兼容性
 
@@ -396,5 +400,20 @@ DSL .fm ──parse──▶ Program（当前规范表示）
 
 ### 15.4 现状
 
-- G-1（稳定标识）、G-2（依赖边）、G-3（来源追踪）、G-4（IR 版本）、G-7（无降级）**仍未关闭**。
-- 本节是这些差距的**实施路径**，不是完成声明。
+- **M1–M4 已全部落地**（2026-11-05）：G-1（稳定标识）、G-2（依赖边）、G-3（来源追踪）、
+  G-4（IR 版本）、G-7（无降级）**均已关闭**。
+- 桥接落点：`crates/forma/src/dsl/lower.rs`（`lower_to_graph`）——
+  `Program → UnifiedSemanticGraph` **单向**投影，不改动 `Program` 既有字段语义，
+  因此**不改动任何 emitter 契约**。
+- 效果：DSL 工程的 `forma graph` 输出稳定标识 + 依赖边 + 来源位置；
+  `forma impact`（MCP）对 DSL 工程**不再被拒**（与联邦工程共用同一套图 API）。
+- **`forma patch` 已支持 DSL 工程**（2026-11-05，RFC-0006 P2）：`dsl::patch` 提供
+  `add-entity-field` / `set-entity-field-required` / `add-access-rule` / `add-table-page`
+  四个主线操作，事务形状与联邦侧一致（快照 → 编辑 → `check_program` 重校验 → 重建）；
+  定位基于 M1 的声明级 `file`/`line`。
+- **P3 五类目标全部入图**（2026-11-05，IR 1.2.0）：表列（`Table` / `TableColumn`）、
+  模型（`Entity` / `EntityField`）、表单（`UiForm` / `UiControl`）、图表（`Chart`：
+  chart → api 操作 / 编码通道字段，页面 → chart）、迁移（`Migration` 链：表 → 迁移链
+  `generates` 向前传播）。回归 `impact_closure_covers_all_five_target_kinds`。
+  **余项**：补丁操作集尚未覆盖「改规则字段约束 / 加实体」；图表/迁移节点的更细粒度
+  （按迁移版本 / 按图表变换）按需立项。

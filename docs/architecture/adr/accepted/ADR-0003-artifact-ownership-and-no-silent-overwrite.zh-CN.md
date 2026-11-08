@@ -68,3 +68,4 @@ related_adrs: [ADR-0001, ADR-0002]
 | 版本 | 日期 | 摘要 |
 |---|---|---|
 | 1.0 | 2026-11-04 | 初版采纳：裁决产物三分类归属、引入产物清单与冲突检测、人工修改不被静默覆盖 |
+| 1.1 | 2026-11-05 | **实现落地（F-002）**：`.forma/artifacts.json` 清单（路径/哈希/归属/生成器）；冲突检测采用「构建前快照、构建后恢复」（emitter 在内部写盘，无法前置拦截）；Adopted 条目**无条件保护**（adopt 后的干净状态不再触发快照会导致覆盖——实现期修正）；`--adopt` / `--overwrite`（审计留痕）/ `--strict` 三个裁决旗标（CLI build 与 MCP forma_build 同管线）；`artifact-modified` / `artifact-adopted` / `artifact-overwritten` 诊断。余项：Extension 锚点机制（§2.2）仍未实现；清单的「来源规格 / 依赖节点」字段待补 |

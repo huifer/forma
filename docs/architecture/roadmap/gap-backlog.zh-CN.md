@@ -36,7 +36,7 @@ breaking_change: false
 | # | 缺口 | 来源 | 现状 | 关闭条件 |
 |---|---|---|---|---|
 | ~~P0-1~~ | ~~**行级访问条件未实现**~~ | **已关闭（2026-11-05）**：`get`/`update`/`delete` 支持行级条件（取行 → 授权 → 校验 → 变更）；Option 字段克隆后比较；Decimal 字面量类型化 | ✅ 已完成（余 P0-1a/b 见 P1） |
-| P0-2 | **资源级 / 字段级策略未实现**（ADR-0004 四层模型只落地了认证层 + 操作/实体级授权） | spec:protocols §7.6 | 无声明入口 | 权限模型补齐到四层并有 Conformance |
+| ~~P0-2~~ | ~~**资源级 / 字段级策略未实现**~~ | **已关闭（2026-11-05）**：字段级策略落地——`access Entity { fields { field → 角色表达式 } }`；服务端在 list/get 响应序列化时裁剪（`trim_<entity>_fields`，字段→允许角色表）；Check 层 5 条 `dsl-field-policy-*` 诊断（未知字段/关联/无 provider/未知角色/表达式受限）。资源级/行级此前已实现（`access` 操作规则 + 行级条件注入 WHERE）。**余项**：字段级前端显隐（体验层）；多租户（RFC-0008 C4） | ✅ 已完成 |
 | ~~P0-3~~ | ~~**前端不做角色感知**~~ | **已关闭（2026-11-05）**：Web 端由授权规则编译出 `src/access.ts`（`ACCESS_RULES` + `useCan`），列表页按角色显隐；角色未知时不隐藏（服务端仍为判定方） | ✅ 已完成（Flutter 端见 P2-6） |
 | ~~P0-4~~ | ~~**DSL 工程上 `forma validate` 假绿**~~ | **已关闭（2026-11-05）**：CLI 与 MCP 统一走 `engine::check_project` 分发；DSL 工程跑 `check_program` + lint；带错误工程**退出码 1** | ✅ 已完成 |
 
@@ -72,12 +72,12 @@ breaking_change: false
 
 | # | 缺口 | 来源 | 现状 |
 |---|---|---|---|
-| P2-1 | `pre` 表达式子集受限（不支持跨实体查询） | spec:protocols §7.5 | 编译期仅接受可判定表达式 |
-| P2-2 | 弃用到移除的最短兼容窗口未定 | spec:compatibility §10.4 | 未约定 |
-| P2-3 | `spec:manifests` 的 `apiVersion` 演进与多 runtime 权限粒度未定 | spec:manifests §5 | 开放问题 |
-| P2-4 | **无 `api` 的工程生成物有未使用导入** | spec:types §7.4 | 导入逻辑由 api 操作驱动；只有实体没有 api 时产生一批 `unused_imports` |
+| ~~P2-1~~ | ~~`pre` 表达式子集受限（不支持跨实体查询）~~ | **已决议（2026-11-05）**：`pre` 限定为**目标实体当前行**的可判定表达式子集（字段比较 / 枚举字面量 / 逻辑组合，编译期保留 `!({expr})` 保护括号）；跨实体查询依赖 [spec:ir §15](../specifications/ir/ir-contract.zh-CN.md) 的 DSL→图 lowering（M3 稳定标识），列入后续里程碑；未知字段与越界路径编译期显式报错，不静默忽略 | ✅ 已决议 |
+| ~~P2-2~~ | ~~弃用到移除的最短兼容窗口未定~~ | **已决议（2026-11-05）**：弃用 → 移除最短窗口 = **≥ 2 个次版本（minor）且 ≥ 6 个月**（取更晚者）；弃用期 MUST 继续产出产物并携带弃用警告（`forma docs check-compatibility` 的 Deprecated 依赖告警沿用）；正式移除 MUST `breaking_change: true` + ADR + 迁移计划（[spec:compatibility §9](../specifications/compatibility/compatibility-rules.zh-CN.md)） | ✅ 已决议 |
+| ~~P2-3~~ | ~~`spec:manifests` 的 `apiVersion` 演进与多 runtime 权限粒度未定~~ | **已决议（2026-11-05）**：`forma.dev/v1` 内仅允许向后兼容演进；新 `apiVersion` 按版本分命名空间并存（并存期 ≥ 1 个编译器次版本），未识别版本拒绝注册（现状不变）；权限粒度 v1 保持 **capability 级**（`permissions` 汇总为并集），操作级权限由 DSL 的 `api { auth }` / `rules { access }` 承担，manifest 不重复建模（[spec:manifests §5](../specifications/manifests/capability-manifest.zh-CN.md)） | ✅ 已决议 |
+| ~~P2-4~~ | ~~**无 `api` 的工程生成物有未使用导入**~~ | **已关闭（2026-11-05）**：routes / repo / validators 的导入全部按需生成（提取器逐符号判定：list→Query、get/update/delete/命令→Path、handler→State、授权→Extension）；只有实体、无 api/命令的工程 **0 警告**；回归测试 `backend_contract.rs` 的 `entity_only_project_has_no_unused_imports` / `list_only_project_imports_are_demand_driven` / `auth_module_only_project_still_compiles_imports` | ✅ 已完成 |
 | ~~P2-5~~ | ~~属性形式 `@min`/`@max` 未做类型校验~~ | **已关闭（2026-11-05）**：随 P1-2 一并落地（仅数值类型 + 恰好 1 个数值参数，`dsl-invalid-constraint`） | ✅ 已完成 |
-| P2-6 | **移动端（Flutter）不做角色感知** | spec:protocols §7.7 | Web 端已按角色显隐；Flutter 端仍由服务端 403 兜底 |
+| ~~P2-6~~ | ~~**移动端（Flutter）不做角色感知**~~ | **已关闭（2026-11-05）**：与 Web 同构——生成 `lib/access.dart`（`accessRules` + `can(entity, op)`）与登录写入 `Api.currentRole`；列表页「新建 / 编辑 / 删除」与编辑页「保存」按钮按角色显隐；**角色未知（未登录 / 加载中）时不隐藏**（服务端仍是判定方）；无授权规则的工程不生成 `access.dart`、产物零变化。回归测试 `tests/flutter_access.rs`（4 项）。顺带修复两个解析器缺陷：`row [...]` 动作列表不跳过逗号（首项之后的动作被静默丢弃）与 `confirm` 后缀导致 `*.delete` 匹配失败——此前声明的删除动作从未渲染 | ✅ 已完成 |
 
 ---
 
@@ -87,10 +87,10 @@ breaking_change: false
 
 | 步 | 交付物 | 状态 |
 |---|---|---|
-| M1 | 诊断携带精确 file/line（`EntityDecl` / `ApiDecl` / `PageDecl` / `CommandDecl`） | ⏳ 未开始 |
-| M2 | `IR_VERSION` + `Program.ir_version` + 内建类型单一权威清单 | ⏳ 未开始（与 P1-1 合并） |
-| M3 | `StableId` / `SourceRef` + DSL 节点与边构造 | ⏳ 未开始 |
-| M4 | CLI/MCP 对 DSL 工程走 `check_program`（消除假绿） | ✅ 已完成（2026-11-05，`engine::check_project` 共享管线） |
+| ~~M1~~ | ~~诊断携带精确 file/line（`EntityDecl` / `EnumDecl` / `RulesDecl` / `ApiDecl` / `PageDecl` / `CommandDecl`）~~ | **已完成（2026-11-05）**：声明级 `line`（解析期）+ `file`（合并期回填）；`check_program` 经 `Origin` 统一注入位置，`dsl-*` 诊断**全部**可定位到 `file:line`（回归 `tests/dsl_ir_bridge.rs`） |
+| ~~M2~~ | ~~`IR_VERSION` + `Program.ir_version` + 内建类型单一权威清单~~ | **已完成（2026-11-05）**：`IR_VERSION = "1.0.0"` + `Program.ir_version`（CLI/MCP 可见）；`BUILTIN_TYPES` 为单一权威清单，新增**逐类型**四目标映射一致性回归（MySQL 列类型逐项断言） |
+| ~~M3~~ | ~~`StableId` / `SourceRef` + DSL 节点与边构造~~ | **已完成（2026-11-05）**：`crates/forma/src/dsl/lower.rs::lower_to_graph` 单向桥接（`Program → UnifiedSemanticGraph`，**不改** emitter 契约）；节点用联邦侧**同一套** URI 构造函数（`forma://project/{p}/entity/{E}` 等）；边覆盖 `defines` / `references` / `belongs-to`；`forma graph`（CLI + MCP）输出稳定标识 + 依赖边 + 来源位置并支持 `--export`；MCP `forma_impact` 对 DSL 工程**不再被拒** |
+| ~~M4~~ | ~~CLI/MCP 对 DSL 工程走 `check_program`（消除假绿）~~ | ✅ 已完成（2026-11-05，`engine::check_project` 共享管线） |
 
 ---
 
@@ -101,6 +101,11 @@ breaking_change: false
 | ~~G-6~~ | `access` / `auth` 被解析但检查层与生成层均不消费（权限声明是空承诺） | 2026-11-05 | 检查层新增 7 条 `dsl-auth-*` / `dsl-access-*` 诊断；生成层在服务端强制执行（401/403）；`api { auth }`（操作级）与 `rules { access }`（实体级）均落地 |
 | ~~P0-4~~ | DSL 工程上 `forma validate` 假绿（RFC-0003 M4） | 2026-11-05 | 新增 `engine::check_project` / `engine::dsl_check` 共享管线，CLI 与 MCP 同源分发；DSL 工程跑 `check_program` + lint，错误工程退出码 1 |
 | ~~P1-1~~ | `Json` 未纳入内建类型清单 | 2026-11-05 | `BUILTIN_TYPES` 扩到 11 型；MySQL/Rust/TS/Dart 映射齐备；新增「生成层支持的类型必须检查层也可用」测试 |
+| ~~P2-4~~ | 无 `api` 的工程生成物有未使用导入 | 2026-11-05 | routes / repo / validators 导入全按需；实体-only 工程 0 警告；3 项回归测试 |
+| ~~P2-6~~ | 移动端（Flutter）不做角色感知 | 2026-11-05 | `lib/access.dart` + `can()` + 登录写入 `Api.currentRole`；按钮按角色显隐；无规则的工程产物零变化；顺带修复 `row [...]` 逗号与 confirm 后缀两个静默丢动作的解析器缺陷 |
+| ~~M1~~ | DSL 诊断缺少精确 file/line | 2026-11-05 | 声明级 `line` + `file`；`Origin` 统一注入位置；`dsl-*` 诊断全部可定位 |
+| ~~M2~~ | IR 无版本 + 内建类型清单不唯一 | 2026-11-05 | `IR_VERSION` + `Program.ir_version`；`BUILTIN_TYPES` 单一权威清单 + 四目标映射一致性回归 |
+| ~~M3~~ | DSL 侧无稳定标识 / 依赖边 / 降级 | 2026-11-05 | `dsl::lower` 单向桥接产出与联邦同构的节点/边；`forma graph` 输出并可导出；`forma impact` 对 DSL 工程可用 |
 
 ---
 

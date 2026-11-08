@@ -90,6 +90,9 @@ breaking_change: false
   - 跨关系排序列**不支持**。
 - **前端**：声明游标分页的 api，页面 **MUST** 用 `useInfiniteQuery` + 「加载更多」；
   选项查询（`XApi.list({ pageSize: 200 })`）**MUST** 改读信封的 `items`。
+- **移动端（Flutter）**：同样 **MUST** 走信封——生成 `CursorPage<T>`（`items` + `nextCursor`）、
+  `ListParams.cursor`，列表页首屏加载后按「加载更多」用 `nextCursor` 续取并**追加**；
+  游标模式的输入体 **MUST NOT** 生成 offset 偏移参数（`page`）。
 
 #### 3.4.2 offset 分页（现状）
 
@@ -122,7 +125,36 @@ breaking_change: false
   行级条件**必须**先取到实体行再判定（取行 → 授权 → 校验 → 变更）。
 - 字段级可见性与行级可见性遵循同一原则：过滤**MUST** 在数据访问层完成。
 
-### 4.3 行级条件的实现约定
+### 4.3 字段级策略（P0-2 / ADR-0004 四层收口）
+
+DSL 语法（在既有 `access Entity` 块内）：
+
+```fm
+access Student {
+  update → role in ["admin", "teacher"]
+  fields {
+    grade → role in ["hr", "manager"]   # 仅这些角色可见
+  }
+}
+```
+
+语义与实现约束：
+
+- **输出裁剪**：当前角色不在允许集 → 该字段从 list/get 响应 JSON 中**移除**
+  （响应序列化处执行，RFC-0008「字段级 → 服务端（输出裁剪）」）；不是 403、不是脱敏标记。
+- **执行位置在服务端**：生成的后端在 list/get 返回前裁剪（`trim_<entity>_fields`，
+  字段 → 允许角色表）；前端不构成安全边界（ADR-0004）。
+- **同字段多条策略 → 角色并集**（任何一条允许即可见）；`any` → 全员可见（无裁剪）。
+- **关联字段不支持**（v1：仅标量字段；关联走实体级访问规则）——编译期显式诊断。
+- **fail-closed**：字段策略引用角色 ⇒ 必须声明 `auth module`；未认证请求走 401（既有保护层）。
+- **诊断码**：`dsl-field-policy-unknown-field` / `-relation-unsupported` / `-no-provider` /
+  `-unknown-role` / `-expression-unsupported`（表达式限 `any` 或角色表达式）。
+- **前端体验层**（列表列 / 表单字段 / 详情行显隐）已实现：Web 生成 `FIELD_RULES` +
+  `canSeeField(entity, field, role)`，Flutter 生成同构的 `fieldRules` + `canSeeField`；
+  列表页按角色隐藏列、表单页隐藏输入框、详情页隐藏行。**角色未知时不隐藏**；
+  无字段策略的工程**零变化**（不生成规则表、不引入引用）。
+
+### 4.3.1 行级条件的实现约定
 
 - 行级条件**MUST** 在取到实体行之后判定（`get` / `update` / `delete`）。
 - Timestamp / Date **仅支持同类型字段对字段比较**；时间字符串字面量、Timestamp↔Date 混比编译期报 `dsl-access-temporal-type-mismatch`。
@@ -130,7 +162,7 @@ breaking_change: false
 - 数值字面量**MUST** 按字段类型渲染（`Decimal` 需显式类型，否则整数字面量类型不明确）。
 - 行级条件**MUST NOT** 出现在无实体行的操作上（`create` / `list`）。
 
-### 4.4 统一错误响应体契约（Runtime Contract · RFC-0005 E1–E5）
+### 4.3.2 统一错误响应体契约（Runtime Contract · RFC-0005 E1–E5）
 
 **所有后端错误同形**（E4）：
 
@@ -155,16 +187,21 @@ breaking_change: false
 规则：`code` 是**公开 API**（E1，改动视为破坏性变更）；`error` / `fields[].message` 为面向用户的文案（E2）；
 错误码 → 状态码的映射**只在** `error.rs::status_for` 声明（E3）。
 
+**`requestId`（请求追踪 id）**：由生成的 `request_id` 中间件产出——优先透传调用方的
+`x-request-id`，否则生成 UUID v4；经 `tokio::task_local` 暴露给错误构造（`IntoResponse`
+拿不到请求扩展），并回写 `x-request-id` 响应头。前端（Web `err.requestId` /
+Flutter `ApiException.requestId`）同形读取，便于与服务端日志对账。
+
 **实现落点**：
 
 | 目标 | 位置 |
 |---|---|
-| 后端（权威） | `error.rs::ErrorBody` + `error_code` 模块 + `status_for` |
+| 后端（权威） | `error.rs::ErrorBody` + `error_code` 模块 + `status_for` + `request_id.rs`（追踪 id 中间件） |
 | Web 客户端 | `api.ts` 的 `req()` → `err.code` |
 | Flutter 客户端 | `ApiException.code` |
 | OpenAPI | `components.schemas.Error`（含错误码枚举）+ 每个操作的统一错误响应 |
 
-### 4.5 前端角色感知（体验层）
+### 4.4 前端角色感知（体验层）
 
 生成的 Web 端：
 
@@ -173,6 +210,15 @@ breaking_change: false
 - 列表页的「新建 / 编辑 / 删除」按钮在对应操作受约束时**按角色显隐**。
 - 角色未知（未登录 / 请求中）时**不隐藏**——服务端才是判定方。
 - 无授权规则的工程**不生成** `access.ts`，产物与之前**完全一致**（零行为变更）。
+
+生成的 Flutter 端（P2-6，与 Web 同构）：
+
+- 生成 `lib/access.dart`：`accessRules`（实体 → 受约束操作 + 允许角色）与
+  `currentRole()` / `can(entity, op)`；登录 / 注册响应将角色写入 `Api.currentRole`。
+- 列表页「新建 / 编辑 / 删除」与编辑页「保存」按钮在对应操作受约束时**按角色显隐**。
+- 角色未知时**不隐藏**；无授权规则的工程**不生成** `access.dart`，产物零变化。
+- 两端语义一致：api 级与实体级规则对同一 (实体, 操作) 取**角色交集**；
+  行级条件不在前端判定，仍由服务端返回 403。
 
 ### 4.5 编译期约束
 
@@ -252,12 +298,12 @@ api Orders {
 |---|---|---|
 | ~~1~~ | ~~**行级条件不支持跨关系遍历**~~ **已关闭**：一层 `relation.field` 遍历已实现；两层以上 / Optional 关系 / 非关系遍历仍有编译期显式诊断 |
 | ~~2~~ | ~~**行级条件不支持 Json 比较**~~ **已关闭**：Timestamp/Date 同类型比较已实现（混比报 `dsl-access-temporal-type-mismatch`）；Json 字段已入 `access_comparable`（`==`/`!=`） |
-| 3 | **Flutter target 不支持 cursor pagination** | Build 阶段在任何 emitter 写盘前显式拒绝；同一工程的 Web cursor API 已实现 |
+| ~~3~~ | ~~**Flutter target 不支持 cursor pagination**~~ **已关闭（2026-11-05）**：Flutter 端支持游标分页——`CursorPage<T>` 信封（`{items, nextCursor}`）、`ListParams.cursor`、列表页「加载更多」按 `nextCursor` 续取（首屏 + 增量追加）；`Api.getRaw` 取原始信封。**余项**：可视化运行时仍要求裸列表响应（chart 消费 cursor api 仍在构建期显式拒绝） |
 | 4 | ~~统一错误响应体契约未落地~~（已实现，见 §4.4） | `error/code/fields/requestId` 跨后端 / Web / Flutter / OpenAPI 同形；`requestId` 尚为预留 |
-| 5 | `pre` 的表达式子集受限 | 仅编译期可判定的表达式；不支持跨实体查询 |
-| 6 | 资源级 / 字段级策略未实现 | ADR-0004 描述的权限四层模型当前只落地了认证层 + 操作/实体级授权 |
-| 7 | **移动端（Flutter）不做角色感知** | Web 已按角色隐藏操作；Flutter 端仍由服务端 403 兜底 |
-| 8 | **`requestId` 未生成** | 错误体已预留字段；需要请求级追踪 id（axum 中间件）才能填充 |
+| 5 | ~~`pre` 的表达式子集受限~~ **已决议（2026-11-05）**：`pre` 限定为**目标实体当前行**的可判定表达式子集（字段比较 / 枚举字面量 / 逻辑组合）；跨实体查询依赖 spec:ir §15 的 DSL→图 lowering（M3 稳定标识），列入后续；未知字段与越界路径编译期显式报错 | 已决议——不再是缺口，是显式的语言边界 |
+| ~~6~~ | ~~资源级 / 字段级策略未实现~~ **已关闭（2026-11-05，P0-2）**：四层模型全部落地——认证（JWT）+ 策略（RBAC）+ 资源/实体级（`access` 操作规则 + 行级条件）+ **字段级**（`fields { }` 输出裁剪）。前端体验层（列/输入框/详情行按角色隐藏）亦已补齐（Web `FIELD_RULES` / Flutter `fieldRules`）。**余项**：多租户（RFC-0008 C4） |
+| ~~7~~ | ~~**移动端（Flutter）不做角色感知**~~ **已关闭（2026-11-05）**：生成 `lib/access.dart` + `can(entity, op)`，登录写入 `Api.currentRole`；按钮按角色显隐；角色未知不隐藏；无规则的工程产物零变化（回归测试 `tests/flutter_access.rs`） | ✅ 已完成 |
+| ~~8~~ | ~~**`requestId` 未生成**~~ **已关闭（2026-11-05）**：生成 `request_id.rs` 中间件——透传/生成 id、`tokio::task_local` 作用域、`x-request-id` 响应头回写；错误体从作用域填充；Web/Flutter 客户端同形读取 |
 
 ## 8. 开放问题
 
