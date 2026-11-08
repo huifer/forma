@@ -1,7 +1,7 @@
 ---
 id: RFC-0010
 title: Visualization Specification and Rendering System
-status: Accepted            # 实现分期 V0.1 已落地（见 §13 与 crates/forma/src/visualization/）
+status: Accepted            # V0.1–V0.3 / V0.5 已落地（metric/table + dashboard IR + theme/preview/渲染门，见 §13 分期与 CHANGELOG）
 version: 1.0
 authors: [forma-maintainers]
 created: 2026-11-05

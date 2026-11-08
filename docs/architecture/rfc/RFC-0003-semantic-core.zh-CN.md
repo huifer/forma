@@ -1,7 +1,7 @@
 ---
 id: RFC-0003
 title: Semantic Core Architecture
-status: Proposed
+status: Implemented
 version: 1.0
 authors: [forma-maintainers]
 created: 2026-11-04
@@ -14,6 +14,8 @@ related_adrs: [ADR-0001, ADR-0002]
 related_specs: [spec:ir, spec:types]
 breaking_change: false
 ---
+
+> **Implementation Status（Implemented，2026-11-08）**：实现落地：IR_VERSION 1.2.0 + Program.ir_version；BUILTIN_TYPES 12 型四目标映射回归；Stable Identity（identity.rs 同构构造）；DSL→图单向桥接（dsl::lower）；声明级 file/line。证据：tests/dsl_ir_bridge.rs / tests/dsl_validate.rs（CLI↔MCP 漂移防线）。
 
 # RFC-0003：语义内核架构（Semantic Core）
 

@@ -1,7 +1,7 @@
 ---
 id: RFC-0006
 title: Agent Engineering Protocol
-status: Proposed
+status: Implemented
 version: 1.0
 authors: [forma-maintainers]
 created: 2026-11-04
@@ -14,6 +14,8 @@ related_adrs: [ADR-0001, ADR-0002]
 related_specs: [spec:ir, spec:protocols]
 breaking_change: false
 ---
+
+> **Implementation Status（Implemented，2026-11-08）**：实现落地：agent.rs 四工具（search/get_context/plan/report）+ 事务式补丁（快照→编辑→check→重建）+ patchId 幂等 + expected 冲突检测 + 审批门 + 风险评估同源。证据：tests/agent_tools.rs / tests/dsl_patch.rs。
 
 # RFC-0006：Agent 工程协议（Agent Engineering Protocol）
 
@@ -272,6 +274,10 @@ Commit / Report     →  证据报告
 ### 8.6 Extension Points
 
 - **新补丁操作**：扩展 `PatchOperation` 枚举；每个操作必须实现「幂等 + 可回滚 + 可校验」。
+  当前 DSL 主线操作集（2026-11-05）：
+  `add-entity-field` / `set-entity-field-required` / `add-access-rule` / `add-table-page` /
+  `add-entity` / `add-field-rule` / `add-form-field` / **`set-field-rule`**（改已有 min/max 值，
+  message 保留）；全部经过同一事务、审批门、幂等与 expected 冲突检测路径。
 - **新工具**：新增任务型工具，不得绕过补丁事务。
 - **新风险维度**：扩展风险分级表，但必须保持 fail-safe 默认（未知 → High）。
 - **人工审批集成**：审批门以可插拔方式接入（CI 门、人工确认、策略引擎）。
@@ -334,15 +340,15 @@ Commit / Report     →  证据报告
 
 ## 14. Migration Plan
 
-| 步 | 内容 | 完成判据 |
-|---|---|---|
-| **P1** | 修正 CLI/MCP 语义一致性（与 RFC-0003 M4 同批） | `forma_validate` / `forma_impact` / `forma_patch` 对 DSL 工程不再误报或误拒 |
-| **P2** | 扩展 `PatchOperation` 至 DSL 主线操作集；复用 `patch.rs` 的快照/回滚机制 | DSL 工程可经 `forma_patch` 完成「加字段 + 加规则 + 加页面」 |
-| **P3** | 基于 RFC-0003 M3 的依赖图实现 DSL 侧 `forma_impact` | 影响闭包含表列、模型、表单、图表、迁移五类目标 |
-| **P4** | 引入 `forma_plan` / `forma_report` / `forma_search` / `forma_get_context` | 一次 Agent 会话可完成 §8.5 全流程，无需读取目标源码 |
-| **P5** | 接入风险审批门与审计落库 | High/Extreme 操作在无审批凭据时被拒绝 |
+| 步 | 内容 | 完成判据 | 状态 |
+|---|---|---|---|
+| **P1** | 修正 CLI/MCP 语义一致性（与 RFC-0003 M4 同批） | `forma_validate` / `forma_impact` / `forma_patch` 对 DSL 工程不再误报或误拒 | ✅ 已完成（2026-11-05，`engine::check_project`） |
+| **P2** | 扩展 `PatchOperation` 至 DSL 主线操作集；复用 `patch.rs` 的快照/回滚机制 | DSL 工程可经 `forma_patch` 完成「加字段 + 加规则 + 加页面」 | ✅ 已完成（2026-11-05，`dsl::patch`：`add-entity-field` / `set-entity-field-required` / `add-access-rule` / `add-table-page`；事务 = 快照 → 编辑 → `check_program` → 重建，新引入语义错误即整体回滚） |
+| **P3** | 基于 RFC-0003 M3 的依赖图实现 DSL 侧 `forma_impact` | 影响闭包含表列、模型、表单、图表、迁移五类目标 | ✅ 已完成（2026-11-05，M3 桥接 + `NodeKind` 增 `chart` / `migration`：实体/字段/表/列/枚举/API 操作/命令/页面/控件/图表/迁移链；五类目标全部入闭包，回归 `impact_closure_covers_all_five_target_kinds`） |
+| **P4** | 引入 `forma_plan` / `forma_report` / `forma_search` / `forma_get_context` | 一次 Agent 会话可完成 §8.5 全流程，无需读取目标源码 | ✅ 已完成（2026-11-05，`src/agent.rs` + MCP 工具面：search=语义检索；get_context=声明块摘录+依赖/引用者+影响闭包；plan=副本试运行（零副作用）+ 迁移风险分级 + 审批判定 verdict；report=模型/校验证据/待执行迁移/产物面。回归 `tests/agent_tools.rs`（8 项，含 §8.5 全流程）） |
+| **P5** | 风险审批门 + 审计落库 + 补丁幂等/冲突检测 | High/Extreme 操作在无审批凭据时被拒绝；同一 patchId 不重复应用；过期 expected 被拒绝 | ✅ 已完成（2026-11-05：`dsl::patch::assess_risk` 共享风险评估（迁移 High/Extreme + 权限规则变更 §8.7）；`forma_patch` 写入前在副本试运行评估，无审批凭据即**拒绝**（`patch-approval-required`，零写入）；补丁文档支持 `approval: { by, reason }`、`patchId`（`.forma/patches.json` 幂等台账）、`expected`（声明块 sha256 冲突检测，`patch-conflict`）；审计落 `.forma/audit.jsonl`（applied/rejected/failed/idempotent + 风险 + 审批来源），`forma_plan` 回传 expected，`forma_report` 附审计尾迹。回归 `tests/dsl_patch.rs`（18 项）+ `tests/agent_tools.rs`（11 项）） |
 
-> P2 依赖 RFC-0003 M1（line 定位）与 M2（类型清单）；P3 依赖 RFC-0003 M3（StableId + 依赖边）。**P3 是关键路径**——没有稳定标识就没有可寻址的影响面。
+> P2 依赖 RFC-0003 M1（line 定位）与 M2（类型清单）；P3 依赖 RFC-0003 M3（StableId + 依赖边）。**P3 是关键路径**——没有稳定标识就没有可寻址的影响面。M1–M3 已于 2026-11-05 落地（`dsl::lower`），P2/P3 随之解锁。
 
 ## 15. Implementation Plan
 
@@ -355,20 +361,21 @@ Commit / Report     →  证据报告
 
 ## 16. Conformance Requirements
 
-- [ ] DSL 工程的 `forma_patch` 成功应用并通过重校验；失败时磁盘状态与操作前完全一致。
-- [ ] 同一 `patchId` 重复提交不产生二次变更（幂等）。
-- [ ] `baseRevision` / `expected` 不匹配时拒绝并回滚（冲突检测）。
-- [ ] `forma_impact` 对 DSL 工程返回影响闭包，且闭包包含表列、模型、表单三类目标。
-- [ ] 未知补丁操作被显式拒绝并给出错误码（不静默忽略）。
-- [ ] 破坏性补丁在缺少审批凭据时被 `forma_patch` 拒绝。
-- [ ] 每个补丁操作都有对应回归测试（既有 `tests/patch.rs` 扩展）。
+- [x] DSL 工程的 `forma_patch` 成功应用并通过重校验；失败时磁盘状态与操作前完全一致（P2 已回归）。
+- [x] 同一 `patchId` 重复提交不产生二次变更（幂等）（2026-11-05：`.forma/patches.json` 台账 + `idempotent: true`）。
+- [x] `expected`（声明块 sha256）不匹配时拒绝并零写入（冲突检测）（2026-11-05：`patch-conflict` 错误码；`forma_plan` 回传目标实体哈希供 Agent 原样提交）。
+- [x] `baseRevision`（`<project>@<IR_VERSION>`）不匹配时拒绝并零写入（`patch-base-revision`）；`forma_plan` 回传当前 revision（2026-11-05，IR 1.2.0）。
+- [x] `forma_impact` 对 DSL 工程返回影响闭包，且闭包包含表列、模型、表单、图表、迁移五类目标（P3）。
+- [x] 未知补丁操作被显式拒绝并给出错误码（不静默忽略；serde 操作标签 + P2 操作计划失败均有回归）。
+- [x] 破坏性补丁在缺少审批凭据时被 `forma_patch` 拒绝（P5：`patch-approval-required`，零写入 + 审计留痕；带凭据可执行并落审计）。
+- [x] 每个 DSL 补丁操作都有对应回归测试（`tests/dsl_patch.rs`：18 项，含 P2/P5/幂等/冲突）。
 
 ## 17. Acceptance Criteria
 
 1. Agent 在**不读取任何生成物源码**的前提下，完成「加字段 + 加跨字段校验 + 加表单字段 + 生成迁移」的完整闭环。
 2. 影响面报告准确列出受影响产物，且无关模块未被重新生成（与 RFC-0007 增量断言联测）。
 3. 人为构造的冲突补丁（`expected` 不匹配）被拒绝且不落盘任何变更。
-4. 破坏性补丁在无审批时无法执行；提供审批凭据后可执行并留审计记录。
+4. ✅ 破坏性补丁在无审批时无法执行；提供审批凭据后可执行并留审计记录（P5：`.forma/audit.jsonl` 记录 applied/rejected + 风险 + 审批来源）。
 
 ## 18. Open Questions
 

@@ -1,7 +1,7 @@
 ---
 id: RFC-0007
 title: Build and Artifact System
-status: Proposed
+status: Implemented
 version: 1.0
 authors: [forma-maintainers]
 created: 2026-11-04
@@ -14,6 +14,8 @@ related_adrs: [ADR-0001, ADR-0003]
 related_specs: [spec:manifests, spec:ir, spec:compatibility]
 breaking_change: false
 ---
+
+> **Implementation Status（Implemented，2026-11-08）**：实现落地：.forma/artifacts.json 产物清单（逐文件哈希/归属）+ 构建前快照/构建后恢复 + adopt/overwrite/strict 冲突裁决。证据：tests/artifact_ownership.rs。
 
 # RFC-0007：构建与产物系统（Build and Artifact System）
 

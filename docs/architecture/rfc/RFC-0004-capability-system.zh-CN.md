@@ -1,7 +1,7 @@
 ---
 id: RFC-0004
 title: Capability System and Extension Architecture
-status: Accepted
+status: Implemented
 version: 1.0
 authors: [forma-maintainers]
 created: 2026-11-04
@@ -14,6 +14,8 @@ related_adrs: [ADR-0001]
 related_specs: [spec:manifests, spec:ir, spec:compatibility]
 breaking_change: false
 ---
+
+> **Implementation Status（Implemented，2026-11-08）**：实现落地：capability.rs（Manifest/注册表/依赖闭包/版本兼容/权限汇总）+ 构建期校验阻断 + 项目自备能力不改核心。证据：tests/capability.rs（9 项，含「加能力 → 核心产物 byte 级不变」）。
 
 # RFC-0004：能力系统与扩展架构
 

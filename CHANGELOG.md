@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **治理收尾：RFC 状态推进 + Conformance Suite**：
+  - RFC-0003/0004/0005/0006/0007/0008 → `Implemented`（frontmatter + Implementation Status
+    证据段：IR 契约 / Capability Registry / 错误契约 E1–E5 / Agent 工具与补丁事务 /
+    产物所有权 / 服务端权威授权，各附证明测试）；RFC-0010 状态注释更新
+    （V0.1–V0.3 / V0.5 已落地）；治理 README §4.1 一览表同步；
+  - **Conformance Suite 建立**（`docs/architecture/conformance/`，此前为空目录）：
+    README 总纲（运行方式 + Phase 1 三条完成标准的门禁规则）+ 四层一致性矩阵——
+    semantic（类型/IR/权限/可视化）、adapter（确定性/编译门/零变化/能力扩展）、
+    runtime（错误契约/追踪/日志/API 语义）、compatibility（迁移重放/兼容性检测/产物所有权/
+    patchId 幂等）——每条承诺映射到可运行的证明测试；
+  - `forma docs validate` 27 份治理文档 0 错误；`docs lint` 0 警告（6 条 info 为
+    RFC-0010 旧编号结构的既有提示）。
+
+### Added
 - **Studio（M6/M9 P1）：只读审阅服务 + v2 双向编辑写回**：
   - `forma studio [dir] [--port N]`（默认 4747 / `FORMA_STUDIO_PORT`）本地服务（127.0.0.1，
     零新增依赖——手写 HTTP/1.1，thread-per-conn）；

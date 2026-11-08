@@ -170,12 +170,12 @@ breaking_change: false
 |---|---|---|---|
 | [RFC-0001](rfc/RFC-0001-architecture-overview.zh-CN.md) | Architecture Overview | Accepted | 全局边界、依赖方向、Tier 分层 |
 | [RFC-0002](rfc/RFC-0002-specification-system.zh-CN.md) | Specification System | Proposed | 规格领域划分、语法元规则、标准互通保真度 |
-| [RFC-0003](rfc/RFC-0003-semantic-core.zh-CN.md) | Semantic Core | Proposed | IR 稳定契约、类型系统、Stable Identity、依赖图 |
-| [RFC-0004](rfc/RFC-0004-capability-system.zh-CN.md) | Capability System | Proposed | Capability Manifest、注册/发现/验证、三层 IR |
-| [RFC-0005](rfc/RFC-0005-application-runtime.zh-CN.md) | Application Runtime | Proposed | 运行时模块契约、配置分层、错误契约、产物独立性 |
-| [RFC-0006](rfc/RFC-0006-agent-engineering.zh-CN.md) | Agent Engineering | Proposed | 任务型工具面、补丁事务、风险分级、人工审批门 |
-| [RFC-0007](rfc/RFC-0007-build-and-artifact.zh-CN.md) | Build & Artifact | Proposed | 产物三分类归属、产物清单、冲突检测、增量与可复现构建 |
-| [RFC-0008](rfc/RFC-0008-security-and-governance.zh-CN.md) | Security & Governance | Proposed | 权限四层模型、密钥与审计契约、验证门槛映射 |
+| [RFC-0003](rfc/RFC-0003-semantic-core.zh-CN.md) | Semantic Core | Implemented | IR 稳定契约、类型系统、Stable Identity、依赖图 |
+| [RFC-0004](rfc/RFC-0004-capability-system.zh-CN.md) | Capability System | Implemented | Capability Manifest、注册/发现/验证、三层 IR |
+| [RFC-0005](rfc/RFC-0005-application-runtime.zh-CN.md) | Application Runtime | Implemented | 运行时模块契约、配置分层、错误契约、产物独立性 |
+| [RFC-0006](rfc/RFC-0006-agent-engineering.zh-CN.md) | Agent Engineering | Implemented | 任务型工具面、补丁事务、风险分级、人工审批门 |
+| [RFC-0007](rfc/RFC-0007-build-and-artifact.zh-CN.md) | Build & Artifact | Implemented | 产物三分类归属、产物清单、冲突检测、增量与可复现构建 |
+| [RFC-0008](rfc/RFC-0008-security-and-governance.zh-CN.md) | Security & Governance | Implemented | 权限四层模型、密钥与审计契约、验证门槛映射 |
 | [RFC-0009](rfc/RFC-0009-developer-experience-and-studio.zh-CN.md) | Developer Experience | Proposed | CLI 契约、诊断统一结构、Studio 阶段与边界 |
 | [RFC-0010](rfc/RFC-0010-visualization.zh-CN.md) | Visualization | Accepted | Chart IR、ECharts Adapter、React Runtime（领域范例） |
 
@@ -371,7 +371,7 @@ RFC-0004 的可扩容机制**已落地为代码**，不是纸面设计：
 | 9 | Specification System（RFC-0002） | 规格领域与标准互通契约 | ✅ 文档已交付 |
 | 10 | Security & Governance（RFC-0008） | 权限、密钥、审计、验证门槛 | ✅ 文档已交付 |
 | 11 | Developer Experience（RFC-0009） | CLI 契约、Studio | ✅ 文档已交付 |
-| 12 | Conformance Suite | 兼容性测试 | 🔨 待建（`conformance/` 目录已就位） |
+| 12 | Conformance Suite | 兼容性测试 | ✅ 已建（[conformance/](conformance/README.md)：语义/适配器/运行时/兼容性四层矩阵，承诺 → 证明测试映射；58 套件 / 368 测试全绿） |
 | 13 | Reference Application | 用真实应用验证架构 | 🔨 待建 |
 
 > 基础 RFC（0001–0009）已全部起草完成（状态：`Proposed`，待审查转 `Accepted`）。

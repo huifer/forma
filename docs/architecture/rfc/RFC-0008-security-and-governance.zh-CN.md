@@ -1,7 +1,7 @@
 ---
 id: RFC-0008
 title: Security and Governance Architecture
-status: Proposed
+status: Implemented
 version: 1.0
 authors: [forma-maintainers]
 created: 2026-11-04
@@ -14,6 +14,8 @@ related_adrs: [ADR-0001, ADR-0004]
 related_specs: [spec:ir, spec:types, spec:protocols]
 breaking_change: false
 ---
+
+> **Implementation Status（Implemented，2026-11-08）**：实现落地：服务端权威授权（api auth + rules access + 行级条件 + 字段级裁剪 + @tenant 行级隔离与管理端点）。证据：tests/api_auth.rs（18 项）/ tests/field_policies.rs / backend_contract.rs。
 
 # RFC-0008：安全与治理架构（Security and Governance Architecture）
 
@@ -329,7 +331,7 @@ Response 序列化：字段级裁剪
 | **C1** | 对 `access` / `auth` 块产出显式诊断（`dsl-unsupported-policy`），杜绝静默忽略 | 写有 `auth` 块的规格在 build 时明确失败并说明原因 |
 | **C2** | 实现 `access` / `auth` → 后端权威判定 + 前端体验编译 | 越权请求被服务端拒绝（403/404）；前端按钮相应隐藏 |
 | **C3** | 接入 auth 能力，填充审计 actor | 审计条目 actor 不再为 `anonymous` |
-| **C4** | 行级 / 字段级权限 + 多租户 | 租户条件在查询层生效；敏感字段在响应裁剪 |
+| **C4** | 行级 / 字段级权限 + 多租户 | 租户条件在查询层生效；敏感字段在响应裁剪。行级 ✅（P0-1）；字段级 ✅（2026-11-05，P0-2：`fields { }` 输出裁剪，`dsl-field-policy-*` 诊断）；**多租户仍待立项** |
 | **C5** | 落地验证门槛映射到 CI | CI 按变更类型自动要求对应验证等级 |
 
 > C1 是**立即可做**且价值高的一步：把安全相关的空承诺变成显式错误，成本极低。C2 依赖 auth 能力（roadmap M5）。

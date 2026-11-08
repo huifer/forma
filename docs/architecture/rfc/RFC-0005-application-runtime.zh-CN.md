@@ -1,7 +1,7 @@
 ---
 id: RFC-0005
 title: Application Runtime
-status: Proposed
+status: Implemented
 version: 1.0
 authors: [forma-maintainers]
 created: 2026-11-04
@@ -14,6 +14,8 @@ related_adrs: [ADR-0001]
 related_specs: [spec:ir, spec:protocols]
 breaking_change: false
 ---
+
+> **Implementation Status（Implemented，2026-11-08）**：实现落地：统一错误响应体 E1–E5（FORMA_* 稳定错误码 + status_for 单点映射 + 内部错误不回显）+ requestId 中间件 + 结构化日志（LOG_FORMAT=json）。证据：tests/error_contract.rs / tests/structured_logging.rs。
 
 # RFC-0005：应用运行时（Application Runtime）
 
