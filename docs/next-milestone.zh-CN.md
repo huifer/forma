@@ -11,8 +11,8 @@
 | F-002 | Provenance + 产物 Manifest（哈希 / 所有权 / 人工修改检测） | P0 | ✅ 已完成 | **产物清单落地（2026-11-05，ADR-0003 实现版）**：`.forma/artifacts.json` 记录逐文件哈希 / 归属（Generated/Adopted）/ 生成器；构建前快照受保护产物、构建后恢复——**人工修改不被静默覆盖**（`artifact-modified` 警告 + 保留人工版本）；裁决旗标 `--adopt`（登记 Adopted，永不覆盖）/ `--overwrite`（显式覆盖 + 审计）/ `--strict`（冲突提升 error）。余项：Extension 锚点机制、清单的来源规格/依赖节点字段 |
 | F-003 | Semantic Impact Analysis（字段 / API / 规则 / 页面的依赖闭包） | P0 | ✅ 已完成 | `crates/forma/src/graph.rs` 的 `UnifiedSemanticGraph` + `forma_graph` / `forma_impact` |
 | F-004 | 规则跨语言一致性测试（Rust / TS / Dart 共享语义向量） | P0 | ✅ 已完成 | **行为向量从 DSL 派生（2026-11-05）**：`validation_vectors.rs` 从规则约束（min/max/required）派生边界用例，生成两端行为测试——`validators.test.ts`（vitest，**Web 测试运行器补齐**）与 `rule_vector_test.dart`（flutter_test），由同一派生函数产出（同源保证）；CI 执行 `npx vitest run` + `flutter test`；Rust 侧保留三端字面量一致性断言（`tests/rule_vectors.rs`） |
-| F-005 | OpenAPI / JSON Schema 导入 | P0 | ✅ 部分 | `crates/forma/src/adapters/` 已有 openapi / jsonschema / sql / jsonforms / bpmn 适配器（导入 + 导出） |
-| F-006 | Transactional Specification Patch（校验 / 预览 / 冲突检测 / 原子应用） | P0 | 🔨 部分 | **DSL 主线补丁事务已落地（2026-11-05，RFC-0006 P2）**：`dsl::patch` 提供「加字段 / 改必填 / 加规则 / 加页面」四操作，快照 → 编辑 → 重校验 → 重建，新引入语义错误即整体回滚；联邦侧（`patch.rs`）已实现 AST 级语义补丁；事务式**预览 / 冲突检测**仍待补强 |
+| F-005 | OpenAPI / JSON Schema 导入 | P0 | ✅ 已完成 | `adapters/` 已有 openapi / jsonschema / sql / jsonforms / bpmn 适配器（导入 + 导出）；**`forma import openapi <spec> [--out]` 逆向生成 `.fm` 源文件**（components.schemas → 实体、paths → api、类型映射 + @id 主键保证，生成物通过 check_program，P1-#1） |
+| F-006 | Transactional Specification Patch（校验 / 预览 / 冲突检测 / 原子应用） | P0 | ✅ 已完成 | **RFC-0006 §16 全部兑现**：`dsl::patch` 事务（快照 → 编辑 → 重校验 → 重建，错误整体回滚）；`forma_plan` 在**临时副本**试运行即预览；`expected:[{entity,sha256}]` 冲突检测 + `patchId` 幂等（重复提交零变更）+ `baseRevision` 基线绑定 + 审批门（High/Extreme 需 approval）；Studio v2 的 `POST /api/patch` 走同一事务写回 `.fm`（P1-#10） |
 | F-007 | Agent Context / Plan / Verify 工作流 | P0 | ✅ 已完成 | **Agent 会话闭环落地**：`forma_search`（语义检索）/ `forma_get_context`（声明块摘录 + 依赖/引用者 + 影响闭包）/ `forma_plan`（副本试运行 + 迁移风险分级 + 审批判定 + **expected 回传**）/ `forma_report`（模型 + 校验证据 + 待执行迁移 + 产物面 + 审计尾迹）；`forma_patch` 支持 **patchId 幂等 + expected 冲突检测 + 审批凭据**（RFC-0006 §16 全部兑现）——一次 Agent 会话可完成 RFC-0006 §8.5 全流程，无需读取目标源码 |
 | F-008 | Generated Project Benchmark（真实编译 + Token / 可靠性对照） | P1 | ✅ 已完成 | **10×10 确定性任务矩阵落地（2026-11-05，`forma bench [dir] --json`）**：10 个标准业务变更场景 × 10 个确定性变体 = 100 cases；每个 case 全量 DSL 检查 + 产物生成；每场景变体 0 额外执行生成 backend `cargo check`（10 个真实依赖编译代表样本）；输出 JSON 报告（`forma-benchmark/v1` schema，camelCase）：`checksPassed` / `buildsPassed` / `backendCompilesPassed` / `reliability` / `estimatedInputTokens`（明确标注 4 chars/token proxy，非 LLM tokenizer 实测）/ 逐 case 诊断。基准：**100/100 checks、100/100 builds、10/10 backend cargo check、可靠性 100%** |
 
@@ -32,17 +32,17 @@
 Phase 1 — 编译器可靠性（P0）
   F-003 ✅ 影响分析（已完成；DSL 工程经 M3 桥接同样可用）
   F-001 ✅ IR 稳定契约（版本 + 兼容策略，已完成）
-  F-002   Provenance + 产物 Manifest（内容哈希 + 所有权检测）
-  F-006   事务式补丁（预览 + 冲突检测）
+  F-002 ✅ Provenance + 产物 Manifest（内容哈希 + 所有权检测，已完成）
+  F-006 ✅ 事务式补丁（预览 + 冲突检测 + 幂等，已完成）
   F-004 ✅ 规则跨语言一致性向量（已完成）
   ── 本次交付：forma migrate risk（F-002 的迁移安全子集）──
 
 Phase 2 — Agent 原生化（P0）
   F-007 ✅ Agent Context / Plan / Verify 闭环（已完成）
-  F-005   OpenAPI / JSON Schema 导入（已完成，纳入验收）
+  F-005 ✅ OpenAPI / JSON Schema 导入（已完成，纳入验收）
 
 Phase 3 — 标准生态互通（P1）
-  F-005   既有项目 导入 → IR → 导出 语义等价验收
+  F-005   既有项目 导入 → IR → 导出 语义等价验收（余项）
   F-008 ✅ Generated Project Benchmark（已完成）
 
 Phase 4 — 目标技术扩展（P2，前序稳定后再做）

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **进度同步（P1 全清）**：`docs/roadmap.zh-CN.md` 10 个 P1 项（Redis / OpenAPI 导入 /
+  RHF / Zustand / 文件上传 / 导入导出 / 可视化 V0.2–V0.5 / Studio v1+v2）标 ✅ 并附实现说明；
+  `docs/next-milestone.zh-CN.md` F-005（OpenAPI 导入）/ F-006（事务式补丁预览与冲突检测）
+  标 ✅ 已完成；`Pinia` 与 `Wave 4` 长尾明确列为后续。
+
 ### Added
 - **治理收尾：RFC 状态推进 + Conformance Suite**：
   - RFC-0003/0004/0005/0006/0007/0008 → `Implemented`（frontmatter + Implementation Status

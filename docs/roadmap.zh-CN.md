@@ -37,7 +37,7 @@ M11 Spring/Go/.NET、原生移动、小程序、工作流运行时、支付
 | ✅ 首批 | **MySQL 8** | M2 | InnoDB/utf8mb4；DDL + 基线迁移 → IR diff 增量迁移 |
 | ✅ 已完成 | **PostgreSQL** | M10 | PostgreSQL 15+ DDL target：UUID / JSONB / BOOLEAN / TIMESTAMPTZ / NUMERIC；独立 `db-postgres` + `postgres-migrate` 构建步骤；与 MySQL 共享 DSL/拓扑语义但独立方言渲染，MySQL 产物零变化 |
 | ✅ 已完成 | **SQLite** | M10 | SQLite 3 DDL target：TEXT/NUMERIC/INTEGER 亲和性映射 + PRAGMA foreign_keys；独立 `db-sqlite` + `sqlite-migrate` 构建步骤；与 MySQL/PostgreSQL 共享表拓扑但独立方言渲染 |
-| 🔨 P1 | **Redis**（键设计派生） | M9 | 会话/缓存/限流 |
+| ✅ 已完成 | **Redis**（键设计派生） | M9 | `targets.db.engine: redis` → 从 DSL 实体/索引/唯一/auth/jobs/live 派生键设计（`redis/key-design.md` + `.json`）；默认/关系型工程零产物（P1-#2） |
 | 👁 P2 | SQL Server / Oracle / MongoDB | M11 | 企业遗留 / 文档模型专项设计 |
 
 ### 2.2 后端
@@ -58,7 +58,7 @@ M11 Spring/Go/.NET、原生移动、小程序、工作流运行时、支付
 |---|---|---|---|
 | ✅ 首批 | REST | M3 | `api` 块 → REST 路由 |
 | ✅ 首批 | **OpenAPI 3.1 导出 + Swagger UI** | M7 | 生成视图 + 本地文档站 |
-| 🔨 P1 | **OpenAPI 导入** | M7 | 既有 Swagger 项目 → DSL（逆向工程） |
+| ✅ 已完成 | **OpenAPI 导入** | M7 | `forma import openapi <spec> [--out]` → 从 components.schemas/paths 逆向生成 `.fm`（实体/api/类型映射/@id 主键保证），生成物通过 check_program（P1-#1） |
 | ✅ 已完成 | **GraphQL（schema + resolver 网关）** | M10 | `targets.api.framework: graphql` → `api-graphql` 构建步骤（无 `targets.api` 零产物）；DSL → `schema.graphql`（枚举/实体/正向对象关系/Create·Update Input/Query/Mutation，按各 api operations 裁剪；Decimal→String 同后端序列化契约）+ `src/schema.ts`（typeDefs 同源）+ `src/rest.ts`（服务端 REST 客户端，`REST_BASE` 可指向任意后端 target）+ `src/resolvers.ts`（委托 REST + 关系 resolver）+ `src/server.ts`（graphql-yoga 可运行）；安全语义由 REST 后端权威执行、网关透传 token；逆向关系留 v2（过滤器依赖与 N+1） |
 | 👁 P2 | gRPC（Protobuf 导出）/ tRPC | M11 | |
 
@@ -68,8 +68,8 @@ M11 Spring/Go/.NET、原生移动、小程序、工作流运行时、支付
 |---|---|---|---|
 | ✅ 首批 | **React + TanStack Router/Query/Table + shadcn/ui + Tailwind** | M4 | 校验 zod 与后端同源 |
 | ✅ 首批 | **i18n 资源生成**（react-i18next） | M4 | DSL 内 message → 语言包 |
-| 🔨 P1 | React Hook Form 适配 | M9 | 复杂表单 |
-| 🔨 P1 | 状态管理生成（Zustand / Pinia） | M9 | 从页面数据依赖派生 |
+| ✅ 已完成 | React Hook Form 适配 | M9 | `targets.frontend.usesRhf` opt-in；useForm/register/useController + 校验复用 validators.ts（P1-#5） |
+| ✅ 已完成 | 状态管理生成（Zustand） | M9 | `usesZustand` opt-in；store 从列表页数据依赖派生（filters/search），setter 签名兼容（P1-#6）。Pinia（Vue）留待 Vue 列表页引入过滤/搜索依赖面后跟进 |
 | ✅ 已完成 | **Vue 3 + Vue Router + Pinia + Element Plus** | M10 | `frontend.framework: vue` → 复用 React 契约；auth/命令/角色感知双端对齐 |
 | ✅ 已完成 | **Next.js（App Router / SSR 变体）** | M10 | `frontend.framework: nextjs`（或 `next`）→ `frontend-nextjs` 构建步骤；复用 web_react 的 `types_ts`/`validators_ts`/`api_ts`/`format_ts`；列表页 = Server Component（`src/api-server.ts` + `API_BASE` env + `force-dynamic`）；变更/命令 = Server Actions（`app/actions.ts` + `revalidatePath`）；表单 = client 组件复用 validators 同源校验；new/[id] 页按 api operations 裁剪；`next.config.mjs` rewrites `/api/*`；自带 CI（tsc + next build，无 vitest）；`tsc --noEmit` + `next build` 通过；默认（react）零变化 |
 | 👁 P2 | SvelteKit / Angular | M11 | |
@@ -80,9 +80,9 @@ M11 Spring/Go/.NET、原生移动、小程序、工作流运行时、支付
 | 优先级 | 技术 | 里程碑 | 说明 |
 |---|---|---|---|
 | ✅ 首批 | **Chart IR + ECharts Adapter + React Runtime** | V0.1（已落地） | `chart` 块 → 确定性 option + 按需注册运行时；十种图表类型词表 |
-| 🔨 P1 | Data Binding 完整化（分页/服务端聚合）+ Metric/Table widget | V0.2 | 大数据量走服务端聚合 |
-| 🔨 P1 | **Dashboard IR**（Grid/Flex 布局 + 筛选器 + 联动事件模型） | V0.3 | `page { dashboard ... }` |
-| 🔨 P1 | Theme / Preview / 浏览器渲染验证门 | V0.5 | 与 Studio v1 同一渲染源 |
+| ✅ 已完成 | Data Binding 完整化 + Metric/Table widget | V0.2 | cursor 源解包信封；`type metric`（KPI 卡）/`type table`（真实数据回退）；metric/table-only 工程不装 echarts（P1-#7） |
+| ✅ 已完成 | **Dashboard IR**（Grid 布局 + 筛选器 + 联动） | V0.3 | `page { dashboard { grid { <Chart> w N h N } filters [...] } }`；useMemo source 联动取数；Flutter/Vue/Expo 显式拒绝（P1-#8） |
+| ✅ 已完成 | Theme / Preview / 浏览器渲染验证门 | V0.5 | `theme dark|data-screen` token + Provider；`viz-preview.html` mock 自检渲染门（P1-#9） |
 | 👁 P2 | AntV 适配层（图分析/关系可视化）、GIS、金融/工业领域图表 | V0.6 | 同一 Chart IR 换 Adapter |
 | 👁 P2 | 移动端图表投影 | V0.6+ | Flutter 自绘/内嵌图 |
 
@@ -103,8 +103,8 @@ M11 Spring/Go/.NET、原生移动、小程序、工作流运行时、支付
 |---|---|---|---|
 | ✅ 首批 | **Auth 模块**（用户/角色/会话 + 登录注册页 + JWT/session 中间件） | M5 | `auth module { provider jwt }` |
 | ✅ 首批 | 审计日志 | M7 | `audit { action "…" }` |
-| 🔨 P1 | 文件上传 | M9 | `field Attachment` + `storage s3\|oss\|local` |
-| 🔨 P1 | 导入导出 | M9 | `export Order as csv\|xlsx` |
+| ✅ 已完成 | 文件上传 | M9 | `Attachment` 内建类型 + `@storage(provider, bucket)` 属性；local 落盘/Multipart 端点、s3/oss 显式 501；Web 文件输入（P1-#3） |
+| ✅ 已完成 | 导入导出 | M9 | `export <Api> as csv|xlsx` → 流式 CSV 端点（+ xlsx 501 集成点）、OpenAPI 契约、列表页导出按钮（P1-#4） |
 | ✅ 已完成 | **消息通知** | M10 | 字段属性 `@notify(channel, target, event)`（email/sms/webhook/log 四渠道；属性参数必须括号形式）；检查层 `dsl-notify-unknown-channel` / `dsl-notify-missing-target`（email/sms/webhook 必填）/ `dsl-notify-unknown-event`（事件引用已声明 command）；Rust 后端 `src/notify.rs`：NotifyRule 静态展开（运行时零 DSL 依赖）+ `fire(entity, event, id)`；command handler 成功后自动触发；v1 驱动：log 真实输出（tracing），email/sms/webhook 为占位集成点 |
 | ✅ 已完成 | **全文搜索（基线）** | M10 | 实体级 `searchable [f1, f2]` → MySQL `FULLTEXT KEY ft_{t}_{cols} WITH PARSER ngram`（MySQL 8 内置 ngram 分词，中文 bigram 可用）；检查层 `dsl-searchable-unknown-field` / `dsl-searchable-field-type`（仅 String/Text/Email）；迁移链 `add_fulltext`/`drop_fulltext`（风险 Low/Medium）+ 重放模拟器支持；应用层 q 搜索保持 LIKE 子串语义（对中文友好，零行为变化）。**余项**：外部引擎（Meilisearch/ES）适配与 MATCH AGAINST 查询模式为后续增强 |
 | ✅ 已完成 | **定时任务** | M10 | DSL `job <name> { cron "0 2 * * *" label {...} op Command }`；检查层 `dsl-job-cron-format`（5 字段/范围/列表/范围区间）+ `dsl-job-unknown-op`（api/command 名）+ `dsl-job-input-effect`（InputRef effect 拒绝——调度器无输入来源）+ `dsl-job-pre-unsupported`（复杂 pre 拒绝——fail-safe 不做全表 UPDATE）；MySQL `forma_jobs` 表（迁移链自动增量）+ 确定性 seed；Rust 后端 `jobs.rs`：进程内 30s 轮询调度器（cron 求值零依赖）、TARGETS 由 DSL 静态展开（运行时零 DSL 依赖）、管理端点 GET /api/jobs + POST trigger/enable/disable（挂受保护路由组）；IR bridge `Job` 节点 + job→command references 边 |
@@ -130,7 +130,7 @@ M11 Spring/Go/.NET、原生移动、小程序、工作流运行时、支付
 
 可视化与 DSL 同级：**写 `.fm` 必须能被看见**。Studio 是审阅面的图形投影，分三阶段：
 
-**M6 — Studio v1（实时只读预览）**
+**M6 — Studio v1（实时只读预览）** ✅ 已交付（`forma studio`：语义模型/语义图 API + 最小 Web UI，P1-#10）
 - `forma studio` 本地 Web 服务；DSL 变更刷新即见
 - 实体关系图（ER）：实体/字段/关系/索引，节点点击定位 DSL 源行
 - 页面原型：`table/form/detail` 用真实 shadcn 组件渲染（与 M4 emitter 同源组件，非手绘 mockup）
@@ -138,7 +138,7 @@ M11 Spring/Go/.NET、原生移动、小程序、工作流运行时、支付
 - 规则矩阵：字段校验/守卫/权限按实体×操作一览
 - 验收：仅通过 Studio 即可完整理解一个陌生项目的现状
 
-**M9 — Studio v2（双向编辑）**
+**M9 — Studio v2（双向编辑）** ✅ 已交付（UI 加字段/设必填/加表格页 → `POST /api/patch` → 补丁事务写回 `.fm`，P1-#10）
 - ER 图上增删字段/关系 → 写回 `.fm`（等价于一次语义补丁，走同一校验管线）
 - 页面原型上调整列/控件 → 写回 `page` 块
 - 诊断点击跳转源码
@@ -183,7 +183,7 @@ MIGRATIONS.md + SQL 重放模拟器）。验收：DDL 在 MySQL 8 直接执行�
 
 **M6 Studio v1 / M7 生态互通 / M8 AI 语义补丁闭环（diff 可视化 ✅ 已随 M1 交付：`forma diff` HTML/JSON 报告）**：见 §3、§4；AI 闭环验收——「Order 加付款状态」一条补丁，MySQL + Rust + React 三处同步 + 测试绿，AI 全程不接触目标代码。
 
-**M9 工程化 + Studio v2**：Docker（✅ 已完成：Dockerfile + compose + entrypoint + MySQL healthcheck）、上传/导出/审计、RHF/Zustand、迁移对接、Studio 双向编辑。
+**M9 工程化 + Studio v2**：✅ 全部完成——Docker 产物 / 上传 / 导出 / RHF / Zustand / Studio 双向编辑（P1-#2~#6、#10，均有独立回归测试与生成端编译验证）。
 
 **M10 横向扩栈 / M11 企业级**：见 §2 矩阵标注。
 
