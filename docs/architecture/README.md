@@ -169,14 +169,14 @@ breaking_change: false
 | ID | 主题 | 状态 | 一句话职责 |
 |---|---|---|---|
 | [RFC-0001](rfc/RFC-0001-architecture-overview.zh-CN.md) | Architecture Overview | Accepted | 全局边界、依赖方向、Tier 分层 |
-| [RFC-0002](rfc/RFC-0002-specification-system.zh-CN.md) | Specification System | Proposed | 规格领域划分、语法元规则、标准互通保真度 |
+| [RFC-0002](rfc/RFC-0002-specification-system.zh-CN.md) | Specification System | Implemented | 规格领域划分、语法元规则、标准互通保真度 |
 | [RFC-0003](rfc/RFC-0003-semantic-core.zh-CN.md) | Semantic Core | Implemented | IR 稳定契约、类型系统、Stable Identity、依赖图 |
 | [RFC-0004](rfc/RFC-0004-capability-system.zh-CN.md) | Capability System | Implemented | Capability Manifest、注册/发现/验证、三层 IR |
 | [RFC-0005](rfc/RFC-0005-application-runtime.zh-CN.md) | Application Runtime | Implemented | 运行时模块契约、配置分层、错误契约、产物独立性 |
 | [RFC-0006](rfc/RFC-0006-agent-engineering.zh-CN.md) | Agent Engineering | Implemented | 任务型工具面、补丁事务、风险分级、人工审批门 |
 | [RFC-0007](rfc/RFC-0007-build-and-artifact.zh-CN.md) | Build & Artifact | Implemented | 产物三分类归属、产物清单、冲突检测、增量与可复现构建 |
 | [RFC-0008](rfc/RFC-0008-security-and-governance.zh-CN.md) | Security & Governance | Implemented | 权限四层模型、密钥与审计契约、验证门槛映射 |
-| [RFC-0009](rfc/RFC-0009-developer-experience-and-studio.zh-CN.md) | Developer Experience | Proposed | CLI 契约、诊断统一结构、Studio 阶段与边界 |
+| [RFC-0009](rfc/RFC-0009-developer-experience-and-studio.zh-CN.md) | Developer Experience | Implemented | CLI 契约、诊断统一结构、Studio 阶段与边界 |
 | [RFC-0010](rfc/RFC-0010-visualization.zh-CN.md) | Visualization | Accepted | Chart IR、ECharts Adapter、React Runtime（领域范例） |
 
 ### 4.2 现有 ADR 一览
@@ -362,7 +362,7 @@ RFC-0004 的可扩容机制**已落地为代码**，不是纸面设计：
 |---|---|---|---|
 | 1 | RFC Governance（本文件） | 确定 RFC 管理规则 | ✅ 已交付 |
 | 2 | Architecture Overview（RFC-0001） | 确定全局架构边界 | ✅ 已交付 |
-| 3 | Core Specification（RFC-0003 + `spec:ir`） | 稳定 IR / Identity / Type System | ✅ 文档已交付，实现待落地 |
+| 3 | Core Specification（RFC-0003 + `spec:ir`） | 稳定 IR / Identity / Type System | ✅ 已交付并实现（IR 1.2.0 / M1–M4 / 桥接 / 影响闭包） |
 | 4 | Capability Specification（RFC-0004） | 建立能力扩展机制 | ✅ 文档已交付 |
 | 5 | Adapter Contract（RFC-0003 §8.4 + RFC-0007） | 建立技术适配契约 | ✅ 文档已交付 |
 | 6 | Runtime Contract（RFC-0005） | 明确软件运行模型 | ✅ 文档已交付 |
@@ -371,11 +371,15 @@ RFC-0004 的可扩容机制**已落地为代码**，不是纸面设计：
 | 9 | Specification System（RFC-0002） | 规格领域与标准互通契约 | ✅ 文档已交付 |
 | 10 | Security & Governance（RFC-0008） | 权限、密钥、审计、验证门槛 | ✅ 文档已交付 |
 | 11 | Developer Experience（RFC-0009） | CLI 契约、Studio | ✅ 文档已交付 |
-| 12 | Conformance Suite | 兼容性测试 | ✅ 已建（[conformance/](conformance/README.md)：语义/适配器/运行时/兼容性四层矩阵，承诺 → 证明测试映射；58 套件 / 368 测试全绿） |
-| 13 | Reference Application | 用真实应用验证架构 | 🔨 待建 |
+| 12 | Conformance Suite | 兼容性测试 | ✅ 已建（[conformance/](conformance/README.md)：语义/适配器/运行时/兼容性四层矩阵，承诺 → 证明测试映射；67 套件 / 414 测试全绿） |
+| 13 | Reference Application | 用真实应用验证架构 | ✅ 已满足：`examples/school`（多版本迁移链 + 种子 + 三端产物）+ `examples/access-depth` / `cursor-pagination` + [case-protocol](../case-protocol.zh-CN.md) V1–V16 矩阵 + CI `e2e`（真 MySQL 8）/ `flutter` / `web` / `generated-backend` |
 
-> 基础 RFC（0001–0009）已全部起草完成（状态：`Proposed`，待审查转 `Accepted`）。
-> **文档齐备 ≠ 架构可扩容**——Phase 1 的三条完成标准仍需靠实现与 Conformance 测试证明。
+> 基础 RFC（0001–0009）状态已于 2026-11-08 逐份核实：0001/0010 为 `Accepted`，
+> 0002–0009 为 `Implemented`（0002 的 S4、0004 的 Deprecation 等未覆盖项在各 RFC §16 保留 `[ ]`）。
+> **文档齐备 ≠ 架构可扩容**——Phase 1 的三条完成标准靠实现与 Conformance 测试证明：
+> 2026-11-08 已把 10 份 RFC 的 §16 验收项逐条对照回归：本阶段核实的 6 份共 35 项，
+> **27 项补上证据并勾选、8 项如实保留 `[ ]`** 并登记
+> [gap-backlog](roadmap/gap-backlog.zh-CN.md)「Phase 1 §16 未覆盖项」（G-1…G-8）。
 
 **Phase 1 完成标准不是文档数量，而是**：
 

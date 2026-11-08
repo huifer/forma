@@ -2,10 +2,10 @@
 id: RFC-0001
 title: Architecture Overview and Module Boundaries
 status: Accepted
-version: 1.0
+version: 1.1
 authors: [forma-maintainers]
 created: 2026-11-04
-updated: 2026-11-04
+updated: 2026-11-08
 domain: architecture
 supersedes: []
 superseded_by: []
@@ -174,9 +174,15 @@ Stable Identity 是跨版本稳定的标识符，由 IR 节点承载（`NodeKind
 
 ## 16. Conformance Requirements
 
-- [ ] `forma docs validate` 对所有 RFC 通过（工具就绪后）。
+> 核实日期 2026-11-08（Phase 1 收口）：有回归 / 实现证据才勾选；未覆盖项保留 `[ ]`
+> 并登记 [gap-backlog](../roadmap/gap-backlog.zh-CN.md)「Phase 1 §16 未覆盖项」。
+
+- [x] `forma docs validate` 对所有 RFC 通过（工具就绪后）。
+  证据：CI `docs` job + `tests/docs_validate.rs`；当前 29 篇治理文档 0 error / 0 warning。
 - [ ] 依赖图无 Tier 反向边（见 §7.3）。
-- [ ] 新增 Capability 的 PR 不修改 Semantic Core。
+  ⚠️ 未覆盖：`forma docs graph` 输出依赖图，但没有「Tier 反向边」的自动断言；已登记 gap-backlog。
+- [x] 新增 Capability 的 PR 不修改 Semantic Core。
+  证据：`tests/capability.rs::adding_a_capability_requires_no_core_change`（核心产物 byte 级不变）。
 
 ## 17. Acceptance Criteria
 
@@ -199,3 +205,4 @@ Stable Identity 是跨版本稳定的标识符，由 IR 节点承载（`NodeKind
 | 版本 | 日期 | 摘要 |
 |---|---|---|
 | 1.0 | 2026-11-04 | 初版采纳，定义边界、分层与依赖红线 |
+| 1.1 | 2026-11-08 | Phase 1 §16 验收核实：逐条对照回归测试与实现证据并勾选；未覆盖项保留 `[ ]` 并登记 [gap-backlog](../roadmap/gap-backlog.zh-CN.md)「Phase 1 §16 未覆盖项」；配套补齐生成后端 `/health` `/ready`（RFC-0005）与产物原子写 / 内容跳过（RFC-0007） |

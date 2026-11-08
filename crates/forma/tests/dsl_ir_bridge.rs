@@ -570,3 +570,18 @@ fn mcp_check_reports_located_diagnostics() {
     assert!(d["line"].as_u64().unwrap_or(0) > 0, "{out}");
     assert_eq!(out["errors"], 1, "{out}");
 }
+
+#[test]
+fn lowering_output_is_byte_identical_across_runs() {
+    // RFC-0003 §16：同一 Program 两次 Lowering / 检查结果 byte 级一致
+    let dir = tmp_dir("m3-determinism");
+    write_project(&dir, BRIDGE_FM);
+    let call = || {
+        let args = serde_json::json!({});
+        forma::mcp::call_tool(&dir, "forma_graph", args.as_object().unwrap()).unwrap()
+    };
+    let a = serde_json::to_string(&call()).unwrap();
+    let b = serde_json::to_string(&call()).unwrap();
+    assert_eq!(a, b, "lower_to_graph must be deterministic");
+    assert!(a.contains("entity"), "{a}");
+}

@@ -601,18 +601,26 @@ fn audit_event(
 
 /// 把工程源（manifest + source globs 命中的 .fm）拷贝到临时目录，供试运行。
 ///（审批门与 `forma_plan` 共用同一实现——不允许漂移。）
+/// 规划副本的进程内序号（并行 Agent 会话 / 并行测试不重名）。
+static PLANNING_COPY_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 pub fn planning_copy(
     project_dir: &Path,
     dir: &Path,
     source: &[String],
 ) -> Result<std::path::PathBuf> {
+    // pid + 纳秒不足以在多线程下唯一：同一纳秒两个会话会拿到同名副本并互相覆盖
+    // （表现为 `forma.yaml: root must be a mapping`）。加进程内序号兜底。
+    let seq = PLANNING_COPY_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let tmp = std::env::temp_dir().join(format!(
-        "forma-plan-{}-{}",
+        "forma-plan-{}-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)?
-            .as_nanos()
+            .as_nanos(),
+        seq
     ));
+    let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(&tmp)?;
     // manifest
     let manifest_src = dir.join("forma.yaml");

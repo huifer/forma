@@ -2,7 +2,7 @@
 id: RFC-0004
 title: Capability System and Extension Architecture
 status: Implemented
-version: 1.0
+version: 1.1
 authors: [forma-maintainers]
 created: 2026-11-04
 updated: 2026-11-05
@@ -221,9 +221,17 @@ extensions:
 
 ## 16. Conformance Requirements
 
-- [ ] 新增 Capability 的 PR 不修改 Semantic Core（Tier 1 红线）。
+> 核实日期 2026-11-08（Phase 1 收口）。
+
+- [x] 新增 Capability 的 PR 不修改 Semantic Core（Tier 1 红线）。
+  证据：`tests/capability.rs::adding_a_capability_requires_no_core_change`。
 - [ ] 每个 Capability 提供 Manifest 且含 §8.4 全部 10 项契约。
+  ⚠️ 部分：`CapabilityManifest` / `CapabilitySpec` 已覆盖 provides、consumes、adapters、runtime、
+  dependencies、permissions、compatibility、conformance；Discovery / Registration / Versioning 由
+  `CapabilityRegistry` 承担（`tests/capability.rs`），但 **Deprecation 尚无结构化字段**，且没有
+  「10 项契约逐项」自动断言。已登记 gap-backlog。
 - [ ] 未知 IR 扩展被保留且不被擅解释（测试覆盖）。
+  ⚠️ 未覆盖：spec:compatibility §8 与 spec:ir §X3 有规范性约束，但无自动断言；已登记 gap-backlog。
 
 ## 17. Acceptance Criteria
 
@@ -248,3 +256,4 @@ extensions:
 |---|---|---|
 | 1.0 | 2026-11-04 | 初版提案，定义 Capability Manifest / 三层 IR / 扩展策略 |
 | 1.0 | 2026-11-05 | 状态提升为 Accepted；关联 `spec:manifests` / `spec:ir` 与可视化 Manifest 草案 |
+| 1.1 | 2026-11-08 | Phase 1 §16 验收核实：逐条对照回归测试与实现证据并勾选；未覆盖项保留 `[ ]` 并登记 [gap-backlog](../roadmap/gap-backlog.zh-CN.md)「Phase 1 §16 未覆盖项」；配套补齐生成后端 `/health` `/ready`（RFC-0005）与产物原子写 / 内容跳过（RFC-0007） |

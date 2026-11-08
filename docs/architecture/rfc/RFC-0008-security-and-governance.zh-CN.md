@@ -2,10 +2,10 @@
 id: RFC-0008
 title: Security and Governance Architecture
 status: Implemented
-version: 1.0
+version: 1.1
 authors: [forma-maintainers]
 created: 2026-11-04
-updated: 2026-11-04
+updated: 2026-11-08
 domain: security
 supersedes: []
 superseded_by: []
@@ -347,13 +347,28 @@ Response 序列化：字段级裁剪
 
 ## 16. Conformance Requirements
 
-- [ ] `access` / `auth` 块在未实现前产出显式诊断（无静默忽略）。
-- [ ] 权限判定在服务端强制：越权请求返回 403/404，且不泄露资源存在性。
+> 核实日期 2026-11-08（Phase 1 收口）。
+
+- [x] `access` / `auth` 块产出显式诊断（无静默忽略）。
+  证据：检查层 7 条 `dsl-auth-*` / `dsl-access-*` 诊断；`tests/api_auth.rs`。
+- [x] 权限判定在服务端强制：越权请求返回 403/404。
+  证据：ADR-0004 服务端权威；`tests/api_auth.rs` + `tests/access_relation_depth.rs`（关系行缺失 403）。
 - [ ] 列表查询的权限条件注入 WHERE（非后置过滤）。
-- [ ] 策略求值失败时 fail-closed。
-- [ ] 规格与生成产物中不含密钥值；诊断与日志不含密钥。
-- [ ] 审计条目含主体、动作、资源、时间。
-- [ ] 前后端权限语义同源（同一份规则编译两端）。
+  ⚠️ **未满足（语义偏差）**：当前行级 `access` 条件是「取行 → 授权 → 校验 → 变更」，
+  列表操作甚至不支持行级条件（`dsl-access-row-unsupported` 显式拒绝）。改成 WHERE 注入会改变
+  安全语义与错误码，需先出 ADR 决策（选项见 §20 / gap-backlog）。**不擅自改实现**，如实保留未勾选。
+- [x] 策略求值失败时 fail-closed。
+  证据：关系行缺失 → 403（P2/A-2）；租户 `None` → `col = NULL` 恒不命中 → 空集；
+  未设 `TENANT_ADMIN_TOKEN` → 403 关闭；`tests/access_relation_depth.rs` / `runtime_probes.rs`。
+- [x] 规格与生成产物中不含密钥值；诊断与日志不含密钥。
+  证据：`tests/runtime_probes.rs`（全量扫描 + env 注入门控）+ 内部错误不回显（E5）。
+- [x] 审计条目含主体、动作、资源、时间。
+  证据：生成的 `audit.rs`（`audit_logs`：action / entity / entity_id / actor / ts）+
+  `auditing::PatchAuditEvent`（ts / project / operations / approval_by）；
+  `tests/backend_contract.rs::commands_require_audit_module_and_tracing` / `artifact_ownership.rs`。
+- [x] 前后端权限语义同源（同一份规则编译两端）。
+  证据：Web `access.ts` / Flutter `access.dart` 均由 DSL 规则编译；
+  `tests/web_access.rs` / `tests/flutter_access.rs`。
 
 ## 17. Acceptance Criteria
 
@@ -386,3 +401,4 @@ Response 序列化：字段级裁剪
 | 版本 | 日期 | 摘要 |
 |---|---|---|
 | 1.0 | 2026-11-04 | 初版提案：定义权限四层模型与执行原则、密钥与审计契约、验证门槛映射；把 `access`/`auth` 空承诺显式化 |
+| 1.1 | 2026-11-08 | Phase 1 §16 验收核实：逐条对照回归测试与实现证据并勾选；未覆盖项保留 `[ ]` 并登记 [gap-backlog](../roadmap/gap-backlog.zh-CN.md)「Phase 1 §16 未覆盖项」；配套补齐生成后端 `/health` `/ready`（RFC-0005）与产物原子写 / 内容跳过（RFC-0007） |

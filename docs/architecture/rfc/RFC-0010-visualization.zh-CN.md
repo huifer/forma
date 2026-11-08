@@ -788,11 +788,11 @@ V0.1 已落地的断言见 `crates/forma/tests/visualization.rs`。
 | 版本 | 交付内容 | 状态 |
 |---|---|---|
 | V0.1 | Chart IR、十种图表类型词表、ECharts Adapter（确定性投影 + 按需注册）、React Runtime、页面挂载、MCP 三工具、23 条验收测试 | **已落地** |
-| V0.2 | Data Binding 完整化（分页/服务端聚合）、Metric Card、Table widget | 规划 |
-| V0.3 | Dashboard IR、Grid/Flex 布局、响应式断点 | 规划 |
+| V0.2 | Data Binding 完整化（分页/服务端聚合）、Metric Card、Table widget | **已落地**（metric/table + cursor 源解包；服务端聚合阈值见 §16 未决） |
+| V0.3 | Dashboard IR、Grid/Flex 布局、响应式断点 | **已落地**（dashboard grid + 筛选联动；Flex / 响应式断点未做，见 §16 未决） |
 | V0.4 | Tooltip/Legend/Filter/Drill-down/联动事件模型 | 规划 |
-| V0.5 | Theme、Preview、Runtime Verification（浏览器渲染门） | 规划 |
-| V0.6 | AntV Adapter、领域图表扩展（GIS / 金融 / 工业监控）、移动端图表 | 规划 |
+| V0.5 | Theme、Preview、Runtime Verification（浏览器渲染门） | **已落地**（theme dark/data-screen + preview + 浏览器渲染门，回归 `tests/visualization_v05.rs`） |
+| V0.6 | AntV Adapter、领域图表扩展（GIS / 金融 / 工业监控）、移动端图表 | 规划（BI 语义建模单独立项；目标扩栈已撤销，不排期） |
 
 ### V0.1 落地记录（实现与 RFC 的偏差均已回写正文）
 

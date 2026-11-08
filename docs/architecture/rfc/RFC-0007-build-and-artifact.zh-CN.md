@@ -2,10 +2,10 @@
 id: RFC-0007
 title: Build and Artifact System
 status: Implemented
-version: 1.0
+version: 1.1
 authors: [forma-maintainers]
 created: 2026-11-04
-updated: 2026-11-04
+updated: 2026-11-08
 domain: build
 supersedes: []
 superseded_by: []
@@ -358,13 +358,26 @@ spec:
 
 ## 16. Conformance Requirements
 
+> 核实日期 2026-11-08（Phase 1 收口）。
+
 - [ ] 全部 9 个 emitter 的产物均带 `@generated` 头。
+  ⚠️ 部分：主要 emitter 已带（如 `tests/vue.rs` 断言），但 `package.json` / `README.md` /
+  CI 模板等工程化产物没有；缺「全产物」系统断言。已登记 gap-backlog。
 - [ ] 全部 9 个 emitter 均使用内容哈希跳过写入；连续两次构建零文件写入。
-- [ ] 全部产物写入为原子写（临时文件 + rename）。
-- [ ] 产物清单覆盖全部生成产物，含 generator id/version 与来源规格。
-- [ ] 人工修改过的生成文件不被覆盖，且产生冲突诊断。
-- [ ] 产物内容不含时间戳等非确定性内容（清单的 `generatedAt` 除外）。
-- [ ] 相同规格 + 相同锁定的两次构建，产物 byte 级一致。
+  ⚠️ 部分：`util::write_text_changed` 统一提供内容哈希跳过（`tests/artifact_atomic_write.rs`），
+  但部分 emitter 直接用 `fs::write`，未逐一覆盖；缺逐 emitter 断言。已登记 gap-backlog。
+- [x] 全部产物写入为原子写（临时文件 + rename）（2026-11-08 Phase 1 补齐）。
+  证据：`util::write_text_changed` 同目录临时文件 + `fs::rename`；
+  `tests/artifact_atomic_write.rs::atomic_write_leaves_no_temp_files_and_creates_parents`。
+  边界：POSIX rename 语义（CI 运行于 ubuntu / macos）。
+- [x] 产物清单覆盖全部生成产物，含 generator id/version 与来源规格。
+  证据：`ArtifactEntry.source`（P2/A-6）；`tests/artifact_ownership.rs::manifest_entries_record_source_provenance`。
+- [x] 人工修改过的生成文件不被覆盖，且产生冲突诊断。
+  证据：`artifacts::snapshot_protected` / `restore_protected`；`tests/artifact_ownership.rs`。
+- [x] 产物内容不含时间戳等非确定性内容（清单的 `generatedAt` 除外）。
+  证据：`tests/build.rs`（连续两次构建零变更）+ `tests/seed_flutter.rs`（确定性种子）。
+- [x] 相同规格 + 相同锁定的两次构建，产物 byte 级一致。
+  证据：`tests/build.rs` + `tests/artifact_atomic_write.rs::consecutive_builds_do_not_rewrite_unchanged_artifacts`。
 
 ## 17. Acceptance Criteria
 
@@ -395,3 +408,4 @@ spec:
 | 版本 | 日期 | 摘要 |
 |---|---|---|
 | 1.0 | 2026-11-04 | 初版提案：定义产物三类归属、产物清单、冲突检测（人工修改不静默覆盖）、语义级增量与可复现构建 |
+| 1.1 | 2026-11-08 | Phase 1 §16 验收核实：逐条对照回归测试与实现证据并勾选；未覆盖项保留 `[ ]` 并登记 [gap-backlog](../roadmap/gap-backlog.zh-CN.md)「Phase 1 §16 未覆盖项」；配套补齐生成后端 `/health` `/ready`（RFC-0005）与产物原子写 / 内容跳过（RFC-0007） |

@@ -2,10 +2,10 @@
 id: RFC-0003
 title: Semantic Core Architecture
 status: Implemented
-version: 1.0
+version: 1.1
 authors: [forma-maintainers]
 created: 2026-11-04
-updated: 2026-11-04
+updated: 2026-11-08
 domain: semantic-core
 supersedes: []
 superseded_by: []
@@ -326,9 +326,12 @@ pub trait Lower {
 
 ## 15. Implementation Plan
 
-> **实施进度（2026-11-05 更新）**：M2 的「`Json` 入内建清单」子项已完成（`BUILTIN_TYPES` 11 型）；
-> **M4 已完成**——CLI 与 MCP 统一经 `engine::check_project` 分发，DSL 工程不再假绿；
-> M1 / M2 其余子项 / M3 仍未开始。
+> **实施进度（2026-11-08 逐份核实）**：M1–M4 **全部完成**——声明级 `file`/`line`、
+> `IR_VERSION` 1.2.0、`BUILTIN_TYPES` 12 型四目标映射、`dsl::lower` 单向桥接（节点 URI 与联邦同构）、
+> CLI/MCP 统一经 `engine::check_project` 分发；阶段 4 的影响闭包已接入 Agent 协议
+> （`forma_get_context` / `forma_plan`）。
+> **阶段 3 未单独交付**：`spec:ir` / `spec:types` 是正式 Markdown 规范，但没有机器可读
+> JSON Schema 文件；已登记 [gap-backlog](../roadmap/gap-backlog.zh-CN.md)（G-10）。
 
 | 阶段 | 交付物 | 依赖 |
 |---|---|---|
@@ -339,13 +342,24 @@ pub trait Lower {
 
 ## 16. Conformance Requirements
 
-- [ ] `forma check` 与 `forma validate` 对同一 DSL 工程给出一致结论（含退出码）。
-- [ ] 含 `error` 级诊断的 DSL 工程，`forma validate` 必须非零退出（反假绿断言）。
-- [ ] `BUILTIN_TYPES` 与各 emitter 的类型映射集合一致（新增类型须三端同步，否则测试失败）。
-- [ ] 全部 `dsl-*` 诊断码携带 `file` + `line`。
-- [ ] 同一 `Program` 两次 Lowering / 检查结果 byte 级一致。
-- [ ] DSL 侧节点/边集合与联邦 `UnifiedSemanticGraph` 同构（同一实体得到同一 StableId 字符串）。
-- [ ] 新增 Capability / Adapter 的 PR 不修改 Semantic Core（Tier 1 红线，RFC-0004 §16）。
+> 核实日期 2026-11-08（Phase 1 收口）：逐条对照实现与回归。
+
+- [x] `forma check` 与 `forma validate` 对同一 DSL 工程给出一致结论（含退出码）。
+  证据：`engine::check_project` 单一分发点；`tests/dsl_validate.rs`。
+- [x] 含 `error` 级诊断的 DSL 工程，`forma validate` 必须非零退出（反假绿断言）。
+  证据：`tests/dsl_validate.rs::dsl_project_with_semantic_error_is_reported`（P0-4 修复）。
+- [x] `BUILTIN_TYPES` 与各 emitter 的类型映射集合一致（新增类型须三端同步，否则测试失败）。
+  证据：`tests/dsl_ir_bridge.rs::builtin_types_have_mappings_in_all_targets`（逐型四目标断言）。
+- [x] 全部 `dsl-*` 诊断码携带 `file` + `line`。
+  证据：声明级 `Origin`；`tests/dsl_ir_bridge.rs::every_dsl_diagnostic_has_a_location`。
+- [x] 同一 `Program` 两次 Lowering / 检查结果 byte 级一致。
+  证据：`tests/dsl_ir_bridge.rs::lowering_output_is_byte_identical_across_runs` +
+  `tests/adapter_roundtrip.rs::repeated_check_program_is_deterministic`。
+- [x] DSL 侧节点/边集合与联邦 `UnifiedSemanticGraph` 同构（同一实体得到同一 StableId 字符串）。
+  证据：`tests/dsl_ir_bridge.rs::bridge_produces_stable_ids_and_source_refs` /
+  `bridge_produces_dependency_edges`。
+- [x] 新增 Capability / Adapter 的 PR 不修改 Semantic Core（Tier 1 红线，RFC-0004 §16）。
+  证据：`tests/capability.rs` + 各 target 的「默认零变化」回归（`tests/postgres.rs` / `sqlite.rs` / `vue.rs` / `expo.rs` 等）。
 
 ## 17. Acceptance Criteria
 
@@ -380,3 +394,4 @@ pub trait Lower {
 | 版本 | 日期 | 摘要 |
 |---|---|---|
 | 1.0 | 2026-11-04 | 初版提案：定义语义内核契约（Stable Identity / Type System / Source Ref / Dependency / IR Version）、双 IR 收敛决策与四步迁移路径 |
+| 1.1 | 2026-11-08 | Phase 1 §16 验收核实：逐条对照回归测试与实现证据并勾选；未覆盖项保留 `[ ]` 并登记 [gap-backlog](../roadmap/gap-backlog.zh-CN.md)「Phase 1 §16 未覆盖项」；配套补齐生成后端 `/health` `/ready`（RFC-0005）与产物原子写 / 内容跳过（RFC-0007） |

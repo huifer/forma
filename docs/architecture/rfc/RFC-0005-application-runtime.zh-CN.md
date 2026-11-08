@@ -2,10 +2,10 @@
 id: RFC-0005
 title: Application Runtime
 status: Implemented
-version: 1.0
+version: 1.1
 authors: [forma-maintainers]
 created: 2026-11-04
-updated: 2026-11-04
+updated: 2026-11-08
 domain: runtime
 supersedes: []
 superseded_by: []
@@ -351,14 +351,31 @@ Runtime Module 清单随产物分发（可置于产物目录的 `runtime.manifes
 
 ## 16. Conformance Requirements
 
-- [ ] 后端与前端的错误结构一致（错误码 / i18n 消息 / 字段级错误），且有契约测试。
-- [ ] 错误码为稳定 API，跨版本不变（新增为 minor）。
-- [ ] 产物中无硬编码的环境相关配置。
+> 核实日期 2026-11-08（Phase 1 收口）。
+
+- [x] 后端与前端的错误结构一致（错误码 / i18n 消息 / 字段级错误），且有契约测试。
+  证据：`tests/error_contract.rs`（E1–E5 / Web / Flutter / OpenAPI 同形）。
+- [x] 错误码为稳定 API，跨版本不变（新增为 minor）。
+  证据：生成的 `error.rs::error_code` 模块 + `status_for` 单点映射；`tests/error_contract.rs`。
+  边界：「跨版本不变」由 spec:compatibility 的弃用窗口约束，暂无版本化快照断言。
+- [x] 产物中无硬编码的环境相关配置。
+  证据：`DATABASE_URL` / `PORT` / `JWT_SECRET` / `REST_BASE` 均经环境变量读取；
+  `tests/runtime_probes.rs::generated_artifacts_do_not_hardcode_secret_values`。
 - [ ] 密钥仅经 Secret Provider 注入，产物 / 日志 / 审计 / 清单中密钥出现次数为 0。
-- [ ] 产物声明 Runtime 版本范围与兼容矩阵。
-- [ ] 生成的应用提供 `/health` 与 `/ready`。
-- [ ] 产物可在无 Forma 环境下独立构建（CI 断言）。
+  ⚠️ 部分：已保证「不硬编码密钥值」（上条 + `tests/runtime_probes.rs`），但**独立 Secret Provider
+  抽象未建模**（见 §18 开放问题）。已登记 gap-backlog，不假绿。
+- [x] 产物声明 Runtime 版本范围与兼容矩阵。
+  证据：`BuildReport.ir_version`（CLI 打印 / MCP `irVersion`）+ Capability `compatibility.ir/runtime`
+  构建期校验（`tests/capability.rs::incompatible_ir_version_is_rejected`）。
+- [x] 生成的应用提供 `/health` 与 `/ready`（2026-11-08 Phase 1 补齐）。
+  证据：`tests/runtime_probes.rs`；两个 router 分支共用 `health_routes`，`/ready` 真实探测数据库，
+  不可达返回 503；CI `generated-backend` 对两个生成工程 `cargo check`。
+- [x] 产物可在无 Forma 环境下独立构建（CI 断言）。
+  证据：生成工程自带 `Cargo.toml` / `package.json`；CI `generated-backend` job 与 `web` job
+  在生成目录内独立执行 `cargo check` / npm build。
 - [ ] 配置 / 密钥解析失败时 fail-closed。
+  ⚠️ 部分：`/ready`（503）与 `TENANT_ADMIN_TOKEN` 未设置（403）已 fail-closed；
+  但 `DATABASE_URL` 缺失仍是启动期 `expect` panic，不是优雅降级。已登记 gap-backlog。
 
 ## 17. Acceptance Criteria
 
@@ -391,3 +408,4 @@ Runtime Module 清单随产物分发（可置于产物目录的 `runtime.manifes
 | 版本 | 日期 | 摘要 |
 |---|---|---|
 | 1.0 | 2026-11-04 | 初版提案：定义 Runtime Module 契约、配置分层、Secret Provider、统一错误契约、生命周期约定与产物独立性判据 |
+| 1.1 | 2026-11-08 | Phase 1 §16 验收核实：逐条对照回归测试与实现证据并勾选；未覆盖项保留 `[ ]` 并登记 [gap-backlog](../roadmap/gap-backlog.zh-CN.md)「Phase 1 §16 未覆盖项」；配套补齐生成后端 `/health` `/ready`（RFC-0005）与产物原子写 / 内容跳过（RFC-0007） |

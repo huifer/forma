@@ -4,20 +4,56 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// 原子写临时文件的进程内序号（并行构建 / 并行测试不重名）。
+static WRITE_SEQ: AtomicU64 = AtomicU64::new(0);
 
 pub fn read_text(path: &Path) -> anyhow::Result<String> {
     fs::read_to_string(path).with_context(|| format!("cannot read {}", path.display()))
 }
 
-pub fn write_text(path: &Path, content: &str) -> anyhow::Result<()> {
+/// RFC-0007 §16：**内容哈希跳过写入 + 原子写**。
+///
+/// - 磁盘内容经 `sha256_hex`（换行归一化口径）比较未变 → 返回 `false`，零写入；
+///   连续两次构建不触碰产物文件（mtime 不变），人工修改也不会被无谓覆盖。
+/// - 写入走「同目录临时文件 → `fs::rename`」：读者只可能看到旧文件或完整新文件，
+///   不会看到半截内容。临时文件名带 pid + 纳秒 + 进程内序号，避免并行竞态。
+///
+/// 返回是否真的写了磁盘（供回归测试与构建报告消费）。
+pub fn write_text_changed(path: &Path, content: &str) -> anyhow::Result<bool> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("cannot create dir {}", parent.display()))?;
     }
-    let mut f =
-        fs::File::create(path).with_context(|| format!("cannot write {}", path.display()))?;
-    f.write_all(content.as_bytes())?;
-    Ok(())
+    if let Ok(old) = fs::read_to_string(path) {
+        if crate::util::sha256_hex(&old) == crate::util::sha256_hex(content) {
+            return Ok(false);
+        }
+    }
+    let seq = WRITE_SEQ.fetch_add(1, Ordering::Relaxed);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "artifact".into());
+    let tmp = path.with_file_name(format!(".{name}.tmp-{}-{nanos}-{seq}", std::process::id()));
+    {
+        let mut f =
+            fs::File::create(&tmp).with_context(|| format!("cannot write {}", tmp.display()))?;
+        f.write_all(content.as_bytes())?;
+        f.sync_all()?;
+    }
+    // POSIX rename 为原子替换；CI 运行于 ubuntu / macos。
+    fs::rename(&tmp, path).with_context(|| format!("cannot rename into {}", path.display()))?;
+    Ok(true)
+}
+
+pub fn write_text(path: &Path, content: &str) -> anyhow::Result<()> {
+    write_text_changed(path, content).map(|_| ())
 }
 
 pub fn exists(path: &Path) -> bool {

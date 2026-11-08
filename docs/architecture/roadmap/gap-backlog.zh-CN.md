@@ -122,6 +122,37 @@ breaking_change: false
 
 ---
 
+## Phase 1 §16 未覆盖项（2026-11-08 逐份核实）
+
+> 来源：治理总入口 §10 的 Phase 1 三条完成标准 + 各 RFC §16 Conformance Requirements。
+> 规则同本表：**只在实现并通过回归后关闭**；下列项已在对应 RFC §16 保留 `[ ]`，不假绿。
+
+| # | 来源 | 缺口 | 处置建议 |
+|---|---|---|---|
+| G-1 | RFC-0001 §16-2 | 依赖图缺「Tier 反向边」自动断言 | 在 `forma docs graph --json` 输出上补一条断言（低风险，择机） |
+| G-2 | RFC-0004 §16-2 | Capability Manifest 缺 Deprecation 结构化字段与「10 项契约」逐项断言 | 补 `deprecated` / `superseded_by` 字段 + 逐项回归（需改 manifest schema，走 minor） |
+| G-3 | RFC-0004 §16-3 | 「未知 IR 扩展保留且不被擅解释」无自动断言 | 补 fixture：带未知 `extensions.*` 的 DSL → IR 往返后字段仍在 |
+| G-4 | RFC-0005 §16-4 | 独立 Secret Provider 抽象未建模（当前仅 env 变量注入） | §18 开放问题：先定接口归属（Runtime RFC 还是本 RFC 扩展点）再实现 |
+| G-5 | RFC-0005 §16-8 | `DATABASE_URL` 缺失为启动期 `expect` panic，非优雅 fail-closed | 改为结构化启动错误（错误码 + 日志），保持 0 依赖 |
+| G-6 | RFC-0007 §16-1 | `package.json` / `README` / CI 模板等工程化产物无 `@generated` 头 | 统一头注释格式（JSON/YAML 用 `#` 不合法，需按格式定策略） |
+| G-7 | RFC-0007 §16-2 | 部分 emitter 直接 `fs::write`，未走 `util::write_text_changed` 的哈希跳过 | 逐 emitter 收敛到统一写入函数（与 G-6 一并做） |
+| G-8 | RFC-0008 §16-3 | 列表查询的权限条件未注入 WHERE（当前为取行后授权，list 甚至不支持行级条件） | **需 ADR 决策，不擅自改语义**（选项见下） |
+| G-9 | RFC-0002 §16-1（P3 遗留） | 诊断未按规格领域拆分为独立 Validator / 命名空间 | §18 开放问题，按需立项 |
+| G-10 | RFC-0003 §15 阶段 3 | `spec:ir` / `spec:types` 是正式 Markdown 规范，但无机器可读 JSON Schema | 若需机器消费再立项；当前编译期校验由 `dsl::check_program` 承担 |
+| G-11 | RFC-0010 模板 | 领域 RFC 沿用旧章节编号，`docs lint` 报 6 条 `section-missing` **info**（非阻断） | 保留历史结构；若统一 20 节模板需整体重排 902 行，择机 |
+
+### G-8 的 ADR 选项（RFC-0008 §16-3）
+
+| 选项 | 内容 | 影响 |
+|---|---|---|
+| **A（建议）** | 保持现状，在 ADR 中把「列表操作不做行级 WHERE 过滤」固化为显式语言边界 | 零语义变更；与 `dsl-access-row-unsupported` 诊断、`ADR-0004` 一致；只需文档 |
+| B | 扩展 list 的 WHERE 注入：放开 list 行级条件、repo SQL 注入、错误码 / 空集语义 | 改变安全语义与错误码；需同时改检查层、生成层、Web/Flutter 契约，工作量大且影响已发布行为 |
+
+**Why 建议 A**：B 会让「列表返回空集」与「返回 403」的边界模糊，且要推翻现有显式诊断；
+先由 ADR 记录边界，若将来确有需求再以 breaking change + 迁移计划推进。
+
+---
+
 ## 使用方式
 
 - 新发现缺口：**登记到对应 spec 的「已知缺口」章节**，并在本表加一行（保持双向一致）。

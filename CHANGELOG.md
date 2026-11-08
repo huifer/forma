@@ -8,6 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Phase 1 收口（以 RFC 为入口，不再自创阶段名）**：依据治理总入口 §10「落地顺序」与
+  各 RFC §16 Conformance Requirements，把「已实现」变成「有证据」：
+  - **§16 证据化**：核实 6 份 RFC（0001/0003/0004/0005/0007/0008）共 35 项验收，
+    **27 项附回归/实现证据并勾选，8 项如实保留 `[ ]`** 并登记 gap-backlog（G-1…G-8）；
+    不假绿。RFC-0008「列表权限 WHERE 注入」写成 **ADR 选项 A/B**（建议 A：固化显式边界），
+    不擅自改安全语义。
+  - **真缺口补齐（RFC-0005 / 0007）**：`util::write_text_changed` 统一提供
+    **内容哈希跳过写入 + 同目录临时文件原子 rename**（`tests/artifact_atomic_write.rs`）；
+    生成后端新增公开的 `/health` 与 `/ready`（后者真实探测 DB，不可达 503 fail-closed），
+    两个 router 分支共用 `health_routes`（`tests/runtime_probes.rs`）；entity-only 分支补
+    crate 级 `allow(dead_code)`，生成后端零警告。
+  - **Lowering 确定性回归**：`tests/dsl_ir_bridge.rs::lowering_output_is_byte_identical_across_runs`。
+  - **并行竞态修复**：`dsl::patch::planning_copy` 的 pid+纳秒副本目录加进程内序号，
+    消除多线程同名覆盖（表现为偶发 `forma.yaml: root must be a mapping`）；
+    全量测试连跑 3 次稳定。
+  - **状态同步**：治理总入口 §4.1 RFC 状态表（0002/0009 → Implemented）、§10 顺序 3/12/13
+    （Reference Application 判定为已满足）、conformance 数字；`RFC-0003 §15` 实施进度、
+    `RFC-0010 §13` 分期表（V0.2/V0.3/V0.5 已落地）、6 份 RFC 的 Change Log；
+    gap-backlog 新增 G-1…G-11。
+  - 验证门：`cargo test` **414 项 / 67 套件**（连跑 3 次）、clippy `-D warnings`、fmt、
+    docs validate/lint/check-links/check-dependencies 全绿、CI YAML 解析、
+    生成后端 `cargo check`（school / access-depth / entity-only）零错误零警告。
+
 - **P3 治理收尾与发布就绪（C-1 ~ C-5，5/5）**：
   - **C-1 RFC-0009 升 `Implemented`**：§16 七项逐条附实现证据并勾选；修复 `forma --version`
     （v0.2 联邦时代字符串 → `forma <pkg> (IR <IR_VERSION>, …)`，`tests/cli_version.rs`）。
@@ -27,7 +50,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 新增回归：`tests/cli_version.rs`（1 项）、`tests/adapter_roundtrip.rs`（9 项）；
     全量 `cargo test` **406 项 / 65 套件**通过。
 
-### Added
 - **P2 轨道 A 全面收尾（8/8，用户决策：轨道 B 目标扩栈撤销）**：
   - **A-2 行级访问任意深度关系遍历**：`dsl::resolve_access_field` 单一来源；生成层逐跳
     `repo::find_{E}` 取数（关系行缺失 → 403 fail-closed）；非关系/可选关系/未知字段仍编译期显式拒绝。
