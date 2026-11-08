@@ -16,6 +16,59 @@ pub struct Diagnostic {
     pub nodes: Option<Vec<String>>,
 }
 
+/// 诊断消息的中文映射（RFC-0009 §18-4：CLI 输出 i18n）。
+/// 覆盖高频码；未覆盖的码保持英文原文（不假装有翻译）。
+pub fn message_zh(code: &str) -> Option<&'static str> {
+    Some(match code {
+        "dsl-parse" => "DSL 语法错误",
+        "dsl-duplicate" => "重复声明",
+        "dsl-unknown-entity" => "引用了未声明的实体",
+        "dsl-unknown-field" => "引用了不存在的字段",
+        "dsl-unknown-type" => "未知类型",
+        "dsl-unknown-api" => "引用了未声明的 API",
+        "dsl-unknown-operation" => "未知操作名",
+        "dsl-invalid-type-arg" => "参数化类型参数越界（String 0<n≤65535 / Decimal 0<p≤65 且 s≤p）",
+        "dsl-invalid-constraint" => "约束仅适用于数值类型且参数个数正确",
+        "dsl-access-row-unsupported" => "该操作没有实体行，行级条件不适用",
+        "dsl-access-relation-depth-unsupported" => "行级条件关系遍历超出生成器支持范围",
+        "dsl-access-relation-unsupported" => "行级条件遍历了非关系字段",
+        "dsl-access-relation-optional-unsupported" => "行级条件遍历了可选关系（fail-closed 拒绝）",
+        "dsl-access-unknown-operation" => "访问规则引用了未知操作",
+        "dsl-access-unknown-role" => "访问规则引用了未知角色",
+        "dsl-auth-unknown-role" => "API 授权引用了未知角色",
+        "dsl-auth-unknown-operation" => "API 授权引用了未知操作",
+        "dsl-field-policy-unknown-field" => "字段级策略引用了不存在的字段",
+        "dsl-field-policy-unknown-role" => "字段级策略引用了未知角色",
+        "dsl-tenant-multiple" => "实体声明了多个 @tenant 字段（至多一个）",
+        "dsl-tenant-optional" => "@tenant 字段必须必填（每行属于唯一租户）",
+        "dsl-tenant-type" => "@tenant 字段必须是 String",
+        "dsl-tenant-no-auth" => "@tenant 需要 auth module（租户来自 JWT claim）",
+        "dsl-job-cron-format" => "cron 必须是 5 字段表达式",
+        "dsl-job-unknown-op" => "job 引用了未声明的 api 或 command",
+        "dsl-live-unknown-api" => "live 引用了未声明的 api",
+        "dsl-live-unknown-event" => "live 事件仅限 create/update/delete",
+        "dsl-notify-unknown-channel" => "未知通知渠道（email/sms/webhook/log）",
+        "dsl-notify-unknown-event" => "通知事件引用了未声明的 command",
+        "dsl-searchable-field-type" => "全文搜索仅支持 String/Text/Email 字段",
+        "dsl-storage-unknown-provider" => "未知存储 provider（local/s3/oss）",
+        "dsl-storage-missing-bucket" => "s3/oss 存储必须指定 bucket",
+        "dsl-export-unknown-api" => "导出引用了未声明的 api",
+        "dsl-unknown-rules" => "引用了未声明的规则",
+        "dsl-unknown-guard-op" => "guard 引用了未知操作",
+        "dsl-cursor-sort-duplicate" => "游标排序字段重复",
+        "dsl-invalid-pagination" => "分页配置无效",
+        "dsl-no-source" => "没有匹配的 .fm 源文件",
+        "viz-unknown-chart" => "引用了未声明的图表",
+        "viz-duplicate" => "图表重复声明",
+        "artifact-modified" => "产物被人工修改（已保留人工版本）",
+        "artifact-adopted" => "产物已登记为 adopted（人工版本胜出）",
+        "artifact-overwritten" => "产物已被构建覆盖（--overwrite）",
+        "artifact-extension-preserved" => "扩展点锚点已保留（永不覆盖）",
+        "FORMA_CONFIG_MISSING" => "配置缺失（fail-closed）",
+        _ => return None,
+    })
+}
+
 pub fn format_diagnostic(d: &Diagnostic) -> String {
     let loc = d
         .file
@@ -25,12 +78,19 @@ pub fn format_diagnostic(d: &Diagnostic) -> String {
             None => format!("{f} "),
         })
         .unwrap_or_default();
+    // RFC-0009 §18-4：--lang zh / FORMA_LANG=zh 时输出中文消息（未覆盖的码保持英文）
+    let lang = std::env::var("FORMA_LANG").unwrap_or_default();
+    let msg = if lang == "zh" {
+        message_zh(&d.code).unwrap_or(&d.message)
+    } else {
+        &d.message
+    };
     format!(
         "[{}] {} {}— {}",
         d.severity.to_uppercase(),
         d.code,
         loc,
-        d.message
+        msg
     )
 }
 

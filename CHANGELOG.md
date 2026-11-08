@@ -8,6 +8,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **RFC/spec 保留项全部推进（用户指令「都要做」）**：
+  - **Secret Provider（RFC-0005 §18 / G-4）**：生成 `src/secret.rs`（`resolve` / `require`
+    fail-closed，v1 不缓存避免密钥驻留）；`JWT_SECRET` / `TENANT_ADMIN_TOKEN` 走 Provider；
+    spec:protocols 新增 §10.6 配置契约（环境变量清单 + 缺失行为）；回归 6 项。
+  - **spec:dependencies（RFC-0003 §18-4）**：表达式级依赖契约文档（节点/边/闭包语义 +
+    边界 + 验证），ir-contract 引用。
+  - **产物来源证明（RFC-0007 §18-2）**：`.forma/artifacts.json` 增加 `manifest_hash`
+    （条目哈希聚合链）+ 可选 HMAC-SHA256 签名（`FORMA_SIGNING_KEY`，零新增依赖）；
+    CLI `forma artifacts verify [dir]`（哈希链 + 签名 + 逐条目磁盘一致性）与
+    `forma artifacts conflicts [dir]`（冲突清单 + 处置建议，三方合并的 v1 形态）；
+    回归 5 项。
+  - **补丁草案（RFC-0006 §18-4）**：`forma patch <file> --dry-run --out <report.json>`
+    ——工程副本上预览（源工程零写入），报告落盘供人工审阅；端到端验证。
+  - **诊断 i18n（RFC-0009 §18-4）**：`--lang zh|en`（也接受 `FORMA_LANG`）+
+    48 条高频诊断码中文映射；未覆盖码保持英文（不假装有翻译）。
+  - **Flutter 图表最小集（RFC-0010 §16-4 评估落地）**：bar/line + 无 transform +
+    直接字段 → `fl_chart` 图表页；其余保持占位；`pubspec` 按需引入 fl_chart（零变化）；
+    `flutter analyze` 零 issue。
+  - 验证门：`cargo test` **441 项 / 73 套件**、clippy `-D warnings`、fmt、docs 四门全绿、
+    school 三端（backend `cargo check` / Web `tsc` + vitest / Flutter analyze + 17 测试）全绿、
+    `forma artifacts verify` / `patch --dry-run` 端到端。
+
 - **表达式级依赖完整形态 + CI 加固 + 字段裁剪向量**（spec/RFC 收口续）：
   - **command → 字段依赖边**：命令的 `pre` 条件与 `effect` 目标字段纳入表达式级依赖
     （改字段 → 命令受影响）；回归 `tests/dsl_ir_bridge.rs`（15 项）。

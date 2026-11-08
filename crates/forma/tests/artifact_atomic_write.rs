@@ -72,3 +72,51 @@ fn consecutive_builds_do_not_rewrite_unchanged_artifacts() {
     assert_eq!(before, after, "unchanged artifacts must not be rewritten");
     assert_eq!(fs::read_to_string(&target).unwrap(), content_before);
 }
+
+#[test]
+fn manifest_hash_chain_is_stable_and_tamper_sensitive() {
+    use forma::artifacts::{manifest_hash, ArtifactEntry, ArtifactManifest, Ownership};
+    let mut m = ArtifactManifest {
+        version: 1,
+        artifacts: Default::default(),
+        manifest_hash: String::new(),
+        signature: String::new(),
+    };
+    m.artifacts.insert(
+        "a.txt".into(),
+        ArtifactEntry {
+            hash: "h1".into(),
+            ownership: Ownership::Generated,
+            generator: "gen-x".into(),
+            source: None,
+        },
+    );
+    let h1 = manifest_hash(&m);
+    // 同内容同哈希
+    assert_eq!(manifest_hash(&m), h1);
+    // 改条目哈希 → 变化
+    m.artifacts.get_mut("a.txt").unwrap().hash = "h2".into();
+    assert_ne!(manifest_hash(&m), h1);
+    // 改路径 → 变化
+    let mut m2 = m.clone();
+    let entry = m2.artifacts.remove("a.txt").unwrap();
+    m2.artifacts.insert("b.txt".into(), entry);
+    assert_ne!(manifest_hash(&m2), manifest_hash(&m));
+}
+
+#[test]
+fn signature_verification_requires_signing_key() {
+    // 未设 FORMA_SIGNING_KEY 时：验签返回 false（不 panic），签名生成为空
+    // （不直接操作进程 env，避免并行测试竞态；验证纯函数行为）
+    let m = forma::artifacts::sign_manifest("some-hash");
+    if std::env::var("FORMA_SIGNING_KEY")
+        .map(|k| !k.trim().is_empty())
+        .unwrap_or(false)
+    {
+        assert!(!m.is_empty());
+        assert!(forma::artifacts::verify_signature("some-hash", &m));
+        assert!(!forma::artifacts::verify_signature("other-hash", &m));
+    } else {
+        assert!(m.is_empty());
+    }
+}

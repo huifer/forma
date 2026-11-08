@@ -387,8 +387,9 @@ Commit / Report     →  证据报告
   **已支持**：`DslPatchDocument.operations` 多操作按当前磁盘状态组合应用；失败整体回滚（事务）。
 - [x] ~~`forma_plan` 的输出是否应直接作为 CI 的变更评审材料？~~
   **已支持**：JSON 报告含 verdict / baseRevision / operations / migrations（风险分级）/ expected / impact / build。
-- [ ] 是否需要「补丁草案」在磁盘上落盘（供人审阅后再 apply）？
-  ⏸ **保留**：当前为内存态（`forma_plan` 副本试运行）；落盘属 Studio 审阅流增强。
+- [x] ~~是否需要「补丁草案」在磁盘上落盘（供人审阅后再 apply）？~~
+  **已落地（2026-11-08）**：`forma patch <file> --dry-run --out <report.json>`——
+  工程副本上预览（源工程零写入），报告落盘供人工审阅；端到端验证通过。
 
 
 ## 19. References

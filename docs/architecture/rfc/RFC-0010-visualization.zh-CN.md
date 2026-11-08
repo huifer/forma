@@ -873,8 +873,15 @@ V0.5（theme + preview + 浏览器渲染门）已落地；V0.4 / V0.6 待排期�
    **已定**：`grid { <Chart> w N h N }`（span 语义）已落地（V0.3）；不引入绝对定位词汇。
 3. [x] ~~**多语言图表标题与图例项**~~
    **已决议**：`title` 已是 i18n `Message`；枚举变体显示名由 `@label` 承载（ListRow 的 `{rel}_name` 同源）。
-4. [ ] **图表是否进入 Flutter 适配层**：V0.6 之后评估（移动端通常不做复杂图表；目标扩栈已撤销）。
-   ⏸ **保留**。
+4. [x] ~~**图表是否进入 Flutter 适配层**~~
+   **评估完成并落地最小集（2026-11-08）**：移动端图表需求弱（屏幕小、以列表/表单为主），
+   但 bar/line 两类高频图表值得支持。落地形态：
+   - **支持**：`bar` / `line` + 无 transform + x/y 为实体直接字段 → 生成 `fl_chart` 图表页
+     （x 为 nominal 时用索引，y 取字段值）；
+   - **占位**：其余类型 / 带 transform / 字段缺失 → 保持占位页（路由与导航结构完整）；
+   - 依赖：仅当存在可支持图表时 `pubspec.yaml` 引入 `fl_chart`（零变化原则）；
+   - 验证：`flutter analyze` 零 issue（school 的 CourseCapacity bar 页）。
+   **未支持**：pie/gauge/radar 等复杂类型与 transform 聚合——留待真实需求。
 
 ## 17. 架构上下文与边界（Architectural Context）
 

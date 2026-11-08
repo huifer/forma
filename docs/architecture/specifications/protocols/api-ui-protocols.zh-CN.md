@@ -341,6 +341,29 @@ api Orders {
 
 回归：`tests/seed_flutter.rs`（客户端生成）、`tests/backend_contract.rs`（审计列与 handler）。
 
+## 10.6 配置契约（环境变量清单，RFC-0005 §18）
+
+生成端统一从环境变量读取配置（无配置文件）。Rust 侧经 **Secret Provider**（`src/secret.rs`，
+RFC-0005 §18 / G-4 收口）：`resolve(name) -> Option<String>`（缺失/空 → None）、
+`require(name)`（缺失 → `FORMA_CONFIG_MISSING`，fail-closed）；**v1 不缓存**（避免密钥驻留）。
+
+| 变量 | 目标 | 用途 | 缺失行为 |
+|---|---|---|---|
+| `DATABASE_URL` | backend | 数据库连接串 | 启动失败（`FORMA_CONFIG_MISSING`，非 panic） |
+| `JWT_SECRET` | backend（auth） | JWT 签名密钥 | 开发默认值（**非生产凭据**）；生产必须设置 |
+| `TENANT_ADMIN_TOKEN` | backend（@tenant） | 租户管理面授权（`x-admin-token`） | 管理面关闭（403，默认安全） |
+| `PORT` | backend | 监听端口 | 8080 |
+| `LOG_FORMAT` | backend | `json` → JSON Lines；否则 human | human |
+| `RUST_LOG` | backend | 日志过滤级别 | info |
+| `API_BASE` | Web | 后端地址 | `/api`（Vite/Next 代理） |
+| `REST_BASE` | GraphQL 网关 | REST 后端地址 | `http://localhost:8080` |
+| `GRAPHQL_TOKEN` | GraphQL 网关 | 透传 bearer | 不发送 |
+| `FORMA_GRAPHQL_REVERSE_BATCH` | GraphQL 网关 | 逆向关系单批行数上限 | 1000 |
+| `TENANT_ADMIN_TOKEN` | Web（@tenant） | 管理面令牌输入 | 页面提示后端未设置 |
+
+**跨语言同构说明**：v1 不做三份 trait 定义（RFC-0005 §18-2 保留项）——各目标独立读取，
+语义一致由本表 + 生成端测试保证；Rust 侧提供 `secret.rs` 作为 fail-closed 参考实现。
+
 ## 9. 参考
 
 - RFC-0002 规格体系：[../../rfc/RFC-0002-specification-system.zh-CN.md](../../rfc/RFC-0002-specification-system.zh-CN.md)

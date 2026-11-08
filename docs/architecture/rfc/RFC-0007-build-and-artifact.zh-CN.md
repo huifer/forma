@@ -398,10 +398,15 @@ spec:
 - [x] ~~清单是否需要纳入 git？~~
   **已决议**：不纳入（本机状态，gitignored）；CI 场景由 CI 自行 `forma build` 生成后再校验
   （`generated-backend` job 即此模式）。
-- [ ] 产物是否需要**签名**（如 minisign / sigstore）以证明来源？
-  ⏸ **范围外**：v0.3 不做；对「AI 生成代码进入生产」是重要议题，待独立 ADR 立项。
-- [ ] 冲突的裁决是否应支持三方合并（生成版 vs 人工版 vs 基线）？
-  ⏸ **保留**：保留 / 覆盖二选一已满足 v0.3；三方合并属增强（需要基线版本管理）。
+- [x] ~~产物是否需要**签名**（如 minisign / sigstore）以证明来源？~~
+  **轻量落地（2026-11-08）**：`.forma/artifacts.json` 增加 `manifest_hash`
+  （条目哈希聚合链）+ 可选 HMAC-SHA256 签名（`FORMA_SIGNING_KEY`，零新增依赖）；
+  `forma artifacts verify [dir]` 验证哈希链 / 签名 / 逐条目磁盘一致性。
+  完整 sigstore 集成仍属未来（需密钥管理基础设施）。
+- [x] ~~冲突的裁决是否应支持三方合并（生成版 vs 人工版 vs 基线）？~~
+  **v1 形态落地（2026-11-08）**：`forma artifacts conflicts [dir]` 输出冲突清单
+  （文件、基线哈希、磁盘哈希、行数、处置建议：adopt / overwrite / manual merge）——
+  内容级三方合并仍需基线内容存储（.next 增强）。
 - [x] ~~`Adopted` 归属的产物如何进入编译管线？~~
   **已支持**：`--adopt` 登记 + `Ownership::Adopted` 无条件保护 + Extension 锚点（ADR-0003）。
 

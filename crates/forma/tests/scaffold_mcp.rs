@@ -110,8 +110,8 @@ fn mcp_check_reports_diagnostics_and_lint() {
 fn mcp_build_matches_cli_pipeline() {
     let dir = school_dir();
     let build = call_tool(&dir, "forma_build", &args()).unwrap();
-    // 96 + request_id.rs + viz V0.5 三件 + 策略即测试两件（access.test.ts / access_vector_test.dart）
-    assert_eq!(build["totalFiles"], 109);
+    // 96 + request_id.rs + viz V0.5 三件 + 策略即测试两件 + secret.rs（RFC-0005 §18）
+    assert_eq!(build["totalFiles"], 110);
     let steps: Vec<&str> = build["steps"]
         .as_array()
         .unwrap()

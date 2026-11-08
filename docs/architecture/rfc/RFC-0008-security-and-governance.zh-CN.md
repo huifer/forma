@@ -392,8 +392,9 @@ Response 序列化：字段级裁剪
   Web（vitest）与 Flutter（flutter_test）跨端同源执行；后端结构断言见 `tests/access_vectors.rs`。
 - [x] ~~字段级权限与「响应裁剪」是否需要区分（禁止见 vs 可见但脱敏）？~~
   **已决议**：v0.3 只有**裁剪**（`trim_*_fields`，服务端序列化时移除）；脱敏（可见但打码）不做。
-- [ ] Secret Provider 的统一接口由谁定义（Runtime RFC 还是本 RFC 的扩展点）？
-  ⏸ **保留**（G-4：未建模，需先定接口归属）。
+- [x] ~~Secret Provider 的统一接口由谁定义？~~
+  **已落地（2026-11-08，归属 Runtime RFC）**：`src/secret.rs`
+  （`resolve` / `require` fail-closed，v1 不缓存）；spec:protocols §10.6 定义配置契约。
 
 
 ## 19. References

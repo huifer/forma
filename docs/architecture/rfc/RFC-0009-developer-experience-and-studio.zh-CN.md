@@ -350,8 +350,9 @@ Studio 的模型**就是 IR**——不新建第二套模型。渲染层订阅 IR
   **已定**：独立版本快照（`.forma/ir-snapshot.json`）；迁移台账（`migrations.json`）管 SQL 版本。
 - [x] ~~`forma docs` 的规则集是否应与 REVIEW-CHECKLIST 逐条对应？~~
   **已落地（2026-11-08）**：`REVIEW-CHECKLIST` 新增「docs 命令 ↔ 清单条目」映射表。
-- [ ] 诊断的 i18n：CLI 输出是否需要多语言？
-  ⏸ **保留**：当前诊断消息为英文；规格内 `message` 已支持 zh/en（生成文案层）。
+- [x] ~~诊断的 i18n：CLI 输出是否需要多语言？~~
+  **已落地（2026-11-08）**：`--lang zh|en`（也接受 `FORMA_LANG`）+ 48 条高频诊断码
+  中文映射；未覆盖码保持英文（不假装有翻译）；规格内 `message` 的 zh/en 双语本就已支持。
 
 
 ## 19. References

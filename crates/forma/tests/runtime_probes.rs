@@ -127,7 +127,10 @@ fn generated_artifacts_do_not_hardcode_secret_values() {
     let src = dir.join("generated/backend/src");
     let auth = fs::read_to_string(src.join("auth.rs")).unwrap();
     // 密钥只经环境变量注入，且未设置时降级为开发默认值（非真实凭据）
-    assert!(auth.contains("std::env::var(\"JWT_SECRET\")"), "{auth}");
+    assert!(
+        auth.contains("crate::secret::resolve(\"JWT_SECRET\")"),
+        "{auth}"
+    );
     assert!(!auth.contains("PRIVATE KEY"), "{auth}");
     assert!(!auth.contains("BEGIN RSA"), "{auth}");
     // 全量扫描：生成源码里不得出现疑似硬编码凭据字面量
@@ -165,9 +168,29 @@ api Items { entity Item operations [list get create update delete] }
     let auth = fs::read_to_string(dir.join("generated/backend/src/auth.rs")).unwrap();
     // 未设置 env → 403 关闭（默认安全），不内置 token 字面量
     assert!(
-        auth.contains("std::env::var(\"TENANT_ADMIN_TOKEN\")"),
+        auth.contains("crate::secret::resolve(\"TENANT_ADMIN_TOKEN\")"),
         "{auth}"
     );
     assert!(auth.contains("AppError::Forbidden"), "{auth}");
     assert!(auth.contains("tenant admin is disabled"), "{auth}");
+}
+
+#[test]
+fn secret_provider_is_generated_with_fail_closed_semantics() {
+    // RFC-0005 §18 / G-4：Secret Provider 生成 + fail-closed
+    let dir = tmp("secret");
+    project(&dir, FULL);
+    forma::build::run_build(&dir).unwrap();
+    let secret = fs::read_to_string(dir.join("generated/backend/src/secret.rs")).unwrap();
+    assert!(secret.contains("pub fn resolve(name: &str)"), "{secret}");
+    assert!(secret.contains("pub fn require(name: &str)"), "{secret}");
+    assert!(secret.contains("FORMA_CONFIG_MISSING"), "{secret}");
+    // JWT_SECRET / TENANT_ADMIN_TOKEN 都走 Provider
+    let auth = fs::read_to_string(dir.join("generated/backend/src/auth.rs")).unwrap();
+    assert!(
+        auth.contains("crate::secret::resolve(\"JWT_SECRET\")"),
+        "{auth}"
+    );
+    // 无 @tenant 工程不含 TENANT_ADMIN_TOKEN（零变化）；有 @tenant 的断言见
+    // tenant_admin_token_is_env_gated_without_hardcoded_value
 }

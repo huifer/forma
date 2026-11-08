@@ -51,6 +51,7 @@ fn run(argv: &[String]) -> Result<i32> {
                 "port",
                 "format",
                 "loss-report",
+                "lang",
             ]
             .contains(&name)
             {
@@ -78,6 +79,10 @@ fn run(argv: &[String]) -> Result<i32> {
         PathBuf::from(positional.get(idx).map(String::as_str).unwrap_or("."))
     };
 
+    // RFC-0009 §18-4：诊断输出语言（--lang zh|en，缺省 en；也接受 FORMA_LANG 环境变量）
+    if let Some(lang) = flags.get("lang").filter(|s| !s.is_empty()) {
+        std::env::set_var("FORMA_LANG", lang);
+    }
     match command {
         "check" => Ok(cmd_check(project_dir(0))),
         "lint" => {
@@ -376,6 +381,7 @@ fn run(argv: &[String]) -> Result<i32> {
         }
         "docs" => Ok(cmd_docs(&positional, &flags)),
         "capability" => Ok(cmd_capability(&positional, &flags)),
+        "artifacts" => Ok(cmd_artifacts(&positional, &flags)),
         "patch" => {
             let Some(patch_file) = positional.get(1) else {
                 eprintln!("usage: forma patch [dir] <patch.json>");
@@ -393,6 +399,27 @@ fn run(argv: &[String]) -> Result<i32> {
                     .map_err(|e| anyhow::anyhow!("cannot parse patch file: {e}"))?;
                 forma::patch::PatchInput::Federal(patch)
             };
+            // RFC-0006 §18-4：补丁草案（dry-run）——在工程副本上预览，原工程零写入，
+            // 报告可落盘（--out）供人工审阅后再 apply。
+            if flags.contains_key("dry-run") {
+                let tmp = tmp_patch_preview(&dir);
+                let report = match forma::patch::apply_patch_input(&tmp, input) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        eprintln!("✗ patch dry-run failed: {e:#}");
+                        return Ok(1);
+                    }
+                };
+                let json = serde_json::to_string_pretty(&report)?;
+                match flags.get("out").filter(|s| !s.is_empty()) {
+                    Some(out) => {
+                        std::fs::write(out, &json)?;
+                        println!("✓ draft report → {out} (source project untouched)");
+                    }
+                    None => println!("{json}"),
+                }
+                return Ok(0);
+            }
             let report = forma::patch::apply_patch_input(&dir, input)?;
             let failed = print_patch_report(&report)?;
             Ok(if failed { 1 } else { 0 })
@@ -656,6 +683,185 @@ fn cmd_build_dsl(project_dir: PathBuf, policy: forma::build::OwnershipPolicy, _f
 }
 
 /// `forma capability <list|check|show> [dir]` —— Capability Registry 的命令行入口。
+/// `forma artifacts conflicts [dir]`：三方合并的 v1 形态——冲突清单 + 处置建议
+/// （RFC-0007 §18-3：基线 = manifest 记录哈希；人工版 = 磁盘；生成版 = 当前 emitter）。
+fn cmd_artifacts_conflicts(dir: &str, flags: &std::collections::HashMap<String, String>) -> i32 {
+    let dir = PathBuf::from(dir);
+    if !dir.join(".forma/artifacts.json").is_file() {
+        eprintln!(
+            "✗ no .forma/artifacts.json in {} — run `forma build` first",
+            dir.display()
+        );
+        return 1;
+    }
+    let manifest = forma::artifacts::read_manifest(&dir);
+    let mut conflicts = Vec::new();
+    for (path, entry) in &manifest.artifacts {
+        let abs = dir.join(path);
+        if !abs.is_file() {
+            conflicts.push(serde_json::json!({
+                "file": path, "state": "missing",
+                "baseline": entry.hash, "disk": null,
+                "suggestion": "rebuild",
+            }));
+            continue;
+        }
+        let Ok(disk) = std::fs::read_to_string(&abs) else {
+            continue;
+        };
+        let disk_hash = forma::util::sha256_hex(&disk);
+        if disk_hash == entry.hash {
+            continue;
+        }
+        let disk_lines = disk.lines().count();
+        conflicts.push(serde_json::json!({
+            "file": path,
+            "state": if entry.ownership == forma::artifacts::Ownership::Adopted { "adopted-modified" } else { "modified" },
+            "baseline": entry.hash,
+            "disk": disk_hash,
+            "diskLines": disk_lines,
+            "suggestion": if entry.ownership == forma::artifacts::Ownership::Adopted {
+                "keep (adopted — human version wins)"
+            } else {
+                "resolve: --adopt (register human) | --overwrite (regenerate) | manual merge"
+            },
+        }));
+    }
+    println!(
+        "{} conflict(s) in {} artifact(s)",
+        conflicts.len(),
+        manifest.artifacts.len()
+    );
+    for c in &conflicts {
+        println!("  {}", serde_json::to_string(c).unwrap_or_default());
+    }
+    if flags.contains_key("json") {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&conflicts).unwrap_or_default()
+        );
+    }
+    if conflicts.is_empty() {
+        0
+    } else {
+        1
+    }
+}
+
+/// 补丁草案的工程副本（`forma/` + `forma.yaml`；进程内序号避免并行测试撞名）。
+fn tmp_patch_preview(dir: &Path) -> PathBuf {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+    let tmp = std::env::temp_dir().join(format!(
+        "forma-patch-dry-{}-{seq}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    ));
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(&tmp).unwrap();
+    let manifest_src = dir.join("forma.yaml");
+    if manifest_src.is_file() {
+        std::fs::copy(&manifest_src, tmp.join("forma.yaml")).unwrap();
+    }
+    let forma_dir = dir.join("forma");
+    if forma_dir.is_dir() {
+        copy_dir_recursive(&forma_dir, &tmp.join("forma"));
+    }
+    tmp
+}
+
+fn copy_dir_recursive(src: &Path, dst: &Path) {
+    std::fs::create_dir_all(dst).unwrap();
+    for e in std::fs::read_dir(src).unwrap() {
+        let e = e.unwrap();
+        let target = dst.join(e.file_name());
+        if e.file_type().unwrap().is_dir() {
+            copy_dir_recursive(&e.path(), &target);
+        } else {
+            std::fs::copy(e.path(), target).unwrap();
+        }
+    }
+}
+
+/// `forma artifacts verify [dir] [--strict]`：产物来源证明验证（RFC-0007 §18-2）
+fn cmd_artifacts(positional: &[String], flags: &std::collections::HashMap<String, String>) -> i32 {
+    let sub = positional.first().map(String::as_str).unwrap_or("verify");
+    if sub == "conflicts" {
+        return cmd_artifacts_conflicts(
+            positional.get(1).map(String::as_str).unwrap_or("."),
+            flags,
+        );
+    }
+    // forma artifacts verify [dir]：positional[0] = "verify"，目录取 positional[1]
+    let dir = PathBuf::from(positional.get(1).map(String::as_str).unwrap_or("."));
+    if !dir.join(".forma/artifacts.json").is_file() {
+        eprintln!(
+            "✗ no .forma/artifacts.json in {} — run `forma build` first",
+            dir.display()
+        );
+        return 1;
+    }
+    let manifest = forma::artifacts::read_manifest(&dir);
+    let mut ok = true;
+    // 1) 哈希链
+    let actual = forma::artifacts::manifest_hash(&manifest);
+    if actual != manifest.manifest_hash {
+        eprintln!(
+            "✗ manifest hash mismatch: recorded={}, actual={}",
+            manifest.manifest_hash, actual
+        );
+        ok = false;
+    } else {
+        println!("✓ manifest hash: {actual}");
+    }
+    // 2) 可选签名
+    if manifest.signature.is_empty() {
+        println!("  signature: not configured (set FORMA_SIGNING_KEY to enable)");
+    } else if std::env::var("FORMA_SIGNING_KEY")
+        .map(|k| !k.trim().is_empty())
+        .unwrap_or(false)
+    {
+        // 验签需要同一密钥（与 build 同源；密钥只从环境变量读取）
+        if forma::artifacts::verify_signature(&manifest.manifest_hash, &manifest.signature) {
+            println!("✓ signature verified");
+        } else {
+            eprintln!("✗ signature verification failed");
+            ok = false;
+        }
+    } else {
+        println!("  signature present but FORMA_SIGNING_KEY not set — skipping");
+    }
+    // 3) 逐条目磁盘一致性
+    for (path, entry) in &manifest.artifacts {
+        let abs = dir.join(path);
+        if !abs.is_file() {
+            eprintln!("✗ missing: {path}");
+            ok = false;
+            continue;
+        }
+        let disk = match std::fs::read_to_string(&abs) {
+            Ok(t) => forma::util::sha256_hex(&t),
+            Err(_) => continue,
+        };
+        if disk != entry.hash {
+            eprintln!("✗ modified: {path} (disk ≠ manifest)");
+            ok = false;
+        }
+    }
+    if ok {
+        println!("✓ all {} artifact(s) verified", manifest.artifacts.len());
+        0
+    } else {
+        // 有篡改/缺失即非零（--strict 语义在 verify 场景天然成立）
+        eprintln!("✗ artifacts verification failed");
+        1
+    }
+}
+
 fn cmd_capability(positional: &[String], flags: &std::collections::HashMap<String, String>) -> i32 {
     let action = positional.first().cloned().unwrap_or_else(|| "list".into());
     // `show <id> [dir]`；其余动作为 `[dir]`。

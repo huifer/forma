@@ -73,11 +73,89 @@ pub struct ArtifactEntry {
     pub source: Option<ArtifactSource>,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ArtifactManifest {
     pub version: u8,
     #[serde(default)]
     pub artifacts: BTreeMap<String, ArtifactEntry>,
+    /// 清单自身的哈希链（RFC-0007 §18-2 轻量来源证明）：所有条目哈希的聚合 SHA-256，
+    /// 随清单落盘——任何条目被外部篡改（哈希变化）都会让 manifestHash 失配。
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub manifest_hash: String,
+    /// 可选 HMAC-SHA256 签名（`FORMA_SIGNING_KEY` 环境变量存在时写入）。
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub signature: String,
+}
+
+/// 计算清单哈希链（对「路径 + 条目哈希」排序聚合）。
+pub fn manifest_hash(manifest: &ArtifactManifest) -> String {
+    let mut acc = String::new();
+    for (path, entry) in &manifest.artifacts {
+        acc.push_str(path);
+        acc.push('\0');
+        acc.push_str(&entry.hash);
+        acc.push('\n');
+    }
+    crate::util::sha256_hex(&acc)
+}
+
+/// 可选 HMAC-SHA256（`FORMA_SIGNING_KEY` 存在时）：密钥只从环境变量读取，不落盘。
+pub fn sign_manifest(hash: &str) -> String {
+    let Ok(key) = std::env::var("FORMA_SIGNING_KEY") else {
+        return String::new();
+    };
+    if key.trim().is_empty() {
+        return String::new();
+    }
+    hmac_sha256(key.as_bytes(), hash.as_bytes())
+}
+
+/// 验签（恒定时间比较由长度 + 逐字节 XOR 保证）。
+pub fn verify_signature(hash: &str, signature: &str) -> bool {
+    let expected = sign_manifest(hash);
+    if expected.is_empty() || signature.len() != expected.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (a, b) in expected.bytes().zip(signature.bytes()) {
+        diff |= a ^ b;
+    }
+    diff == 0
+}
+
+/// 纯 HMAC-SHA256（零新增依赖：sha2 + 手写 HMAC 构造）。
+fn hmac_sha256(key: &[u8], msg: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    const BLOCK: usize = 64;
+    let mut k = [0u8; BLOCK];
+    if key.len() > BLOCK {
+        let d = Sha256::digest(key);
+        k[..d.len()].copy_from_slice(&d);
+    } else {
+        k[..key.len()].copy_from_slice(key);
+    }
+    let mut ipad = [0x36u8; BLOCK];
+    let mut opad = [0x5cu8; BLOCK];
+    for i in 0..BLOCK {
+        ipad[i] ^= k[i];
+        opad[i] ^= k[i];
+    }
+    let mut inner = Sha256::new();
+    inner.update(ipad);
+    inner.update(msg);
+    let inner_hash = inner.finalize();
+    let mut outer = Sha256::new();
+    outer.update(opad);
+    outer.update(inner_hash);
+    hex(&outer.finalize())
+}
+
+fn hex(bytes: &[u8]) -> String {
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        s.push_str(&format!("{b:02x}"));
+    }
+    s
 }
 
 /// 读取产物清单（lenient：不存在/损坏时返回空）。
@@ -89,13 +167,19 @@ pub fn read_manifest(project_dir: &Path) -> ArtifactManifest {
         .unwrap_or(ArtifactManifest {
             version: 1,
             artifacts: BTreeMap::new(),
+            manifest_hash: String::new(),
+            signature: String::new(),
         })
 }
 
 /// 写回产物清单。
 pub fn write_manifest(project_dir: &Path, manifest: &ArtifactManifest) -> Result<()> {
     let path = project_dir.join(".forma/artifacts.json");
-    crate::util::write_text(&path, &serde_json::to_string_pretty(manifest)?)
+    let mut m = manifest.clone();
+    // 哈希链 + 可选签名（每次写入前重算，保证与条目一致）
+    m.manifest_hash = manifest_hash(&m);
+    m.signature = sign_manifest(&m.manifest_hash);
+    crate::util::write_text(&path, &serde_json::to_string_pretty(&m)?)
 }
 
 /// 人工修改检测（构建**前**调用）：

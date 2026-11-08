@@ -679,8 +679,7 @@ fn command_pre_and_effects_reference_fields() {
     // RFC-0003 §18 完整形态：命令的 pre 条件与 effect 目标字段都是表达式级依赖
     let dir = tmp_dir("cmd-deps");
     write_project(&dir, RULE_FM);
-    let (_p, graph) = lowered(&dir);
-    // RULE_FM 无命令；用带命令的 fixture 再验
+    let _ = &dir; // RULE_FM 无命令；用带命令的 fixture 再验
     let dir2 = tmp_dir("cmd-deps2");
     write_project(
         &dir2,
