@@ -57,6 +57,10 @@ jobs:
       - name: Check capabilities (registry / dependencies / compatibility)
         # capability check 需要工程目录（根目录无 forma.yaml）；用旗舰示例作为受管工程
         run: cargo run --locked -- capability check examples/school
+      - name: Check internal links
+        run: cargo run --locked -- docs check-links
+      - name: Check document dependencies
+        run: cargo run --locked -- docs check-dependencies
       - name: Detect specification compatibility changes
         shell: bash
         run: |

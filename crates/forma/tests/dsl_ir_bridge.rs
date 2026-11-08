@@ -673,3 +673,39 @@ fn mcp_impact_includes_rules_that_reference_the_field() {
     let text = serde_json::to_string(&out).unwrap();
     assert!(text.contains("/rule/Student/field:name"), "{text}");
 }
+
+#[test]
+fn command_pre_and_effects_reference_fields() {
+    // RFC-0003 §18 完整形态：命令的 pre 条件与 effect 目标字段都是表达式级依赖
+    let dir = tmp_dir("cmd-deps");
+    write_project(&dir, RULE_FM);
+    let (_p, graph) = lowered(&dir);
+    // RULE_FM 无命令；用带命令的 fixture 再验
+    let dir2 = tmp_dir("cmd-deps2");
+    write_project(
+        &dir2,
+        r#"
+app irbridge { version = "0.1.0" }
+entity Enrollment {
+  id     Uuid       @id @default(uuid)
+  status String(20)
+  note   Text?
+}
+api Enrollments { entity Enrollment operations [list get] }
+api EnrollmentApprove {
+  POST "/enrollments/{id}/approve"
+  label { en "Approve" }
+  pre  { status == "pending" }
+  effect { set Enrollment.status = "approved" }
+}
+"#,
+    );
+    let (_p, graph) = lowered(&dir2);
+    let affected = graph.affected_by("forma://project/irbridge/entity/Enrollment/field/status");
+    let uris: Vec<&str> = affected.iter().map(|n| n.uri.as_str()).collect();
+    assert!(
+        uris.iter().any(|u| u.ends_with("/api/EnrollmentApprove")),
+        "command must be affected by its pre/effect field: {uris:?}"
+    );
+    let _ = dir;
+}

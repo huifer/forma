@@ -294,12 +294,44 @@ pub fn lower_to_graph(program: &Program) -> anyhow::Result<LoweredGraph> {
                 "audit": cmd.audit,
             }),
         })?;
-        if let Some(entity) = target_entity {
-            let ent_uri = entity_uri(&project, &entity);
+        if let Some(entity) = &target_entity {
+            let ent_uri = entity_uri(&project, entity);
             if graph.has(&ent_uri) {
                 graph.add_edge(SemanticEdge {
                     from: cmd_uri.clone(),
                     to: ent_uri,
+                    kind: EdgeKind::References,
+                })?;
+            }
+        }
+        // 表达式级依赖（RFC-0003 §18）：pre 条件引用的字段 + effect 目标字段
+        // → command → field 引用边（改字段 → 命令受影响）
+        if let Some(pre) = &cmd.pre {
+            for path in crate::dsl::expr_refs(pre) {
+                let Some(field) = path.first() else {
+                    continue;
+                };
+                if crate::dsl::ACCESS_VARS.contains(&field.as_str()) {
+                    continue;
+                }
+                if let Some(entity) = &target_entity {
+                    let f_uri = entity_field_uri(&project, entity, field);
+                    if graph.has(&f_uri) {
+                        graph.add_edge(SemanticEdge {
+                            from: cmd_uri.clone(),
+                            to: f_uri,
+                            kind: EdgeKind::References,
+                        })?;
+                    }
+                }
+            }
+        }
+        for eff in &cmd.effects {
+            let f_uri = entity_field_uri(&project, &eff.entity, &eff.field);
+            if graph.has(&f_uri) {
+                graph.add_edge(SemanticEdge {
+                    from: cmd_uri.clone(),
+                    to: f_uri,
                     kind: EdgeKind::References,
                 })?;
             }

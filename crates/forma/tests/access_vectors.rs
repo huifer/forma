@@ -142,3 +142,59 @@ fn generated_web_and_dart_tests_carry_the_same_vectors() {
         );
     }
 }
+
+#[test]
+fn field_policy_vectors_are_generated_for_both_clients() {
+    let dir = tmp("field-policy");
+    fs::write(dir.join("forma.yaml"), "project:\n  name: accvec\n  version: 0.1.0\nsource: [\"forma/**/*.fm\"]\ntargets:\n  web:\n    framework: react\n    out: generated/web\n  mobile:\n    out: app_mobile\n").unwrap();
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app accvec { version = "0.1.0" }
+auth module { provider jwt roles [admin, teacher, student] }
+entity Student {
+  id     Uuid       @id @default(uuid)
+  name   String(50) @required
+  salary Decimal(10,2)
+}
+api Students { entity Student operations [list get create update delete] }
+rules R {
+  access Student {
+    fields {
+      salary → role in ["admin"]
+    }
+  }
+}
+page StudentList {
+  route "/students"
+  title { en "Students" }
+  table {
+    query   Students.list
+    columns [name]
+    actions { row [delete → Students.delete confirm] }
+  }
+}
+"#,
+    )
+    .unwrap();
+    forma::build::run_build(&dir).unwrap();
+    let web_test = fs::read_to_string(dir.join("generated/web/src/access.test.ts")).unwrap();
+    assert!(web_test.contains("canSeeField"), "{web_test}");
+    assert!(web_test.contains("field policy vectors"), "{web_test}");
+    // admin 可见 salary；teacher/student 不可见
+    assert!(
+        web_test
+            .contains("{ entity: \"Student\", field: \"salary\", role: \"admin\", visible: true }"),
+        "{web_test}"
+    );
+    assert!(
+        web_test.contains(
+            "{ entity: \"Student\", field: \"salary\", role: \"teacher\", visible: false }"
+        ),
+        "{web_test}"
+    );
+    let dart_test =
+        fs::read_to_string(dir.join("app_mobile/test/access_vector_test.dart")).unwrap();
+    assert!(dart_test.contains("canSeeField"), "{dart_test}");
+    assert!(dart_test.contains("field policy vectors"), "{dart_test}");
+}

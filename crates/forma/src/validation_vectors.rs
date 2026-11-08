@@ -402,3 +402,37 @@ fn expand_op(op: &str) -> Vec<String> {
         vec![op.to_string()]
     }
 }
+
+/// 一条字段可见性行为向量：`entity.field` 对 `role` 应当可见 / 隐藏。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FieldPolicyVector {
+    pub entity: String,
+    pub field: String,
+    pub role: String,
+    pub visible: bool,
+}
+
+/// 从 DSL 字段级策略（`access E { fields { f → role in [...] } }`）派生可见性向量。
+///
+/// 与 [`access_vectors`] 同一模式：角色全集来自 `auth module`；未列出的角色一律不可见。
+pub fn field_policy_vectors(program: &Program) -> Vec<FieldPolicyVector> {
+    let Some(auth) = program.auth.as_ref() else {
+        return Vec::new();
+    };
+    if auth.roles.is_empty() {
+        return Vec::new();
+    }
+    let policies = crate::dsl::field_policy_roles(program);
+    let mut out = Vec::new();
+    for (entity, field, roles) in &policies {
+        for role in &auth.roles {
+            out.push(FieldPolicyVector {
+                entity: entity.clone(),
+                field: field.clone(),
+                role: role.clone(),
+                visible: roles.contains(role),
+            });
+        }
+    }
+    out
+}

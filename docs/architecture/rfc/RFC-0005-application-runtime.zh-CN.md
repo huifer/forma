@@ -396,9 +396,12 @@ Runtime Module 清单随产物分发（可置于产物目录的 `runtime.manifes
   ⏸ **保留**：当前各目标独立读取环境变量，语义一致由 spec:protocols 契约文档保证；
   trait 化属增强，待多目标配置项增多再评估。
 - [x] ~~是否需要「运行时行为向量」测试集（错误映射、配置解析、字段裁剪）？~~
-  **已落地（2026-11-08）**：权限行为向量从 DSL 规则派生，Web（vitest）与 Flutter（flutter_test）
-  跨端同源执行（`validation_vectors::access_vectors` + `canForRole`）；错误码映射向量见
-  `tests/error_contract.rs`（E1–E5 三端）。
+  **已落地（2026-11-08，两轮收口）**：
+  - 权限向量：`validation_vectors::access_vectors` + `canForRole`，Web（vitest）与
+    Flutter（flutter_test）跨端同源执行；
+  - **字段裁剪向量**：`field_policy_vectors` + `canSeeField`，同一模式（`tests/access_vectors.rs` 4 项）；
+  - 错误码映射向量：`tests/error_contract.rs`（E1–E5 三端）。
+  配置解析向量暂不做（各目标独立读 env，语义由 spec:protocols 契约文档保证）。
 - [ ] Secret Provider 的 `resolve` 是否需要缓存层？
   ⏸ **保留**（跟随 G-4：Secret Provider 抽象未建模，缓存无从谈起）。
 - [x] ~~多租户配置（Tenant 层）在单租户部署中的默认值如何定义？~~

@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **表达式级依赖完整形态 + CI 加固 + 字段裁剪向量**（spec/RFC 收口续）：
+  - **command → 字段依赖边**：命令的 `pre` 条件与 `effect` 目标字段纳入表达式级依赖
+    （改字段 → 命令受影响）；回归 `tests/dsl_ir_bridge.rs`（15 项）。
+  - **CI `docs` job 加固**：新增 `docs check-links` 与 `docs check-dependencies` 两道步骤
+    （此前只跑 validate/lint/capability/compatibility）。
+  - **字段级策略跨端一致性向量**（RFC-0005 §18 运行时行为向量收口）：
+    `field_policy_vectors` + `canSeeField`，Web/Dart 测试同源生成（与权限向量同构）；
+    `tests/access_vectors.rs` 4 项。
+  - 验证门：`cargo test` **438 项 / 73 套件**、clippy `-D warnings`、fmt、docs 四门全绿、
+    school Web `tsc` + Flutter analyze 零 issue。
+
 - **spec 层开放问题收口 + 三项工程落地**（RFC §18 之后的下一站）：
   - **表达式级依赖（RFC-0003 §18）**：桥接图新增 `Rule` 节点（access 条件 / guards / checks /
     field rules / 字段级策略），边 `rule → 引用字段`（references）——`forma impact` 现在能回答

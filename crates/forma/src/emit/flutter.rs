@@ -3897,6 +3897,19 @@ fn access_vector_test_dart(program: &Program, pkg: &str) -> String {
     s.push_str("  group('access vectors (derived from DSL rules)', () {\n");
     s.push_str(&cases);
     s.push_str("  });\n");
+    // 字段级策略向量（RFC-0005 §18）：canSeeField 跨端一致性
+    let field_vectors = crate::validation_vectors::field_policy_vectors(program);
+    if !field_vectors.is_empty() {
+        s.push_str("  group('field policy vectors (derived from DSL rules)', () {\n");
+        for v in &field_vectors {
+            s.push_str(&format!(
+                "    test('{} {} as {} → {}', () {{\n      expect(canSeeField('{}', '{}', '{}'), {});\n    }});\n",
+                v.entity, v.field, v.role, if v.visible { "visible" } else { "hidden" },
+                v.entity, v.field, v.role, v.visible
+            ));
+        }
+        s.push_str("  });\n");
+    }
     s.push_str("}\n");
     s
 }
