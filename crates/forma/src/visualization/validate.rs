@@ -47,6 +47,23 @@ pub fn validate_chart(spec: &mut ChartSpec, errors: &mut Vec<Diagnostic>) {
         ));
     }
 
+    // V0.6 工业监控：阈值线仅笛卡尔形状支持（pie/gauge/funnel/... 无 y 轴语义）
+    if spec.threshold.is_some()
+        && !matches!(
+            shape,
+            ShapeFamily::Cartesian | ShapeFamily::Xy | ShapeFamily::Heatmap
+        )
+    {
+        errors.push(diag(
+            "viz-threshold-unsupported",
+            format!(
+                "chart '{}' uses `threshold` which requires a cartesian shape (got {:?})",
+                spec.id, shape
+            ),
+            line,
+        ));
+    }
+
     let require = |errors: &mut Vec<Diagnostic>,
                    spec_id: &str,
                    channel: &str,

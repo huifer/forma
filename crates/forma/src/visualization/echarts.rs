@@ -14,6 +14,7 @@ use serde_json::{json, Value};
 pub fn chart_option(spec: &ChartSpec) -> Value {
     let title = crate::dsl::pick_message(&spec.title, &spec.id);
     let mut option = json!({});
+
     if !title.is_empty() {
         option["title"] = json!({ "text": title });
     }
@@ -121,7 +122,26 @@ fn cartesian(spec: &ChartSpec, option: &mut Value) {
     if let Some(stack) = &spec.series.stack {
         series["stack"] = json!(stack);
     }
+    if let Some(t) = &spec.threshold {
+        series["markLine"] = threshold_mark_line(t);
+    }
     option["series"] = json!([series]);
+}
+
+/// V0.6 工业监控：阈值线 markLine 片段（echarts）。
+fn threshold_mark_line(t: &super::ThresholdSpec) -> Value {
+    json!({
+        "silent": true,
+        "symbol": "none",
+        "data": [{
+            "yAxis": t.value,
+            "label": {
+                "formatter": if t.label.is_empty() { format!("{}", t.value) } else { t.label.clone() },
+                "position": "insideEndTop",
+            },
+            "lineStyle": { "color": "#dc2626", "type": "dashed" },
+        }],
+    })
 }
 
 fn xy(spec: &ChartSpec, option: &mut Value) {

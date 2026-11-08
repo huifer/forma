@@ -47,6 +47,21 @@ export function antvOption(spec: ChartSpec): AntVOption {
   if (spec.chartType === "line") {
     option.smooth = true;
   }
+  // V0.6 工业监控：阈值线（G2Plot annotations，横向参考线）
+  if (spec.threshold) {
+    option.annotations = [
+      {
+        type: "line",
+        start: ["min", spec.threshold.value],
+        end: ["max", spec.threshold.value],
+        style: { stroke: "#dc2626", lineDash: [4, 4] },
+        text: {
+          content: spec.threshold.label || String(spec.threshold.value),
+          position: "end",
+        },
+      },
+    ];
+  }
   if (spec.tooltip?.enabled === false) option.tooltip = false;
   if (spec.legend) option.legend = { position: "top" as const };
   return option;

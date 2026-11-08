@@ -215,6 +215,8 @@ pub struct ChartDecl {
     pub appearance: AppearanceDecl,
     /// V0.5 design token：default | dark | data-screen（缺省 default）
     pub theme: Option<String>,
+    /// V0.6 工业监控：阈值线（y 值 + 可选标签）
+    pub threshold: Option<ThresholdDecl>,
     pub line: usize,
     /// 声明位置（M1）：`file` 在多文件合并时回填。
     pub file: Option<String>,
@@ -228,6 +230,13 @@ pub struct EncodingDecl {
     pub color: Option<ChannelDecl>,
     /// K 线（candlestick）四字段：开/高/低/收（字段名）
     pub ohlc: Option<OhlcDecl>,
+}
+
+/// 阈值线（V0.6 工业监控）：y 数值 + 可选标签。
+#[derive(Debug, Clone)]
+pub struct ThresholdDecl {
+    pub value: f64,
+    pub label: String,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -1932,6 +1941,7 @@ impl<'a> Parser<'a> {
             zoom: None,
             appearance: AppearanceDecl::default(),
             theme: None,
+            threshold: None,
             line: name_tok.line,
             file: None,
         };
@@ -1993,6 +2003,26 @@ impl<'a> Parser<'a> {
                 "theme" if tok.kind == TokKind::Ident => {
                     self.next();
                     decl.theme = Some(self.expect_ident().unwrap_or_default());
+                }
+                // V0.6 工业监控：阈值线（y 数值 + 可选标签）
+                "threshold" if tok.kind == TokKind::Ident => {
+                    self.next();
+                    let value = self.parse_number();
+                    let mut label = String::new();
+                    if self.eat_punct("{") {
+                        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+                            if self.is_kw("label") {
+                                self.next();
+                                if self.peek().kind == TokKind::Str {
+                                    label = self.next().value.clone();
+                                }
+                            } else {
+                                self.next();
+                            }
+                        }
+                        self.expect_punct("}");
+                    }
+                    decl.threshold = Some(ThresholdDecl { value, label });
                 }
                 other => {
                     self.error_at(&tok, format!("unknown chart entry '{other}'"));

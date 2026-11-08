@@ -278,3 +278,124 @@ page TradeList {
         "{codes:?}"
     );
 }
+
+// ── V0.6 工业监控：阈值线（threshold）─────────────────────────
+
+#[test]
+fn threshold_line_is_emitted_for_all_adapters() {
+    let dir = tmp("threshold-echarts");
+    project(&dir, Some("echarts"));
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app viz06 { version = "0.1.0" }
+entity Metric {
+  id    Uuid @id @default(uuid)
+  name  String(20)
+  value Decimal(12,2)
+}
+api Metrics { entity Metric operations [list get] }
+chart Trend {
+  type line
+  title { en "Trend" }
+  source Metrics.list
+  encoding { x { field name type nominal } y { field value type quantitative } }
+  threshold 100 { label "SLA" }
+}
+page TrendPage {
+  route "/trend"
+  title { en "Trend" }
+  chart Trend
+}
+page MetricList {
+  route "/metrics"
+  title { en "Metrics" }
+  table {
+    query   Metrics.list
+    columns [name]
+    actions { row [delete → Metrics.delete confirm] }
+  }
+}
+"#,
+    )
+    .unwrap();
+    forma::build::run_build(&dir).unwrap();
+    // echarts：markLine 在图表 option 投影里（chart_file）
+    let chart = read(&dir, "generated/web/src/viz/charts/Trend.ts");
+    assert!(chart.contains("markLine"), "{chart}");
+    assert!(chart.contains("SLA"), "{chart}");
+
+    // antv：annotations
+    let dir2 = tmp("threshold-antv");
+    project(&dir2, Some("antv"));
+    fs::write(
+        dir2.join("forma/app.fm"),
+        &fs::read_to_string(dir.join("forma/app.fm")).unwrap(),
+    )
+    .unwrap();
+    forma::build::run_build(&dir2).unwrap();
+    let antv_opt = read(&dir2, "generated/web/src/viz/echarts.ts");
+    assert!(antv_opt.contains("annotations"), "{antv_opt}");
+    // AntV 的 annotations 在运行时 option 投影里（antv_option），chart 文件只含 spec 投影
+    let _ = read(&dir2, "generated/web/src/viz/charts/Trend.ts");
+
+    // flutter：extraLinesData（HorizontalLine）
+    let dir3 = tmp("threshold-flutter");
+    fs::write(
+        dir3.join("forma.yaml"),
+        "project:\n  name: viz06\n  version: 0.1.0\nsource: [\"forma/**/*.fm\"]\ntargets:\n  mobile:\n    out: app_mobile\n",
+    )
+    .unwrap();
+    fs::write(
+        dir3.join("forma/app.fm"),
+        &fs::read_to_string(dir.join("forma/app.fm")).unwrap(),
+    )
+    .unwrap();
+    forma::build::run_build(&dir3).unwrap();
+    let page = read(&dir3, "app_mobile/lib/pages/trend_page.dart");
+    assert!(page.contains("ExtraLinesData"), "{page}");
+    assert!(page.contains("HorizontalLine("), "{page}");
+}
+
+#[test]
+fn threshold_on_pie_is_rejected() {
+    let dir = tmp("threshold-pie");
+    project(&dir, Some("echarts"));
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app viz06 { version = "0.1.0" }
+entity Metric {
+  id    Uuid @id @default(uuid)
+  name  String(20)
+  value Decimal(12,2)
+}
+api Metrics { entity Metric operations [list get] }
+chart Share {
+  type pie
+  title { en "Share" }
+  source Metrics.list
+  encoding { x { field name type nominal } y { field value type quantitative } }
+  threshold 100 { label "SLA" }
+}
+page TrendPage {
+  route "/trend"
+  title { en "Trend" }
+  chart Trend
+}
+page MetricList {
+  route "/metrics"
+  title { en "Metrics" }
+  table { query Metrics.list columns [name] actions { row [delete → Metrics.delete confirm] } }
+}
+"#,
+    )
+    .unwrap();
+    let (program, _) = forma::dsl::load_program(&dir, &["forma/**/*.fm".into()]).unwrap();
+    let sem = forma::dsl::check_program(&program);
+    let codes: Vec<String> = sem.iter().map(|d| d.code.clone()).collect();
+    assert!(
+        codes.iter().any(|c| c == "viz-threshold-unsupported"),
+        "{codes:?}"
+    );
+}

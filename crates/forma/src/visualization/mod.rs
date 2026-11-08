@@ -458,6 +458,14 @@ pub struct ChartSpec {
     pub theme: String,
     pub responsive: ResponsiveSpec,
     pub accessibility: A11ySpec,
+    /// V0.6 工业监控：阈值线（y 值 + 可选标签）；None = 无
+    pub threshold: Option<ThresholdSpec>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ThresholdSpec {
+    pub value: f64,
+    pub label: String,
 }
 
 // ── IR → JSON 投影（给 Runtime 消费）─────────────────────
@@ -856,6 +864,10 @@ pub fn lower_chart(
         accessibility: A11ySpec {
             aria_label: crate::dsl::pick_message(&decl.title, &decl.name).into(),
         },
+        threshold: decl.threshold.as_ref().map(|t| ThresholdSpec {
+            value: t.value,
+            label: t.label.clone(),
+        }),
     };
 
     // 形状级校验（必需通道 / 类型匹配）

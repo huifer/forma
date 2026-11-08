@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **可视化 V0.6 续：工业监控阈值线（RFC-0010 §16-6）**：
+  - DSL `threshold <数值> { label "..." }` 通道（仅笛卡尔形状）；
+  - echarts（markLine）/ AntV（annotations）/ Flutter（HorizontalLine）三端渲染；
+  - 检查层 `viz-threshold-unsupported`（pie/gauge 等无 y 轴语义的形状拒绝）；
+  - 回归 `tests/visualization_v06.rs`（9 项）；全量 `cargo test` **455 项 / 74 套件**。
+
 - **可视化 V0.6 续：Candlestick（K 线）——AntV 专属**：
   - DSL `type candlestick` + `ohlc { open high low close }` 编码；
   - AntV（G2Plot Candlestick）渲染；echarts adapter **显式拒绝**（无内置 K 线）；

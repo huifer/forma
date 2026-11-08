@@ -897,8 +897,10 @@ V0.5（theme + preview + 浏览器渲染门）已落地；V0.4 / V0.6 待排期�
      `viz-candlestick-missing-ohlc` / `viz-candlestick-missing-x` /
      `viz-candlestick-unknown-field` / `viz-candlestick-non-numeric`；
      回归 `tests/visualization_v06.rs`（7 项）。
-   - **工业监控（时序告警）**：本质是 line + 阈值线（markLine/markArea）——
-     **可基于现有 line 扩展**（加 threshold 通道），是三者中最易落地的；待需求。
+   - **工业监控（时序告警）**：**已落地（2026-11-08）**：`threshold <数值> { label "..." }`
+     通道（仅笛卡尔形状）——echarts 走 markLine、AntV 走 annotations、Flutter 走
+     HorizontalLine；检查层 `viz-threshold-unsupported`（非笛卡尔拒绝）；
+     回归 `tests/visualization_v06.rs`（9 项）。
 
 ## 17. 架构上下文与边界（Architectural Context）
 
