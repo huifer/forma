@@ -152,6 +152,25 @@ jobs:
         working-directory: examples/cursor-pagination/generated/backend
         run: cargo check
 
+  # RFC-0010 V0.6：AntV（G2Plot）adapter 生成产物验证（npm install + tsc）
+  viz-antv:
+    name: generated web with AntV adapter (tsc)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Generate artifacts
+        run: cargo run --locked -- build examples/viz-antv
+      - name: Type check
+        working-directory: examples/viz-antv/generated/web
+        run: |
+          npm install --no-audit --no-fund
+          npx tsc --noEmit
+
   # 案例协议 V14：真实 MySQL 8 端到端——迁移链 + 种子数据 + 后端 + API 冒烟
   # （list/filter/search/create/validation-error/guard）。这是历史上抓出 8 类
   # 生成器运行时 bug 的那道防线，必须留在 CI。

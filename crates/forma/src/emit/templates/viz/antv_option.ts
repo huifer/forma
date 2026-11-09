@@ -64,7 +64,7 @@ export function antvOption(spec: ChartSpec): AntVOption {
       },
     ];
   }
-  if (spec.tooltip?.enabled === false) option.tooltip = false;
+  if (spec.tooltip === false) option.tooltip = false;
   if (spec.legend) option.legend = { position: "top" as const };
   return option;
 }

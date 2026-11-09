@@ -76,7 +76,7 @@ fn antv_adapter_generates_g2plot_runtime_without_echarts() {
     assert!(!option.contains("echarts.use"), "{option}");
     let runtime = read(&dir, "generated/web/src/viz/runtime.tsx");
     assert!(runtime.contains("@antv/g2plot"), "{runtime}");
-    assert!(runtime.contains("new Plot("), "{runtime}");
+    assert!(runtime.contains("new (Plot as any)("), "{runtime}"); // Plot 在 G2Plot 类型里是抽象类 → as any
 
     // 依赖：@antv/g2plot 在，echarts 不在
     let pkg = read(&dir, "generated/web/package.json");
@@ -242,7 +242,11 @@ page TradeList {
         "{option}"
     );
     let runtime = read(&dir, "generated/web/src/viz/runtime.tsx");
-    assert!(runtime.contains("new Candlestick("), "{runtime}");
+    assert!(runtime.contains("new Stock("), "{runtime}"); // G2Plot K 线类名是 Stock
+    assert!(
+        runtime.contains("[ohlc.open, ohlc.close, ohlc.high, ohlc.low]"),
+        "{runtime}"
+    );
 }
 
 #[test]

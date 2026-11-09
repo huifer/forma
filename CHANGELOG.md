@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **AntV adapter 产物验证收口（类型层 + CI）**：修 6 个 AntV 生成 TS 类型错误
+  （import 槽位、tooltip boolean、shapeData 参数顺序、Plot 抽象类、G2Plot K 线类名
+  Stock、ohlc 四元 yField、spec 类型补 threshold/ohlc）；本地镜像 npm install +
+  `npx tsc --noEmit` **零错误**；新增 `examples/viz-antv` 参考工程与 CI `viz-antv`
+  job（npm install + tsc 长期防线）；全量 `cargo test` **457 项 / 74 套件**。
+
 - **AntV adapter 支持集收口（正确性修复）**：funnel/radar 补全（G2Plot Funnel/Radar 类）；
   gauge/heatmap/treemap 构建期**显式拒绝**（绝不错误渲染成柱状图）；
   回归 `tests/visualization_v06.rs`（11 项）；全量 `cargo test` **457 项 / 74 套件**。

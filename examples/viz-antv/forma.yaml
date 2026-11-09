@@ -1,0 +1,12 @@
+project:
+  name: viz-antv
+  version: 0.1.0
+
+source: ["forma/**/*.fm"]
+
+targets:
+  web:
+    framework: react
+    out: generated/web
+  visualization:
+    adapter: antv

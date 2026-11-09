@@ -1,0 +1,65 @@
+// AntV (G2Plot) adapter reference app (RFC-0010 V0.6): second-adapter artifact verification.
+app vizAntv {
+  version = "0.1.0"
+  locale  = ["en"]
+}
+
+entity Order {
+  id        Uuid       @id @default(uuid)
+  status    String(20) @required
+  amount    Decimal(12,2)
+  createdAt Timestamp  @default(now) @readonly
+}
+
+api Orders {
+  entity Order
+  operations [list get create update delete]
+  list { sort [createdAt desc] }
+}
+
+chart ByStatus {
+  type bar
+  title { en "Orders by status" }
+  source Orders.list
+  encoding {
+    x { field status type nominal }
+    y { field amount type quantitative }
+  }
+  threshold 1000 { label "SLA" }
+}
+
+chart Trend {
+  type line
+  title { en "Trend" }
+  source Orders.list
+  encoding {
+    x { field createdAt type temporal }
+    y { field amount type quantitative }
+  }
+}
+
+page OrderList {
+  route "/orders"
+  title { en "Orders" }
+  table {
+    query   Orders.list
+    columns [status, amount]
+    actions {
+      create → OrderEdit
+      row    [edit → OrderEdit, delete → Orders.delete confirm]
+    }
+  }
+}
+
+page OrderEdit {
+  route "/orders/{id}"
+  title { en "Edit order" }
+  form Order {
+    layout stack {
+      status Input @required
+      amount Input
+    }
+    submit → Orders.update redirect "/orders"
+    submit create → Orders.create redirect "/orders"
+  }
+}

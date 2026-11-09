@@ -35,6 +35,8 @@ export interface Encoding {
   y?: Channel;
   series?: Channel;
   color?: Channel;
+  /** V0.6 K 线：开高低收四字段 */
+  ohlc?: { open: string; high: string; low: string; close: string };
 }
 
 export type TransformPlan =
@@ -73,6 +75,8 @@ export interface ChartSpec {
   minHeight: number;
   ariaLabel: string;
   theme: VizThemeToken;
+  /** V0.6 工业监控：阈值线 */
+  threshold?: { value: number; label: string };
 }
 
 export type VizThemeToken = "default" | "dark" | "data-screen";
