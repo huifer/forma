@@ -21,6 +21,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
       `fixtures/` 目录 → 改为 `find(|p| p.is_file())`。
   验证：`cargo test` 494 项 / 76 套件全绿，`cargo clippy --all-targets -- -D warnings` 干净。
 
+- **生成的 Docker 产物在干净环境可构建**（deployability 门）：
+  - `Dockerfile` 不再 `COPY Cargo.lock`（emitter 不产出，全新克隆必然失败）→ 改为
+    `cargo fetch` 生成锁文件 + 预取依赖，保留层缓存；
+  - 基础镜像 `rust:1.83-slim` → `rust:1-slim`：依赖（sqlx → idna_adapter）要求
+    edition2024（Cargo 1.85+），旧镜像在干净环境构建失败；
+  - `.dockerignore` 从 `generated/backend/` 移到**项目根**（Docker 从 build context
+    根读取，原位置不会被读取），且不再排除 `generated/` 与 `db/`（Dockerfile 要 COPY）；
+  - CI 新增 `docker` job（真实 `docker build` 生成后端镜像）。
+  验证：本地 `docker build -f generated/backend/Dockerfile` 成功产出镜像。
+
+- **文档漂移校准**：README 双语徽章 `tests-92` → `tests-494`；
+  「本地领先 `origin/main` 49 个提交」→ 「已同步（0 ahead / 0 behind）」。
+
 ### Added
 - **发布前架构叙事校准（2026-11-09）**：把最近 49 个本地提交（Studio V3 本地历史回放、
   可视化 V0.4–V0.6、CLI 端到端回归）同步回治理叙事：

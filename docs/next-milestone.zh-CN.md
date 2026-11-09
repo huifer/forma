@@ -8,7 +8,7 @@
 > 可视化 V0.4–V0.6（Dashboard 联动/下钻、AntV/G2Plot、legend/tooltip、size/label、GIS、
 > 工业监控阈值线、K 线）与 CLI 端到端回归已提交但尚未同步到治理叙事。
 > 本阶段只校准文档状态，不新增 target、不改 emitter 契约。
-> 当前实测：`cargo test` 494 项 / 76 套件；本地领先 `origin/main` 49 个提交。
+> 当前实测：`cargo test` 494 项 / 76 套件；已同步到 `origin/main`（0 ahead / 0 behind）。
 
 > **P2 轨道 A 已全面收尾（2026-11-08）**：F-001…F-008 之后，P2 的 8 项余项
 > （多层关系遍历 / GraphQL 逆向关系 / 多租户管理 UI / 产物清单来源规格与锚点 /

@@ -395,7 +395,7 @@ RFC-0004 的可扩容机制**已落地为代码**，不是纸面设计：
 可视化 V0.4–V0.6（Dashboard 联动/下钻、AntV/G2Plot、legend/tooltip、size/label、GIS、
 工业监控阈值线、K 线）与 CLI 端到端回归；README / roadmap / RFC / Capability Registry /
 Conformance 叙事已同步到该状态。当前实测 `cargo test` 494 项 / 76 套件，
-本地领先 `origin/main` 49 个提交。
+已同步到 `origin/main`（`git rev-list --left-right --count origin/main...HEAD` 为 0/0）。
 
 **Phase 1 完成标准不是文档数量，而是**：
 

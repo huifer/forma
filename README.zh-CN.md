@@ -17,7 +17,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org/)
-[![Tests](https://img.shields.io/badge/tests-92%20passing-brightgreen.svg)](#开发)
+[![Tests](https://img.shields.io/badge/tests-494%20passing-brightgreen.svg)](#开发)
 [![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet.svg)](#AI-接入mcp)
 [![Status](https://img.shields.io/badge/status-v0.3%20%E8%AE%BE%E8%AE%A1%20%2B%20M1-blue.svg)](docs/roadmap.zh-CN.md)
 

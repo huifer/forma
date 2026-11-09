@@ -78,7 +78,11 @@ fn docker_artifacts_are_deployable_and_path_consistent() {
     let dockerfile = get("generated/backend/Dockerfile");
     let compose = get("docker-compose.yml");
     let entrypoint = get("generated/backend/entrypoint.sh");
-    let ignore = get("generated/backend/.dockerignore");
+    // .dockerignore 必须位于 build context 根（项目根），否则 Docker 不会读取；
+    // 且不能排除 generated/ 与 db/（Dockerfile 要 COPY 它们）。
+    let ignore = get(".dockerignore");
+    assert!(!ignore.contains("generated/"), "{ignore}");
+    assert!(!ignore.contains("db/"), "{ignore}");
 
     assert!(dockerfile.contains("FROM rust:"), "{dockerfile}");
     assert!(
@@ -89,6 +93,13 @@ fn docker_artifacts_are_deployable_and_path_consistent() {
         dockerfile.contains("COPY generated/backend/Cargo.toml"),
         "{dockerfile}"
     );
+    // emitter 不产出 Cargo.lock（generated/ 是生成物）：干净 checkout 上
+    // `COPY Cargo.lock` 会让镜像构建失败，改用 `cargo fetch` 预取依赖。
+    assert!(
+        !dockerfile.contains("COPY generated/backend/Cargo.lock"),
+        "{dockerfile}"
+    );
+    assert!(dockerfile.contains("cargo fetch"), "{dockerfile}");
     assert!(
         dockerfile.contains("COPY db/migrations /app/migrations"),
         "{dockerfile}"
@@ -123,6 +134,7 @@ fn docker_artifacts_are_deployable_and_path_consistent() {
     assert!(dir.join("docker-compose.yml").is_file());
     assert!(dir.join("generated/backend/Dockerfile").is_file());
     assert!(dir.join("generated/backend/entrypoint.sh").is_file());
+    assert!(dir.join(".dockerignore").is_file());
 }
 
 #[test]

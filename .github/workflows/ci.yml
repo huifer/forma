@@ -114,6 +114,21 @@ jobs:
         working-directory: examples/access-depth/generated/backend
         run: cargo check
 
+  # 生成的 Docker 产物必须可构建（deployability 门）。
+  # 干净环境才暴露的两个问题：COPY Cargo.lock（emitter 不产出，已改 cargo fetch）
+  # 与 rust:1.83 基础镜像过旧（依赖要求 edition2024，已升 rust:1-slim）。
+  docker:
+    name: generated backend docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Generate artifacts
+        run: cargo run --locked -- build examples/school
+      - name: Build backend image
+        working-directory: examples/school
+        run: docker build -f generated/backend/Dockerfile -t forma-school-test .
+
   # 案例协议 V16：生成的 React Web 必须通过 tsc 与 vite 生产构建。
   web:
     name: generated web (tsc + vite)
