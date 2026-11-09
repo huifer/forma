@@ -864,3 +864,108 @@ page MetricList {
         "{codes:?}"
     );
 }
+
+// ── V0.6 收尾：多系列 + legend 交互 ──────────────────────────────
+
+#[test]
+fn multi_series_encoding_produces_grouped_option_and_legend() {
+    let dir = tmp("multiseries");
+    project(&dir, Some("echarts"));
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app viz06 { version = "0.1.0" }
+entity Order {
+  id     Uuid @id @default(uuid)
+  month  String(10)
+  region String(20)
+  amount Decimal(12,2)
+}
+api Orders { entity Order operations [list get] }
+chart Trend {
+  type line
+  title { en "Trend" }
+  source Orders.list
+  encoding {
+    x      { field month type nominal }
+    y      { field amount type quantitative }
+    series { field region type nominal }
+  }
+}
+page OrderList {
+  route "/orders"
+  title { en "Orders" }
+  table {
+    query   Orders.list
+    columns [month]
+    actions { row [delete → Orders.delete confirm] }
+  }
+}
+"#,
+    )
+    .unwrap();
+    forma::build::run_build(&dir).unwrap();
+    let chart = read(&dir, "generated/web/src/viz/charts/Trend.ts");
+    // spec 带 series 通道；option 带 legend（多系列图例）
+    assert!(chart.contains("\"series\""), "{chart}");
+    assert!(chart.contains("region"), "{chart}");
+    // 运行时按 series 分组生成多 series（transform.ts 的 shapeCartesian）
+    let transform = read(&dir, "generated/web/src/viz/transform.ts");
+    assert!(transform.contains("seriesKey"), "{transform}");
+    let echarts = read(&dir, "generated/web/src/viz/echarts.ts");
+    assert!(echarts.contains("data.series.map"), "{echarts}");
+}
+
+#[test]
+fn dashboard_legend_toggle_drives_filters() {
+    let dir = tmp("legend-link");
+    project(&dir, Some("echarts"));
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app viz06 { version = "0.1.0" }
+entity Order {
+  id     Uuid @id @default(uuid)
+  month  String(10)
+  region String(20)
+  amount Decimal(12,2)
+}
+api Orders { entity Order operations [list get] list { filters [region] } }
+chart Trend {
+  type line
+  title { en "Trend" }
+  source Orders.list
+  encoding {
+    x      { field month type nominal }
+    y      { field amount type quantitative }
+    series { field region type nominal }
+  }
+}
+page Dashboard {
+  route "/dashboard"
+  title { en "Dashboard" }
+  dashboard {
+    grid { Trend w 12 h 300 }
+    filters [region]
+  }
+}
+page OrderList {
+  route "/orders"
+  title { en "Orders" }
+  table {
+    query   Orders.list
+    columns [month]
+    actions { row [delete → Orders.delete confirm] }
+  }
+}
+"#,
+    )
+    .unwrap();
+    forma::build::run_build(&dir).unwrap();
+    let page = read(&dir, "generated/web/src/pages/Dashboard.tsx");
+    assert!(page.contains("legend-toggle"), "{page}");
+    assert!(page.contains("region: e.series as string"), "{page}");
+    // 多系列图例（option.legend.type 由 grouped 派生）
+    let chart = read(&dir, "generated/web/src/viz/charts/Trend.ts");
+    assert!(chart.contains("\"legend\""), "{chart}");
+}

@@ -2939,14 +2939,47 @@ fn dashboard_page(
             .iter()
             .find(|i| i.chart == it.chart)
             .and_then(|i| i.drilldown.clone());
+        // V0.6 收尾：legend 交互——点击图例（系列）→ 用该系列值筛选其他图表
+        // （仅当 series 字段在 cfg.filters 中声明时接线）
+        let series_filter = program
+            .charts
+            .iter()
+            .find(|c| c.name == it.chart)
+            .and_then(|c| c.encoding.series.as_ref().map(|ch| ch.field.clone()))
+            .map(|f| crate::identity::to_snake_case(&f))
+            .filter(|f| {
+                cfg.filters
+                    .iter()
+                    .any(|fl| crate::identity::to_snake_case(fl) == *f)
+            });
+        let legend_cond = series_filter.as_ref().map(|sf| {
+            format!(
+                "e.type === \"legend-toggle\" && e.series) setFilters((p) => ({{ ...p, {sf}: e.series as string }})); "
+            )
+        });
+        // 有 select 分支 → `else if (...)`；无 → `if (...)`
+        let legend_branch = match &legend_cond {
+            Some(c) => format!("else if ({c}"),
+            None => String::new(),
+        };
+        let legend_only = match &legend_cond {
+            Some(c) => format!("if ({c}"),
+            None => String::new(),
+        };
         let on_event = match (&x_filter, &drilldown) {
             (Some(field), Some(route)) => format!(
-                " onEvent={{(e) => {{ if (e.type === \"select\" && e.name !== undefined) navigate({{ to: \"{route}\", search: {{ {field}: e.name as string }} }}); }}}}"
+                " onEvent={{(e) => {{ if (e.type === \"select\" && e.name !== undefined) navigate({{ to: \"{route}\", search: {{ {field}: e.name as string }} }}); {legend_branch}}}}}"
             ),
             (Some(field), None) => format!(
-                " onEvent={{(e) => {{ if (e.type === \"select\" && e.name !== undefined) setFilters((p) => ({{ ...p, {field}: e.name as string }})); }}}}"
+                " onEvent={{(e) => {{ if (e.type === \"select\" && e.name !== undefined) setFilters((p) => ({{ ...p, {field}: e.name as string }})); {legend_branch}}}}}"
             ),
-            (None, _) => String::new(),
+            (None, _) => {
+                if legend_only.is_empty() {
+                    String::new()
+                } else {
+                    format!(" onEvent={{(e) => {{ {legend_only}}}}}")
+                }
+            }
         };
         grid_items.push_str(&format!(
             "          <div style={{{{ gridColumn: \"span {w}\", minHeight: {h} }}}}>\n            <FormaChart spec={{{c}Spec}} option={{{c}Option}} source={{{src}Source}}{on_event} />\n          </div>\n",

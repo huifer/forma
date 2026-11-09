@@ -8,6 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **可视化 V0.6 收尾（一）：legend 交互 + 多系列验证**：
+  - legend 点击（系列）→ dashboard 筛选联动（series 字段在 `filters` 中声明时接线；
+    与 select/drilldown 分支合并生成，`if`/`else if` 按分支存在性选择）；
+  - 多系列端到端验证（`encoding.series` → shapeCartesian 分组 → 多 series + 图例）；
+  - 回归 23 项；生成工程 `tsc --noEmit` 通过；全量 `cargo test` **469 项 / 74 套件**。
+
+### Changed
+- **可视化 V0.6 续：数据标签 label**：
+  - DSL `label <field> { format "..." }`（字段必须存在）；
+  - ECharts `series.label`（{@字段} 取值）/ AntV `option.label.content`；
+  - 检查层 `viz-label-unknown-field`；
+  - 回归 21 项；全量 `cargo test` **467 项 / 74 套件**。
+
+- **可视化 V0.6 续：数值映射 size 通道（点大小由数据驱动）**：
+  - DSL `encoding { size { field <数值> type quantitative } }`（字段必须数值）；
+  - ECharts `visualMap`（连续，按 size 字段取值，inRange.symbolSize 6→20）；
+  - AntV `option.size = [field, [6,20]]`（scatter 同构）；
+  - 检查层 `viz-size-unknown-field` / `viz-size-non-numeric`；
+  - 回归 19 项；全量 `cargo test` **465 项 / 74 套件**。
+
 - **可视化 V0.6 续：地图散点 scattermap（ECharts 专属）**：
   - DSL `type scattermap` + `map "region"` + x=lng/y=lat 数值通道（二维点形状）；
   - ECharts `geo` 底图 + scatter（coordinateSystem: geo）+ GeoJSON registerMap；
