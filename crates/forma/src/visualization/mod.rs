@@ -48,10 +48,12 @@ pub enum ChartType {
     Table,
     /// K 线（V0.6 / AntV）：开高低收四字段（G2Plot Candlestick；echarts 不支持 → 构建期拒绝）
     Candlestick,
+    /// 地图（V0.6 / ECharts）：GeoJSON 底图 + 区域数值（value/name 通道）
+    Map,
 }
 
 impl ChartType {
-    pub const ALL: [ChartType; 13] = [
+    pub const ALL: [ChartType; 14] = [
         ChartType::Line,
         ChartType::Bar,
         ChartType::Area,
@@ -65,6 +67,7 @@ impl ChartType {
         ChartType::Metric,
         ChartType::Table,
         ChartType::Candlestick,
+        ChartType::Map,
     ];
 
     pub fn parse(s: &str) -> Option<Self> {
@@ -82,6 +85,7 @@ impl ChartType {
             "metric" => Some(ChartType::Metric),
             "table" => Some(ChartType::Table),
             "candlestick" => Some(ChartType::Candlestick),
+            "map" => Some(ChartType::Map),
             _ => None,
         }
     }
@@ -101,6 +105,7 @@ impl ChartType {
             ChartType::Metric => "metric",
             ChartType::Table => "table",
             ChartType::Candlestick => "candlestick",
+            ChartType::Map => "map",
         }
     }
 
@@ -117,6 +122,8 @@ impl ChartType {
             ChartType::Table => ShapeFamily::Table,
             // K 线：x 时间 + 四值（AntV 专用渲染；形状按笛卡尔整形）
             ChartType::Candlestick => ShapeFamily::Cartesian,
+            // 地图：区域名 + 数值（部分-整体形状）
+            ChartType::Map => ShapeFamily::PartToWhole,
         }
     }
 }
@@ -460,6 +467,8 @@ pub struct ChartSpec {
     pub accessibility: A11ySpec,
     /// V0.6 工业监控：阈值线（y 值 + 可选标签）；None = 无
     pub threshold: Option<ThresholdSpec>,
+    /// V0.6 GIS：地图区域名（geo/<region>.json）
+    pub map_region: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -503,6 +512,9 @@ pub fn spec_json(spec: &ChartSpec) -> serde_json::Value {
     m.insert("showSymbol".into(), json!(spec.series.show_symbol));
     m.insert("minHeight".into(), json!(spec.responsive.min_height));
     m.insert("theme".into(), json!(spec.theme));
+    if let Some(region) = &spec.map_region {
+        m.insert("mapRegion".into(), json!(region));
+    }
     m.insert(
         "ariaLabel".into(),
         json!(spec
@@ -868,6 +880,7 @@ pub fn lower_chart(
             value: t.value,
             label: t.label.clone(),
         }),
+        map_region: decl.map_region.clone(),
     };
 
     // 形状级校验（必需通道 / 类型匹配）

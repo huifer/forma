@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **可视化 V0.6 续：GIS 地图（ECharts 专属，§16-6 收口）**：
+  - DSL `type map` + `map "region"`（数据源契约：工程内 `geo/<region>.json` GeoJSON）；
+  - ECharts `registerMap`（GeoJSON 内联）+ map series；AntV/Flutter 显式处理
+    （AntV 构建期拒绝；Flutter 占位页）；geo 文件缺失构建期显式报错；
+  - 修 stub 判定（map series 无 ctor 但仍是 ECharts 图表，不能生成 stub）；
+  - 回归 `tests/visualization_v06.rs`（14 项）；全量 `cargo test` **460 项 / 74 套件**。
+
 - **AntV adapter 产物验证收口（类型层 + CI）**：修 6 个 AntV 生成 TS 类型错误
   （import 槽位、tooltip boolean、shapeData 参数顺序、Plot 抽象类、G2Plot K 线类名
   Stock、ohlc 四元 yField、spec 类型补 threshold/ohlc）；本地镜像 npm install +

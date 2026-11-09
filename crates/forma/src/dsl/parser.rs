@@ -217,6 +217,8 @@ pub struct ChartDecl {
     pub theme: Option<String>,
     /// V0.6 工业监控：阈值线（y 值 + 可选标签）
     pub threshold: Option<ThresholdDecl>,
+    /// V0.6 GIS：地图区域名（对应工程内 `geo/<region>.json` GeoJSON 数据源）
+    pub map_region: Option<String>,
     pub line: usize,
     /// 声明位置（M1）：`file` 在多文件合并时回填。
     pub file: Option<String>,
@@ -1942,6 +1944,7 @@ impl<'a> Parser<'a> {
             appearance: AppearanceDecl::default(),
             theme: None,
             threshold: None,
+            map_region: None,
             line: name_tok.line,
             file: None,
         };
@@ -2003,6 +2006,13 @@ impl<'a> Parser<'a> {
                 "theme" if tok.kind == TokKind::Ident => {
                     self.next();
                     decl.theme = Some(self.expect_ident().unwrap_or_default());
+                }
+                // V0.6 GIS：地图区域（GeoJSON 数据源名）
+                "map" if tok.kind == TokKind::Ident => {
+                    self.next();
+                    if self.peek().kind == TokKind::Str {
+                        decl.map_region = Some(self.next().value.clone());
+                    }
                 }
                 // V0.6 工业监控：阈值线（y 数值 + 可选标签）
                 "threshold" if tok.kind == TokKind::Ident => {

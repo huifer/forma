@@ -474,3 +474,89 @@ page OrderList {{
         assert!(msg.contains("not supported by the AntV"), "{msg}");
     }
 }
+
+// ── V0.6 GIS：地图（ECharts 专属，geo/<region>.json 数据源契约）─────────
+
+const GEO_JSON: &str = r#"{
+  "type": "FeatureCollection",
+  "features": [
+    {"type": "Feature", "properties": {"name": "Alpha"}, "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}},
+    {"type": "Feature", "properties": {"name": "Beta"}, "geometry": {"type": "Polygon", "coordinates": [[[1, 1], [2, 1], [2, 2], [1, 1]]]}}
+  ]
+}"#;
+
+fn gis_fixture() -> &'static str {
+    r#"
+app viz06 { version = "0.1.0" }
+entity Sales {
+  id       Uuid @id @default(uuid)
+  province String(20)
+  amount   Decimal(12,2)
+}
+api SalesApi { entity Sales operations [list get] }
+chart ChinaSales {
+  type map
+  map "cn"
+  title { en "China sales" }
+  source SalesApi.list
+  encoding {
+    x { field province type nominal }
+    y { field amount type quantitative }
+  }
+}
+page SalesList {
+  route "/sales"
+  title { en "Sales" }
+  table {
+    query   SalesApi.list
+    columns [province]
+    actions { row [delete → SalesApi.delete confirm] }
+  }
+}
+"#
+}
+
+#[test]
+fn map_chart_generates_geo_registration_and_import() {
+    let dir = tmp("gis");
+    project(&dir, Some("echarts"));
+    fs::write(dir.join("forma/app.fm"), gis_fixture()).unwrap();
+    fs::create_dir_all(dir.join("geo")).unwrap();
+    fs::write(dir.join("geo/cn.json"), GEO_JSON).unwrap();
+    forma::build::run_build(&dir).unwrap();
+
+    // GeoJSON 内联 + registerMap
+    let geo_ts = read(&dir, "generated/web/src/viz/geo_cn.ts");
+    assert!(geo_ts.contains("echarts.registerMap"), "{geo_ts}");
+    assert!(geo_ts.contains("FeatureCollection"), "{geo_ts}");
+    // chart 文件 side-effect import + map series
+    let chart = read(&dir, "generated/web/src/viz/charts/ChinaSales.ts");
+    assert!(chart.contains("import \"./geo_cn\""), "{chart}");
+    assert!(chart.contains("\"type\": \"map\""), "{chart}");
+    // spec 输出 mapRegion
+    let spec = read(&dir, "generated/web/src/viz/spec.ts");
+    assert!(spec.contains("mapRegion"), "{spec}");
+}
+
+#[test]
+fn map_chart_requires_geo_json_file() {
+    let dir = tmp("gis-missing");
+    project(&dir, Some("echarts"));
+    fs::write(dir.join("forma/app.fm"), gis_fixture()).unwrap();
+    // 不放 geo/cn.json
+    let err = forma::build::run_build(&dir).unwrap_err();
+    let msg = format!("{err:#}");
+    assert!(msg.contains("geo/cn.json"), "{msg}");
+}
+
+#[test]
+fn map_chart_rejected_by_antv_adapter() {
+    let dir = tmp("gis-antv");
+    project(&dir, Some("antv"));
+    fs::write(dir.join("forma/app.fm"), gis_fixture()).unwrap();
+    fs::create_dir_all(dir.join("geo")).unwrap();
+    fs::write(dir.join("geo/cn.json"), GEO_JSON).unwrap();
+    let err = forma::build::run_build(&dir).unwrap_err();
+    let msg = format!("{err:#}");
+    assert!(msg.contains("not supported by the AntV"), "{msg}");
+}

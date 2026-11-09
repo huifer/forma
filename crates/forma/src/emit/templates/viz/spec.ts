@@ -77,6 +77,8 @@ export interface ChartSpec {
   theme: VizThemeToken;
   /** V0.6 工业监控：阈值线 */
   threshold?: { value: number; label: string };
+  /** V0.6 GIS：地图区域名（geo/<region>.json） */
+  mapRegion?: string;
 }
 
 export type VizThemeToken = "default" | "dark" | "data-screen";

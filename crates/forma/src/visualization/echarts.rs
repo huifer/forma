@@ -48,6 +48,12 @@ pub fn chart_option(spec: &ChartSpec) -> Value {
         ]);
     }
 
+    // V0.6 GIS：地图是 map series（与形状分派无关，先处理）
+    if spec.chart_type == ChartType::Map {
+        let region = spec.map_region.clone().unwrap_or_else(|| "world".into());
+        option["series"] = json!([{ "type": "map", "map": region, "data": [] }]);
+        return option;
+    }
     match spec.shape {
         ShapeFamily::Cartesian => cartesian(spec, &mut option),
         ShapeFamily::Xy => xy(spec, &mut option),
