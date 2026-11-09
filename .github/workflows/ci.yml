@@ -216,7 +216,9 @@ jobs:
       - name: Apply migration chain + seed
         working-directory: examples/school
         run: |
-          for f in db/migrations/0001_init.sql db/migrations/0002_upgrade.sql db/migrations/0003_upgrade.sql; do
+          # 应用**全部** upgrade（0004 建 users/audit_logs，0005 加 idempotency_key）——
+          # 旧脚本只列了 0001-0003，后端启动后 auth/audit 查询会因缺表失败。
+          for f in db/migrations/*_init.sql db/migrations/*_upgrade.sql; do
             mysql -h 127.0.0.1 -P 3307 -uroot -pforma123 school < "$f"
           done
           mysql -h 127.0.0.1 -P 3307 -uroot -pforma123 school < db/seed/seed_0_3_0.sql
@@ -227,29 +229,40 @@ jobs:
           cargo build
           DATABASE_URL="mysql://root:forma123@127.0.0.1:3307/school" \
             ./target/debug/school-backend &> /tmp/backend.log &
-          for i in $(seq 1 30); do
-            curl -sf http://127.0.0.1:8080/api/schools > /dev/null && break
+          # /health 是公开探针；/api/* 实体路由在 require_auth 之后（无 token → 401）
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8080/health > /dev/null && break
             sleep 1
           done
-      - name: API smoke (list / search / create / validation / guard)
+      - name: API smoke (auth / list / search / create / validation / guard)
         run: |
           B=http://127.0.0.1:8080/api
+          # 实体路由在 require_auth 之后：先注册 + 登录拿 admin token
+          # （注册冲突 409 也接受，保证幂等）
+          REG=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$B/auth/register" \
+            -H 'Content-Type: application/json' \
+            -d '{"username":"ci-e2e","password":"ci-e2e-secret","role":"admin"}')
+          test "$REG" = "200" -o "$REG" = "409"
+          TOKEN=$(curl -s -X POST "$B/auth/login" -H 'Content-Type: application/json' \
+            -d '{"username":"ci-e2e","password":"ci-e2e-secret"}' \
+            | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+          AUTH="Authorization: Bearer $TOKEN"
           # 列表（含 JOIN 显示列）
-          curl -sf "$B/students?page_size=2" | grep -q school_name
+          curl -sf "$B/students?page_size=2" -H "$AUTH" | grep -q school_name
           # 搜索（LIKE + 三值逻辑 COALESCE）
-          curl -sf "$B/students?q=student0" | grep -q student0
+          curl -sf "$B/students?q=student0" -H "$AUTH" | grep -q student0
           # 过滤（FK 列）
-          SCHOOL=$(curl -s "$B/schools" | python3 -c "import sys,json;print(json.load(sys.stdin)[0]['id'])")
-          curl -sf "$B/students?school=$SCHOOL" | grep -q "$SCHOOL"
+          SCHOOL=$(curl -s "$B/schools" -H "$AUTH" | python3 -c "import sys,json;print(json.load(sys.stdin)[0]['id'])")
+          curl -sf "$B/students?school=$SCHOOL" -H "$AUTH" | grep -q "$SCHOOL"
           # 创建（关系载荷）
-          curl -sf -X POST "$B/schools" -H 'Content-Type: application/json' \
+          curl -sf -X POST "$B/schools" -H "$AUTH" -H 'Content-Type: application/json' \
             -d '{"name":"CI School","city":"CI"}' | grep -q '"ok":true'
           # 规则校验失败 → 400 + fields
-          CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$B/students" \
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$B/students" -H "$AUTH" \
             -H 'Content-Type: application/json' \
             -d "{\"school\":\"$SCHOOL\",\"name\":\"x\",\"email\":\"ci-$GITHUB_RUN_ID@example.test\",\"age\":2}")
           test "$CODE" = "400"
           # 守卫：删除已结课报名 → 409
-          ENR=$(curl -s "$B/enrollments" | python3 -c "import sys,json;print([e['id'] for e in json.load(sys.stdin) if e['status']=='completed'][0])")
-          CODE=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "$B/enrollments/$ENR")
+          ENR=$(curl -s "$B/enrollments" -H "$AUTH" | python3 -c "import sys,json;print([e['id'] for e in json.load(sys.stdin) if e['status']=='completed'][0])")
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "$B/enrollments/$ENR" -H "$AUTH")
           test "$CODE" = "409"

@@ -34,6 +34,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **文档漂移校准**：README 双语徽章 `tests-92` → `tests-494`；
   「本地领先 `origin/main` 49 个提交」→ 「已同步（0 ahead / 0 behind）」。
 
+- **e2e job 从未真正跑通**（此前被 `--locked` 失败掩盖，构建阶段未走到 API 冒烟）：
+  - 迁移只应用了 0001–0003，缺 0004（`users`/`audit_logs`）与 0005 → 改为应用
+    全部 `*_init.sql` + `*_upgrade.sql`；
+  - 就绪探针打到 `/api/schools`（在 `require_auth` 之后，无 token → 401）→ 改用公开
+    `/health`；
+  - API 冒烟未鉴权 → 先 `/api/auth/register` + `/api/auth/login` 拿 admin token，再带
+    `Authorization: Bearer` 跑 list/search/filter/create/validation/guard。
+  验证：本地真实 MySQL 8 + 生成后端完整复现，六项冒烟全部通过。
+
 ### Added
 - **发布前架构叙事校准（2026-11-09）**：把最近 49 个本地提交（Studio V3 本地历史回放、
   可视化 V0.4–V0.6、CLI 端到端回归）同步回治理叙事：
