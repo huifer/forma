@@ -580,7 +580,8 @@ fn cmd_import_with(
 /// 运行 F-008 的确定性业务变更矩阵（默认 10 场景 × 10 变体 = 100 cases）：
 /// DSL 检查 → 产物生成 → 代表性 backend `cargo check`（每场景变体 0）→ JSON / 文本报告。
 fn cmd_bench(dir: &Path, flags: &std::collections::HashMap<String, String>) -> i32 {
-    let out = forma::bench::run(dir).unwrap_or_else(|e| {
+    let skip_backend = flags.contains_key("skip-backend");
+    let out = forma::bench::run_with(dir, skip_backend).unwrap_or_else(|e| {
         eprintln!("benchmark aborted: {e:#}");
         std::process::exit(1);
     });

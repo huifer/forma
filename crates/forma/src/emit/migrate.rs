@@ -960,11 +960,6 @@ pub fn emit_migration(
     }
 
     let rs = read_snapshot(project_dir, out_dir);
-    eprintln!(
-        "DBG-SNAP path={:?} read_ok={}",
-        snapshot_path(project_dir, out_dir),
-        rs.is_some()
-    );
     let old_snapshot = rs.or_else(|| rebuild_snapshot_from_chain(project_dir, out_dir));
     if let Some(snap) = old_snapshot.as_ref() {
         // 快照是从迁移链重放重建的（新克隆场景）→ 落盘持久化，

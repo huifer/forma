@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **CLI 端到端回归：`docs` 三命令 + `bench --skip-backend`**：
+  - `cli_io.rs` 新增 3 项 CLI 回归（`docs check-links` 断链=warning 语义、
+    `check-dependencies` 自依赖报错、`check-compatibility` breaking 缺迁移计划报错）；
+  - 新增 `forma bench --skip-backend`：跳过 10 个 backend `cargo check`（快速 smoke 模式，
+    `bench::run_with(root, skip_backend)`；完整模式默认不变）；
+  - 移除 `emit/migrate.rs` 遗留的 `DBG-SNAP` 调试打印（曾污染 `bench --json` 的 stdout）。
+
 - **Studio V3 本地收尾：变更历史可视化与回放**：
   - `GET /api/patch-history` 读取 `.forma/audit.jsonl`（RFC-0006 P5 审计落点）；
   - 历史面板展示 patchId / 时间 / 操作 / 状态 / 改动文件 / 风险 / 重建规模；

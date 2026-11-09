@@ -476,3 +476,321 @@ fn cli_migrate_status_and_verify() {
         "{stdout}"
     );
 }
+
+// ── CLI: check / seed / init / bench / import openapi ──
+
+fn write_io(dir: &std::path::Path, fm: &str) {
+    fs::create_dir_all(dir.join("forma")).unwrap();
+    fs::write(
+        dir.join("forma.yaml"),
+        "project:\n  name: clifull\n  version: 0.1.0\nsource: [\"forma/**/*.fm\"]\ntargets:\n  db:\n    engine: mysql\n    out: generated/db\n",
+    )
+    .unwrap();
+    fs::write(dir.join("forma/app.fm"), fm).unwrap();
+}
+
+#[test]
+fn cli_check_clean_and_error_paths() {
+    let dir = tmp("check");
+    write_io(&dir, IO_FM);
+    let output = forma().args(["check"]).arg(&dir).output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("0 errors"), "{stdout}");
+
+    let bad = tmp("check-bad");
+    write_io(&bad, "app clifull { version = \"0.1.0\" }\nentity Order { id Uuid @id @default(uuid) status Nope }\n");
+    let output = forma().args(["check"]).arg(&bad).output().unwrap();
+    assert!(!output.status.success(), "check should fail");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("[ERROR]"), "{stderr}");
+}
+
+#[test]
+fn cli_seed_writes_and_verifies_deterministic_data() {
+    let dir = tmp("seed");
+    write_io(&dir, IO_FM);
+    let status = forma().args(["seed"]).arg(&dir).status().unwrap();
+    assert!(status.success(), "seed failed");
+    // 种子落盘
+    let seed_dir = dir.join("generated/db/seed");
+    assert!(seed_dir.is_dir(), "seed dir missing");
+    let entries: Vec<_> = fs::read_dir(&seed_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .collect();
+    assert!(!entries.is_empty(), "no seed files");
+
+    // --verify：磁盘种子与 DSL 推导一致 → 0
+    let output = forma()
+        .args(["seed", "--verify"])
+        .arg(&dir)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "seed verify failed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("seed verify ok"), "{stdout}");
+
+    // 篡改 → verify 非 0
+    let victim = seed_dir
+        .read_dir()
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .next()
+        .unwrap();
+    fs::write(victim.path(), "-- tampered\n").unwrap();
+    let output = forma()
+        .args(["seed", "--verify"])
+        .arg(&dir)
+        .output()
+        .unwrap();
+    assert!(!output.status.success(), "verify should fail after tamper");
+}
+
+#[test]
+fn cli_init_scaffolds_working_project() {
+    let dir = tmp("init");
+    let status = forma().args(["init"]).arg(&dir).status().unwrap();
+    assert!(status.success(), "init failed");
+    assert!(dir.join("forma.yaml").is_file(), "manifest missing");
+    assert!(dir.join("forma/app.fm").is_file(), "app.fm missing");
+    // init 产物是可通过 check 的工程
+    let output = forma().args(["check"]).arg(&dir).output().unwrap();
+    assert!(
+        output.status.success(),
+        "init project should pass check: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn cli_bench_runs_matrix_and_exits_zero() {
+    let dir = tmp("bench");
+    write_io(&dir, IO_FM);
+    let output = forma()
+        .args(["bench", "--skip-backend"])
+        .arg(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "bench failed: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("cases"), "{stdout}");
+    assert!(stdout.contains("checks"), "{stdout}");
+
+    // --json 机读
+    let output = forma()
+        .args(["bench", "--skip-backend", "--json"])
+        .arg(&dir)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("casesTotal") || stdout.contains("cases_total"),
+        "{stdout}"
+    );
+}
+
+#[test]
+fn cli_import_openapi_writes_dsl_and_loss_report() {
+    let dir = tmp("oas");
+    let spec = dir.join("petstore.yaml");
+    fs::write(
+        &spec,
+        r#"openapi: "3.0.0"
+info:
+  title: Pet Store
+  version: "1.0.0"
+paths:
+  /pets:
+    get:
+      tags: [Pet]
+      responses: {'200': {description: ok}}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string, maxLength: 50}
+        photos: {type: array, items: {type: string}}
+"#,
+    )
+    .unwrap();
+    let out = dir.join("app.fm");
+    let report = dir.join("loss.json");
+    let status = forma()
+        .args(["import", "openapi"])
+        .arg(&spec)
+        .args(["--out"])
+        .arg(&out)
+        .args(["--loss-report"])
+        .arg(&report)
+        .status()
+        .unwrap();
+    assert!(status.success(), "import openapi failed");
+    let dsl = fs::read_to_string(&out).unwrap();
+    assert!(dsl.contains("entity Pet"), "{dsl}");
+    let loss = fs::read_to_string(&report).unwrap();
+    assert!(loss.contains("openapi"), "{loss}");
+}
+
+// ── CLI: docs check-links / check-dependencies / check-compatibility ──
+
+fn write_doc_cli(root: &std::path::Path, rel: &str, content: &str) {
+    let p = root.join("docs/architecture").join(rel);
+    fs::create_dir_all(p.parent().unwrap()).unwrap();
+    fs::write(p, content).unwrap();
+}
+
+fn full_rfc_cli(id: &str, deps: &str) -> String {
+    let mut s = format!(
+        "---\nid: {id}\ntitle: {id} 测试\nstatus: Accepted\nversion: 1.0\nauthors: [tester]\ncreated: 2026-11-04\nupdated: 2026-11-04\ndomain: architecture\ndepends_on: [{deps}]\nrelated_rfcs: []\nrelated_adrs: []\nbreaking_change: false\n---\n\n# {id}\n\n"
+    );
+    for (n, title) in [
+        (1, "Metadata"),
+        (2, "Abstract"),
+        (3, "Motivation"),
+        (4, "Goals"),
+        (5, "Non-goals"),
+        (6, "Terminology"),
+        (7, "Architectural Context"),
+        (8, "Design"),
+        (9, "Compatibility"),
+        (10, "Security Considerations"),
+        (11, "Performance and Reliability"),
+        (12, "Alternatives Considered"),
+        (13, "Trade-offs"),
+        (14, "Migration Plan"),
+        (15, "Implementation Plan"),
+        (16, "Open Questions"),
+        (17, "Conformance Requirements"),
+        (18, "Acceptance Criteria"),
+        (19, "References"),
+        (20, "Change Log"),
+    ] {
+        s.push_str(&format!("## {n}. {title}\n\n正文。\n\n"));
+    }
+    s
+}
+
+#[test]
+fn cli_docs_check_links_clean_and_broken() {
+    let root = tmp("docs-links");
+    write_doc_cli(
+        &root,
+        "rfc/RFC-0001-a.zh-CN.md",
+        &full_rfc_cli("RFC-0001", ""),
+    );
+
+    // 干净 → 0
+    let output = forma()
+        .args(["docs", "check-links"])
+        .arg(&root)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "check-links clean failed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("governed doc"), "{stdout}");
+
+    // 断链 → warning（exit 0），但 stderr 含 docs-link-broken
+    write_doc_cli(
+        &root,
+        "rfc/RFC-0002-b.zh-CN.md",
+        &full_rfc_cli("RFC-0002", "").replace(
+            "## 19. References",
+            "## 19. References\n\n- [missing](missing.md)",
+        ),
+    );
+    let output = forma()
+        .args(["docs", "check-links"])
+        .arg(&root)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "broken link is a warning, exit 0");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("docs-link-broken"), "{stderr}");
+}
+
+#[test]
+fn cli_docs_check_dependencies_self_and_cycle() {
+    let root = tmp("docs-deps");
+    // 自依赖 → 非 0
+    write_doc_cli(
+        &root,
+        "rfc/RFC-0001-a.zh-CN.md",
+        &full_rfc_cli("RFC-0001", "RFC-0001"),
+    );
+    let output = forma()
+        .args(["docs", "check-dependencies"])
+        .arg(&root)
+        .output()
+        .unwrap();
+    assert!(!output.status.success(), "self-dep should fail");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("docs-dep-self"), "{stderr}");
+
+    // 干净依赖 → 0
+    let root2 = tmp("docs-deps-ok");
+    write_doc_cli(
+        &root2,
+        "rfc/RFC-0001-a.zh-CN.md",
+        &full_rfc_cli("RFC-0001", ""),
+    );
+    write_doc_cli(
+        &root2,
+        "rfc/RFC-0002-b.zh-CN.md",
+        &full_rfc_cli("RFC-0002", "RFC-0001"),
+    );
+    let output = forma()
+        .args(["docs", "check-dependencies"])
+        .arg(&root2)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "clean deps failed");
+}
+
+#[test]
+fn cli_docs_check_compatibility_breaking_without_migration() {
+    let root = tmp("docs-compat");
+    // breaking_change: true 且删掉 Migration Plan 章节 → 非 0
+    let doc = full_rfc_cli("RFC-0001", "")
+        .replace("breaking_change: false", "breaking_change: true")
+        .replace("## 14. Migration Plan\n\n正文。\n\n", "");
+    write_doc_cli(&root, "rfc/RFC-0001-a.zh-CN.md", &doc);
+    let output = forma()
+        .args(["docs", "check-compatibility"])
+        .arg(&root)
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "breaking without migration should fail"
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stdout.contains("docs-compat-breaking-without-migration")
+            || stderr.contains("docs-compat-breaking-without-migration"),
+        "{stdout} {stderr}"
+    );
+
+    // 干净 → 0
+    let root2 = tmp("docs-compat-ok");
+    write_doc_cli(
+        &root2,
+        "rfc/RFC-0001-a.zh-CN.md",
+        &full_rfc_cli("RFC-0001", ""),
+    );
+    let output = forma()
+        .args(["docs", "check-compatibility"])
+        .arg(&root2)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "clean compat failed");
+}

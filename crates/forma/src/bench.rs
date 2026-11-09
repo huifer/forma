@@ -87,6 +87,11 @@ pub fn cases() -> Vec<BenchmarkCase> {
 /// 运行矩阵：100 个 case 全量 DSL check + 产物生成；每场景 variant=0 额外执行
 /// 生成 backend 的 `cargo check`（10 个真实编译代表样本，避免 100 次重复依赖安装）。
 pub fn run(root: &Path) -> Result<BenchmarkReport> {
+    run_with(root, false)
+}
+
+/// `skip_backend=true`：跳过 10 个 backend `cargo check`（快速 smoke 模式）。
+pub fn run_with(root: &Path, skip_backend: bool) -> Result<BenchmarkReport> {
     fs::create_dir_all(root)?;
     let started = Instant::now();
     let mut results = Vec::with_capacity(100);
@@ -146,7 +151,7 @@ pub fn run(root: &Path) -> Result<BenchmarkReport> {
         }
 
         // 10 个代表样本做真实依赖编译（其余 case 的信度由 check + build + hash 保证）
-        let backend_compile = if case.variant == 0 && build_ok {
+        let backend_compile = if !skip_backend && case.variant == 0 && build_ok {
             let backend = case_dir.join("generated/backend");
             let status = Command::new("cargo")
                 .arg("check")
