@@ -234,6 +234,24 @@ fn read_ledger_lenient(project_dir: &Path) -> crate::emit::MigrationLedger {
         .unwrap_or_default()
 }
 
+/// 台账存在则用台账；否则从入库迁移链只读重建（不写盘）。
+fn migration_ledger_readonly(project_dir: &Path) -> anyhow::Result<crate::emit::MigrationLedger> {
+    let ledger = read_ledger_lenient(project_dir);
+    if !ledger.entries.is_empty() {
+        return Ok(ledger);
+    }
+    let loaded = crate::manifest::load_manifest(project_dir)?;
+    let out = loaded
+        .manifest
+        .targets
+        .database
+        .as_ref()
+        .and_then(|d| d.out.clone())
+        .unwrap_or_else(|| "generated/db".into());
+    let program = crate::build::load_dsl_program(project_dir)?.1;
+    crate::emit::ledger_from_committed_chain(project_dir, &out, &program)
+}
+
 /// 工具分发（pub 供集成测试直接调用）。
 pub fn call_tool(
     project_dir: &Path,
@@ -271,7 +289,9 @@ pub fn call_tool(
                 bail!("forma_migrate 仅适用于 DSL 工程（forma.yaml 带 `source`）");
             }
             let lines = crate::emit::migration_status(project_dir)?;
-            let ledger = read_ledger_lenient(project_dir);
+            // 台账是 gitignored 本机状态。缺失时只读地从入库 SQL 链重建，
+            // 不写盘，也不依赖本机 .forma/migrations.json。
+            let ledger = migration_ledger_readonly(project_dir)?;
             let entries: Vec<serde_json::Value> = ledger
                 .entries
                 .iter()

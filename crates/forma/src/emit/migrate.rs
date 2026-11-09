@@ -273,6 +273,42 @@ fn ledger_path(project_dir: &Path) -> PathBuf {
     project_dir.join(".forma").join("migrations.json")
 }
 
+/// 台账缺失（新克隆 / CI 干净 checkout）时从入库迁移链**只读**重建。
+/// 不写 `.forma/migrations.json`，避免只读工具产生副作用。
+pub fn read_ledger_lenient_public(project_dir: &Path) -> Result<MigrationLedger> {
+    let ledger = read_ledger(project_dir);
+    if !ledger.entries.is_empty() {
+        return Ok(ledger);
+    }
+    // 非 DSL 工程 / 语义错误工程：没有迁移链可读，返回空台账（不报错）。
+    let loaded = match crate::manifest::load_manifest(project_dir) {
+        Ok(m) => m,
+        Err(_) => return Ok(MigrationLedger::default()),
+    };
+    let program = match crate::build::load_dsl_program(project_dir) {
+        Ok((_, p)) => p,
+        Err(_) => return Ok(MigrationLedger::default()),
+    };
+    let out = loaded
+        .manifest
+        .targets
+        .database
+        .as_ref()
+        .and_then(|t| t.out.clone())
+        .unwrap_or_else(|| "generated/db".into());
+    ledger_from_committed_chain(project_dir, &out, &program)
+}
+
+/// 从入库迁移链重建台账（只读，不写盘）。
+pub fn ledger_from_committed_chain(
+    project_dir: &Path,
+    out_dir: &str,
+    program: &Program,
+) -> Result<MigrationLedger> {
+    let app_version = app_version_of(program);
+    ledger_from_chain(project_dir, out_dir, &app_version)
+}
+
 fn read_ledger(project_dir: &Path) -> MigrationLedger {
     read_text(&ledger_path(project_dir))
         .ok()
@@ -1078,8 +1114,11 @@ pub fn emit_migration(
 // ── CLI：forma migrate {status|history|up|down} ────────────
 
 /// 台账摘要行（供 status/history 渲染）。
+///
+/// 台账是 gitignored 本机状态；干净 checkout 上缺失时从**入库迁移链**只读重建，
+/// 不写盘（与 `ledger_from_committed_chain` 同一来源）。
 pub fn migration_status(project_dir: &Path) -> Result<Vec<String>> {
-    let ledger = read_ledger(project_dir);
+    let ledger = read_ledger_lenient_public(project_dir)?;
     if ledger.entries.is_empty() {
         return Ok(vec![
             "(no migrations recorded — run `forma build` first)".into()

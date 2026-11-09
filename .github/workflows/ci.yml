@@ -208,7 +208,8 @@ jobs:
       - name: Run backend
         working-directory: examples/school/generated/backend
         run: |
-          cargo build --locked
+          # generated/ 被 gitignore，emitter 不产出 Cargo.lock；--locked 在干净 checkout 上必然失败。
+          cargo build
           DATABASE_URL="mysql://root:forma123@127.0.0.1:3307/school" \
             ./target/debug/school-backend &> /tmp/backend.log &
           for i in $(seq 1 30); do

@@ -1234,11 +1234,8 @@ fn cmd_migrate(
 }
 
 fn read_ledger_lenient(project_dir: &std::path::Path) -> forma::emit::MigrationLedger {
-    let p = project_dir.join(".forma").join("migrations.json");
-    forma::util::read_text(&p)
-        .ok()
-        .and_then(|t| serde_json::from_str(&t).ok())
-        .unwrap_or_default()
+    // 台账缺失（干净 checkout）时从入库迁移链只读重建，与 migration_status 同源。
+    forma::emit::read_ledger_lenient_public(project_dir).unwrap_or_default()
 }
 
 fn cmd_diff(

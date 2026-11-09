@@ -531,14 +531,15 @@ fn cli_seed_writes_and_verifies_deterministic_data() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("seed verify ok"), "{stdout}");
 
-    // 篡改 → verify 非 0
+    // 篡改 → verify 非 0（read_dir 顺序不稳定，只取文件，避免命中 fixtures/ 目录）
     let victim = seed_dir
         .read_dir()
         .unwrap()
         .filter_map(|e| e.ok())
-        .next()
-        .unwrap();
-    fs::write(victim.path(), "-- tampered\n").unwrap();
+        .map(|e| e.path())
+        .find(|p| p.is_file())
+        .expect("no seed file to tamper");
+    fs::write(&victim, "-- tampered\n").unwrap();
     let output = forma()
         .args(["seed", "--verify"])
         .arg(&dir)

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **CI 在干净 checkout 上的三类 P0 失败**（HEAD `50b5804` 的 GitHub Actions 全量 job 首次运行暴露）：
+  - `clippy`：`visualization/mod.rs` 的 `////` 注释触发 Rust 1.99 新 lint
+    `four_forward_slashes`（本地 1.97 不报）→ 改为 `///`；
+  - `e2e`：生成后端目录 `cargo build --locked` 必然失败（`generated/` 被 gitignore，
+    emitter 不产出 `Cargo.lock`）→ 去掉 `--locked`；
+  - `scaffold_mcp` / `cli_io` 两条测试非 hermetic：
+    - 迁移台账 `.forma/migrations.json` 是 gitignored 本机状态，缺失时 MCP/CLI 返回空；
+      新增 `read_ledger_lenient_public` / `ledger_from_committed_chain`，从**入库 SQL 链**
+      只读重建（不写盘），`forma_migrate` / `migrate status` 在干净 checkout 上得到完整链；
+    - `cli_seed_writes_and_verifies_deterministic_data` 的 `read_dir().next()` 可能命中
+      `fixtures/` 目录 → 改为 `find(|p| p.is_file())`。
+  验证：`cargo test` 494 项 / 76 套件全绿，`cargo clippy --all-targets -- -D warnings` 干净。
+
 ### Added
 - **发布前架构叙事校准（2026-11-09）**：把最近 49 个本地提交（Studio V3 本地历史回放、
   可视化 V0.4–V0.6、CLI 端到端回归）同步回治理叙事：

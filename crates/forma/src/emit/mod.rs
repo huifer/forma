@@ -37,9 +37,10 @@ pub use flutter::emit_flutter;
 pub use graphql::emit_graphql;
 pub use hono::emit_hono;
 pub use migrate::{
-    classify_op, diff_down_sql, diff_ops, emit_migration, migration_down, migration_risk_lines,
-    migration_status, migration_up, migration_verify, pending_migration_ops, MigrationEntry,
-    MigrationLedger, MigrationOp, MigrationRisk, MigrationRiskReport,
+    classify_op, diff_down_sql, diff_ops, emit_migration, ledger_from_committed_chain,
+    migration_down, migration_risk_lines, migration_status, migration_up, migration_verify,
+    pending_migration_ops, read_ledger_lenient_public, MigrationEntry, MigrationLedger,
+    MigrationOp, MigrationRisk, MigrationRiskReport,
 };
 pub use mysql::emit_mysql;
 pub use nest::emit_nestjs;

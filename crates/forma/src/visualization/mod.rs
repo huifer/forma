@@ -8,7 +8,7 @@
 //! 1. IR 里不出现任何 ECharts 概念（没有 xAxis/series/dataZoom 这种词）；
 //! 2. IR → option 的投影是纯函数且确定性（同 IR 两次投影 byte 级一致）；
 //! 3. 数据变换（filter/bucket/aggregate/sort/limit）属于 IR 语义，不属于 Adapter ——
-////    这样 AntV / D3 适配器可以复用同一套变换语义。
+//!    这样 AntV / D3 适配器可以复用同一套变换语义。
 
 pub mod echarts;
 pub mod validate;
