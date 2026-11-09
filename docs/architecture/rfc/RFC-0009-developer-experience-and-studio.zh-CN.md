@@ -202,6 +202,12 @@ pub struct Diagnostic {
 | **V2 双向编辑** | ER 图增删字段/关系 → 写回 `.fm`；页面原型调整列/控件 → 写回 `page` 块；补丁审阅 | 写回等价于一次语义补丁，走同一校验管线 |
 | **V3 协作** | 多人实时协作、变更评审视图（DSL diff 的图形化）、历史版本回放 | 变更历史可视化且可回放 |
 
+> **V3 收尾（2026-11-08）**：本地审阅面的「变更历史可视化且可回放」已交付——
+> `GET /api/patch-history` 读取 `.forma/audit.jsonl`（append-only 审计），展示 patchId /
+> 时间 / 操作 / 状态 / 改动文件 / 风险 / 重建规模；「回放」= 审计摘要 + patchId
+> 重新提交（补丁事务幂等，零二次变更）。多人实时协作仍明确排除（仅绑定 127.0.0.1）。
+> 回归 `tests/studio.rs::studio_patch_history_is_visible_and_replayable`。
+
 > **明确排除**：Studio 不做运行时拖拽编排、不做可视化编程。页面由 `page` 块的抽象原语表达，视觉自由度由目标生态（shadcn 等）承担。
 
 ### 8.3 Data Model

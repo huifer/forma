@@ -137,6 +137,14 @@ fn html_ui() -> String {
   .edit input, .edit select { padding: 6px 8px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 13px; }
   .mini { font-size: 12px; padding: 4px 10px; border-radius: 8px; border: 1px solid #e2e8f0; background: #fff; cursor: pointer; }
   .result { font-size: 11px; white-space: pre-wrap; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; max-height: 220px; overflow: auto; }
+  .history-btn { position: fixed; right: 16px; bottom: 16px; padding: 8px 14px; border-radius: 999px; border: 1px solid #2563eb; background: #2563eb; color: #fff; cursor: pointer; font-size: 12px; }
+  .history-panel { position: fixed; top: 0; right: -360px; width: 340px; height: 100vh; background: #fff; border-left: 1px solid #e2e8f0; transition: right .2s ease; padding: 12px; overflow: auto; z-index: 20; }
+  .history-panel.open { right: 0; }
+  .history-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .history-item { border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; margin-bottom: 8px; font-size: 12px; }
+  .history-item .status { font-weight: 600; }
+  .history-item .meta { color: #64748b; margin-top: 4px; word-break: break-all; }
+  .history-item .ops { margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -148,6 +156,11 @@ fn html_ui() -> String {
   <nav class="nav" id="nav"></nav>
   <section class="detail" id="detail"><p class="empty">选择左侧实体查看字段与关系。</p></section>
 </main>
+<button class="history-btn" onclick="toggleHistory()">变更历史</button>
+<aside class="history-panel" id="history">
+  <div class="history-head"><strong>变更历史</strong><button class="mini" onclick="toggleHistory()">关闭</button></div>
+  <div id="history-list" class="history-list"><p class="empty">暂无审计记录</p></div>
+</aside>
 <script>
 const nav = document.getElementById('nav');
 const detail = document.getElementById('detail');
@@ -225,6 +238,30 @@ function rebuildNav(m) {
     b.onclick = () => show(e);
     nav.appendChild(b);
   }
+}
+
+function toggleHistory() {
+  document.getElementById('history').classList.toggle('open');
+  loadHistory();
+}
+
+async function loadHistory() {
+  const res = await fetch('/api/patch-history');
+  const h = await res.json();
+  const box = document.getElementById('history-list');
+  if (!h.items || h.items.length === 0) { box.innerHTML = '<p class="empty">暂无审计记录</p>'; return; }
+  box.innerHTML = h.items.map(it => {
+    const ops = (it.operations || []).join(', ');
+    const files = (it.filesChanged || []).join(', ');
+    const status = it.status === 'applied' ? '<span class="status" style="color:#16a34a">✓ applied</span>'
+      : '<span class="status" style="color:#dc2626">✗ ' + it.status + '</span>';
+    return '<div class="history-item">' + status
+      + '<div class="meta">' + it.ts + ' · build ' + it.buildFiles + ' files</div>'
+      + (ops ? '<div class="ops">' + ops + '</div>' : '')
+      + (files ? '<div class="meta">' + files + '</div>' : '')
+      + (it.message ? '<div class="meta">' + it.message + '</div>' : '')
+      + '</div>';
+  }).join('') + '<p class="empty">' + h.note + '</p>';
 }
 
 (async () => {
@@ -366,6 +403,11 @@ fn handle(mut conn: TcpStream, dir: &Path) {
                 ),
             }
         }
+        ("GET", "/api/patch-history") => {
+            // V3：变更历史可视化（本地审阅面；多人实时协作不在 v0.3 范围）
+            let body = serde_json::to_string(&patch_history(dir)).unwrap_or_default();
+            response("200 OK", "application/json", body)
+        }
         _ => response("404 Not Found", "text/plain", "not found".into()),
     };
     write_resp(&mut conn, &resp);
@@ -396,4 +438,54 @@ pub fn studio_port(flag: Option<u16>) -> u16 {
             .unwrap_or(DEFAULT_PORT)
     })
     .max(1)
+}
+
+/// 变更历史条目（Studio V3 本地审阅面）。
+///
+/// 数据来源：`.forma/audit.jsonl`（append-only，RFC-0006 P5 审计落点）。
+/// 「回放」= 在审阅面展示某次补丁的变更前后摘要（operations / filesChanged /
+/// buildFiles / risk / message）；真实 DSL 内容可由 patchId 重新提交补丁事务，
+/// 本函数只负责把历史变成可视化数据，不伪造 diff。
+pub fn patch_history(dir: &Path) -> serde_json::Value {
+    let events = crate::auditing::read_recent(dir, 200);
+    let items: Vec<serde_json::Value> = events
+        .iter()
+        .rev()
+        .map(|e| {
+            let ops = e
+                .get("operations")
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str().map(String::from))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            let files = e
+                .get("filesChanged")
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str().map(String::from))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            json!({
+                "ts": e.get("ts").cloned().unwrap_or_else(|| json!("")),
+                "project": e.get("project").cloned().unwrap_or_else(|| json!("")),
+                "status": e.get("status").cloned().unwrap_or_else(|| json!("")),
+                "operations": ops,
+                "filesChanged": files,
+                "buildFiles": e.get("buildFiles").cloned().unwrap_or_else(|| json!(0)),
+                "risk": e.get("risk").cloned().unwrap_or_else(|| json!({})),
+                "approvalBy": e.get("approvalBy").cloned(),
+                "message": e.get("message").cloned(),
+            })
+        })
+        .collect();
+    json!({
+        "count": items.len(),
+        "items": items,
+        "note": "回放为审计摘要；重新应用请携带 patchId 走 /api/patch（事务幂等）",
+    })
 }

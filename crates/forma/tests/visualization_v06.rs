@@ -334,7 +334,7 @@ page MetricList {
     project(&dir2, Some("antv"));
     fs::write(
         dir2.join("forma/app.fm"),
-        &fs::read_to_string(dir.join("forma/app.fm")).unwrap(),
+        fs::read_to_string(dir.join("forma/app.fm")).unwrap(),
     )
     .unwrap();
     forma::build::run_build(&dir2).unwrap();
@@ -352,7 +352,7 @@ page MetricList {
     .unwrap();
     fs::write(
         dir3.join("forma/app.fm"),
-        &fs::read_to_string(dir.join("forma/app.fm")).unwrap(),
+        fs::read_to_string(dir.join("forma/app.fm")).unwrap(),
     )
     .unwrap();
     forma::build::run_build(&dir3).unwrap();
@@ -444,13 +444,13 @@ page OrderList {
 #[test]
 fn antv_adapter_rejects_unsupported_types_explicitly() {
     // treemap：编码合法（x+y 同构），但 AntV adapter 不支持 → 构建期 bail
-    for bad in ["treemap"] {
-        let dir = tmp("antv-bad");
-        project(&dir, Some("antv"));
-        fs::write(
-            dir.join("forma/app.fm"),
-            format!(
-                r#"
+    let bad = "treemap";
+    let dir = tmp("antv-bad");
+    project(&dir, Some("antv"));
+    fs::write(
+        dir.join("forma/app.fm"),
+        format!(
+            r#"
 app viz06 {{ version = "0.1.0" }}
 entity Order {{ id Uuid @id @default(uuid) name String(20) value Decimal(12,2) }}
 api Orders {{ entity Order operations [list get] }}
@@ -466,13 +466,12 @@ page OrderList {{
   table {{ query Orders.list columns [name] actions {{ row [delete → Orders.delete confirm] }} }}
 }}
 "#
-            ),
-        )
-        .unwrap();
-        let err = forma::build::run_build(&dir).unwrap_err();
-        let msg = format!("{err:#}");
-        assert!(msg.contains("not supported by the AntV"), "{msg}");
-    }
+        ),
+    )
+    .unwrap();
+    let err = forma::build::run_build(&dir).unwrap_err();
+    let msg = format!("{err:#}");
+    assert!(msg.contains("not supported by the AntV"), "{msg}");
 }
 
 // ── V0.6 GIS：地图（ECharts 专属，geo/<region>.json 数据源契约）─────────
@@ -820,7 +819,7 @@ page MetricList {
     project(&dir2, Some("antv"));
     fs::write(
         dir2.join("forma/app.fm"),
-        &fs::read_to_string(dir.join("forma/app.fm")).unwrap(),
+        fs::read_to_string(dir.join("forma/app.fm")).unwrap(),
     )
     .unwrap();
     forma::build::run_build(&dir2).unwrap();

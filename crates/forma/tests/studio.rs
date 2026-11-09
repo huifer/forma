@@ -275,3 +275,70 @@ fn studio_v2_bidirectional_patch() {
     let (status, _) = post(port, "/api/patch", "{not json");
     assert!(status.contains("400"), "{status}");
 }
+
+// ── Studio V3：变更历史可视化与回放 ─────────────────────────────
+
+#[test]
+fn studio_patch_history_is_visible_and_replayable() {
+    let dir = tmp_dir("v3-history");
+    write_project(&dir);
+
+    let listener = forma::studio::run_studio(0).unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let dir_thread = dir.clone();
+    std::thread::spawn(move || {
+        forma::studio::serve(listener, Arc::from(dir_thread.as_path()));
+    });
+    std::thread::sleep(Duration::from_millis(200));
+
+    // 先打一次补丁，产生审计记录
+    let (status, _) = post(
+        port,
+        "/api/patch",
+        r#"{"patchId":"history-1","operations":[{"op":"add-entity-field","entity":"Order","field":{"name":"note","type":"Text"},"required":false}]}"#,
+    );
+    assert!(status.contains("200"), "{status}");
+
+    // 历史 API
+    let (status, body) = get(port, "/api/patch-history");
+    assert!(status.contains("200"), "{status}");
+    let h: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert!(h["count"].as_u64().unwrap() >= 1, "{h}");
+    let item = &h["items"][h["items"].as_array().unwrap().len() - 1];
+    assert_eq!(item["status"], "applied", "{h}");
+    assert!(
+        item["operations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|o| o == "add-entity-field"),
+        "{h}"
+    );
+    assert!(
+        item["filesChanged"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|f| f == "forma/app.fm"),
+        "{h}"
+    );
+    assert!(h["note"].as_str().unwrap().contains("patchId"), "{h}");
+
+    // UI 含历史面板
+    let (status, body) = get(port, "/");
+    assert!(status.contains("200"), "{status}");
+    assert!(body.contains("变更历史"), "{body}");
+    assert!(body.contains("/api/patch-history"), "{body}");
+
+    // 回放：审计摘要 + patchId 可重新提交（幂等零二次变更）
+    let (status, body) = post(
+        port,
+        "/api/patch",
+        r#"{"patchId":"history-1","operations":[{"op":"add-entity-field","entity":"Order","field":{"name":"note","type":"Text"},"required":false}]}"#,
+    );
+    assert!(status.contains("200"), "{status} {body}");
+    let report: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(report["idempotent"], true, "{report}");
+    let fm = std::fs::read_to_string(dir.join("forma/app.fm")).unwrap();
+    assert!(fm.contains("note Text"), "{fm}");
+}

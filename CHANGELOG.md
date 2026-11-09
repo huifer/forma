@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Studio V3 本地收尾：变更历史可视化与回放**：
+  - `GET /api/patch-history` 读取 `.forma/audit.jsonl`（RFC-0006 P5 审计落点）；
+  - 历史面板展示 patchId / 时间 / 操作 / 状态 / 改动文件 / 风险 / 重建规模；
+  - 「回放」= 审计摘要 + patchId 幂等重提交（零二次变更）；多人实时协作仍明确排除；
+  - 回归 `tests/studio.rs::studio_patch_history_is_visible_and_replayable`；
+  - RFC-0009 V3 收尾注记 + roadmap M11 Studio v3 状态同步。
+
+### Changed
 - **可视化 V0.6 收尾（二）：tooltip 交互 + 类型缺口补全**：
   - AntV 多系列 tooltip 共享 crosshair（`shared: Boolean(spec.encoding.series)`）、
     单系列 item tooltip（showMarkers）；ECharts 侧已有 valueFormatter；
