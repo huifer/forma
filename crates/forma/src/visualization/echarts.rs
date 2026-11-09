@@ -48,10 +48,32 @@ pub fn chart_option(spec: &ChartSpec) -> Value {
         ]);
     }
 
-    // V0.6 GIS：地图是 map series（与形状分派无关，先处理）
-    if spec.chart_type == ChartType::Map {
+    // V0.6 GIS：地图类是 series type（与形状分派无关，先处理）
+    // 数值映射（点大小由数据驱动）：visualMap 连续型，按 size 字段取值
+    if let Some(size_ch) = &spec.encoding.size {
+        option["visualMap"] = json!({
+            "show": true,
+            "min": 0,
+            "max": 100,
+            "dimension": size_ch.field,
+            "inRange": { "symbolSize": [6, 20] },
+            "textStyle": { "color": "#666" },
+        });
+    }
+    if spec.chart_type == ChartType::Map || spec.chart_type == ChartType::ScatterMap {
         let region = spec.map_region.clone().unwrap_or_else(|| "world".into());
-        option["series"] = json!([{ "type": "map", "map": region, "data": [] }]);
+        if spec.chart_type == ChartType::ScatterMap {
+            // 地图散点：geo 底图 + scatter（coordinateSystem: geo；x=lng, y=lat）
+            option["geo"] = json!({ "map": region, "roam": true });
+            option["series"] = json!([{
+                "type": "scatter",
+                "coordinateSystem": "geo",
+                "symbolSize": 8,
+                "data": [],
+            }]);
+        } else {
+            option["series"] = json!([{ "type": "map", "map": region, "data": [] }]);
+        }
         return option;
     }
     match spec.shape {
@@ -130,6 +152,15 @@ fn cartesian(spec: &ChartSpec, option: &mut Value) {
     }
     if let Some(t) = &spec.threshold {
         series["markLine"] = threshold_mark_line(t);
+    }
+    // 数据标签（V0.6）：图表上直接显示数值
+    if let Some(label) = &spec.label {
+        // ECharts 的 {@字段} 语法直接取该字段值（如 {@sales}）
+        series["label"] = json!({
+            "show": true,
+            "position": "top",
+            "formatter": format!("{{@{}}}", label.field),
+        });
     }
     option["series"] = json!([series]);
 }

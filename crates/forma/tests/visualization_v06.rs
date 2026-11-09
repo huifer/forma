@@ -560,3 +560,307 @@ fn map_chart_rejected_by_antv_adapter() {
     let msg = format!("{err:#}");
     assert!(msg.contains("not supported by the AntV"), "{msg}");
 }
+
+// ── V0.6 续：地图散点 scattermap（经纬度散点）────────────────────
+
+#[test]
+fn scattermap_generates_geo_scatter_and_registration() {
+    let dir = tmp("scattermap");
+    project(&dir, Some("echarts"));
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app viz06 { version = "0.1.0" }
+entity Store {
+  id     Uuid @id @default(uuid)
+  name   String(20)
+  lng    Float
+  lat    Float
+  sales  Decimal(12,2)
+}
+api Stores { entity Store operations [list get] }
+chart StoreMap {
+  type scattermap
+  map "cn"
+  title { en "Stores" }
+  source Stores.list
+  encoding {
+    x { field lng type quantitative }
+    y { field lat type quantitative }
+  }
+}
+page StoreList {
+  route "/stores"
+  title { en "Stores" }
+  table {
+    query   Stores.list
+    columns [name]
+    actions { row [delete → Stores.delete confirm] }
+  }
+}
+"#,
+    )
+    .unwrap();
+    fs::create_dir_all(dir.join("geo")).unwrap();
+    fs::write(dir.join("geo/cn.json"), GEO_JSON).unwrap();
+    forma::build::run_build(&dir).unwrap();
+
+    let chart = read(&dir, "generated/web/src/viz/charts/StoreMap.ts");
+    assert!(chart.contains("import \"./geo_cn\""), "{chart}");
+    assert!(chart.contains("\"coordinateSystem\": \"geo\""), "{chart}");
+    assert!(chart.contains("\"type\": \"scatter\""), "{chart}");
+    let geo_ts = read(&dir, "generated/web/src/viz/geo_cn.ts");
+    assert!(geo_ts.contains("registerMap"), "{geo_ts}");
+}
+
+#[test]
+fn scattermap_requires_region_declaration() {
+    let dir = tmp("scattermap-noregion");
+    project(&dir, Some("echarts"));
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app viz06 { version = "0.1.0" }
+entity Store { id Uuid @id @default(uuid) name String(20) lng Float lat Float }
+api Stores { entity Store operations [list get] }
+chart StoreMap {
+  type scattermap
+  title { en "Stores" }
+  source Stores.list
+  encoding { x { field lng type quantitative } y { field lat type quantitative } }
+}
+page StoreList {
+  route "/stores"
+  title { en "Stores" }
+  table { query Stores.list columns [name] actions { row [delete → Stores.delete confirm] } }
+}
+"#,
+    )
+    .unwrap();
+    let (program, _) = forma::dsl::load_program(&dir, &["forma/**/*.fm".into()]).unwrap();
+    let sem = forma::dsl::check_program(&program);
+    let codes: Vec<String> = sem.iter().map(|d| d.code.clone()).collect();
+    assert!(
+        codes.iter().any(|c| c == "viz-scattermap-missing-region"),
+        "{codes:?}"
+    );
+}
+
+#[test]
+fn scattermap_rejected_by_antv_adapter() {
+    let dir = tmp("scattermap-antv");
+    project(&dir, Some("antv"));
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app viz06 { version = "0.1.0" }
+entity Store { id Uuid @id @default(uuid) name String(20) lng Float lat Float }
+api Stores { entity Store operations [list get] }
+chart StoreMap {
+  type scattermap
+  map "cn"
+  title { en "Stores" }
+  source Stores.list
+  encoding { x { field lng type quantitative } y { field lat type quantitative } }
+}
+page StoreList {
+  route "/stores"
+  title { en "Stores" }
+  table { query Stores.list columns [name] actions { row [delete → Stores.delete confirm] } }
+}
+"#,
+    )
+    .unwrap();
+    let err = forma::build::run_build(&dir).unwrap_err();
+    let msg = format!("{err:#}");
+    assert!(msg.contains("not supported by the AntV"), "{msg}");
+}
+
+// ── V0.6 续：数值映射 size 通道（点大小由数据驱动）────────────────
+
+#[test]
+fn size_channel_maps_point_size_to_data() {
+    let dir = tmp("size-channel");
+    project(&dir, Some("echarts"));
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app viz06 { version = "0.1.0" }
+entity Store {
+  id     Uuid @id @default(uuid)
+  name   String(20)
+  lng    Float
+  lat    Float
+  sales  Decimal(12,2)
+}
+api Stores { entity Store operations [list get] }
+chart StoreMap {
+  type scattermap
+  map "cn"
+  title { en "Stores" }
+  source Stores.list
+  encoding {
+    x { field lng type quantitative }
+    y { field lat type quantitative }
+    size { field sales type quantitative }
+  }
+}
+page StoreList {
+  route "/stores"
+  title { en "Stores" }
+  table {
+    query   Stores.list
+    columns [name]
+    actions { row [delete → Stores.delete confirm] }
+  }
+}
+"#,
+    )
+    .unwrap();
+    fs::create_dir_all(dir.join("geo")).unwrap();
+    fs::write(dir.join("geo/cn.json"), GEO_JSON).unwrap();
+    forma::build::run_build(&dir).unwrap();
+    let chart = read(&dir, "generated/web/src/viz/charts/StoreMap.ts");
+    assert!(chart.contains("visualMap"), "{chart}");
+    assert!(chart.contains("symbolSize"), "{chart}");
+    // AntV 侧 size 通道（用 scatter——AntV 支持 scatter 的 size 映射）
+    let dir2 = tmp("size-channel-antv");
+    project(&dir2, Some("antv"));
+    let fm = fs::read_to_string(dir.join("forma/app.fm"))
+        .unwrap()
+        .replace("type scattermap", "type scatter");
+    fs::write(dir2.join("forma/app.fm"), fm).unwrap();
+    forma::build::run_build(&dir2).unwrap();
+    let antv_opt = read(&dir2, "generated/web/src/viz/echarts.ts");
+    assert!(
+        antv_opt.contains("option.size = [spec.encoding.size.field"),
+        "{antv_opt}"
+    );
+}
+
+#[test]
+fn size_channel_requires_numeric_field() {
+    let dir = tmp("size-non-numeric");
+    project(&dir, Some("echarts"));
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app viz06 { version = "0.1.0" }
+entity Store { id Uuid @id @default(uuid) name String(20) lng Float lat Float }
+api Stores { entity Store operations [list get] }
+chart StoreMap {
+  type scattermap
+  map "cn"
+  title { en "Stores" }
+  source Stores.list
+  encoding {
+    x { field lng type quantitative }
+    y { field lat type quantitative }
+    size { field name type nominal }
+  }
+}
+page StoreList {
+  route "/stores"
+  title { en "Stores" }
+  table { query Stores.list columns [name] actions { row [delete → Stores.delete confirm] } }
+}
+"#,
+    )
+    .unwrap();
+    let (program, _) = forma::dsl::load_program(&dir, &["forma/**/*.fm".into()]).unwrap();
+    let sem = forma::dsl::check_program(&program);
+    let codes: Vec<String> = sem.iter().map(|d| d.code.clone()).collect();
+    assert!(
+        codes.iter().any(|c| c == "viz-size-non-numeric"),
+        "{codes:?}"
+    );
+}
+
+// ── V0.6 续：数据标签 label（图表上显示数值）────────────────────
+
+#[test]
+fn label_shows_field_value_on_chart() {
+    let dir = tmp("label");
+    project(&dir, Some("echarts"));
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app viz06 { version = "0.1.0" }
+entity Metric {
+  id    Uuid @id @default(uuid)
+  name  String(20)
+  value Decimal(12,2)
+}
+api Metrics { entity Metric operations [list get] }
+chart Bars {
+  type bar
+  title { en "Bars" }
+  source Metrics.list
+  encoding { x { field name type nominal } y { field value type quantitative } }
+  label value { format "currency" }
+}
+page MetricList {
+  route "/metrics"
+  title { en "Metrics" }
+  table {
+    query   Metrics.list
+    columns [name]
+    actions { row [delete → Metrics.delete confirm] }
+  }
+}
+"#,
+    )
+    .unwrap();
+    forma::build::run_build(&dir).unwrap();
+    let chart = read(&dir, "generated/web/src/viz/charts/Bars.ts");
+    assert!(chart.contains("\"label\""), "{chart}");
+    assert!(chart.contains("{@value}"), "{chart}");
+    // AntV 侧 label 配置
+    let dir2 = tmp("label-antv");
+    project(&dir2, Some("antv"));
+    fs::write(
+        dir2.join("forma/app.fm"),
+        &fs::read_to_string(dir.join("forma/app.fm")).unwrap(),
+    )
+    .unwrap();
+    forma::build::run_build(&dir2).unwrap();
+    let antv_opt = read(&dir2, "generated/web/src/viz/echarts.ts");
+    assert!(
+        antv_opt.contains("option.label = { content: spec.label.field"),
+        "{antv_opt}"
+    );
+}
+
+#[test]
+fn label_requires_existing_field() {
+    let dir = tmp("label-bad");
+    project(&dir, Some("echarts"));
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app viz06 { version = "0.1.0" }
+entity Metric { id Uuid @id @default(uuid) name String(20) value Decimal(12,2) }
+api Metrics { entity Metric operations [list get] }
+chart Bars {
+  type bar
+  title { en "Bars" }
+  source Metrics.list
+  encoding { x { field name type nominal } y { field value type quantitative } }
+  label nope { format "currency" }
+}
+page MetricList {
+  route "/metrics"
+  title { en "Metrics" }
+  table { query Metrics.list columns [name] actions { row [delete → Metrics.delete confirm] } }
+}
+"#,
+    )
+    .unwrap();
+    let (program, _) = forma::dsl::load_program(&dir, &["forma/**/*.fm".into()]).unwrap();
+    let sem = forma::dsl::check_program(&program);
+    let codes: Vec<String> = sem.iter().map(|d| d.code.clone()).collect();
+    assert!(
+        codes.iter().any(|c| c == "viz-label-unknown-field"),
+        "{codes:?}"
+    );
+}

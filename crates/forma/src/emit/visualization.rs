@@ -125,7 +125,10 @@ pub fn emit_visualization_with_adapter(
     // V0.6 GIS：每个 map region 生成 geo_<region>.ts（GeoJSON 内联 + registerMap）
     let mut map_regions: Vec<String> = Vec::new();
     for spec in &charts {
-        if spec.chart_type == crate::visualization::ChartType::Map {
+        if matches!(
+            spec.chart_type,
+            crate::visualization::ChartType::Map | crate::visualization::ChartType::ScatterMap
+        ) {
             let region = spec.map_region.clone().unwrap_or_else(|| "world".into());
             if !map_regions.contains(&region) {
                 map_regions.push(region);
@@ -207,8 +210,10 @@ fn echarts_runtime(project_dir: &Path, charts: &[ChartSpec]) -> String {
             // echarts 无内置 K 线（需 custom series）——该分支只在 antv adapter 下可达
             // （emit_visualization_with_adapter 对 echarts + candlestick 提前 bail）
             crate::visualization::ChartType::Candlestick => "CandlestickChart",
-            // ECharts 地图是 series type（无图表构造器）——由 chart_option 注入主 series
-            crate::visualization::ChartType::Map => continue,
+            // ECharts 地图类（map / scattermap）是 series type（无构造器）——由 chart_option 注入
+            crate::visualization::ChartType::Map | crate::visualization::ChartType::ScatterMap => {
+                continue
+            }
         };
         if !chart_ctors.contains(&ctor) {
             chart_ctors.push(ctor);
@@ -345,7 +350,10 @@ fn chart_file(program: &Program, spec: &ChartSpec) -> String {
     let spec_json =
         serde_json::to_string_pretty(&visualization::spec_json(spec)).unwrap_or_default();
     // V0.6 GIS：map 图表引入 GeoJSON 注册（side-effect）
-    let geo_import = if spec.chart_type == crate::visualization::ChartType::Map {
+    let geo_import = if matches!(
+        spec.chart_type,
+        crate::visualization::ChartType::Map | crate::visualization::ChartType::ScatterMap
+    ) {
         let region = spec.map_region.clone().unwrap_or_else(|| "world".into());
         format!("import \"./geo_{region}\";\n")
     } else {

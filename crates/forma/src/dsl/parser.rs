@@ -219,6 +219,8 @@ pub struct ChartDecl {
     pub threshold: Option<ThresholdDecl>,
     /// V0.6 GIS：地图区域名（对应工程内 `geo/<region>.json` GeoJSON 数据源）
     pub map_region: Option<String>,
+    /// V0.6 数据标签：显示字段 + 格式
+    pub label: Option<ChartLabel>,
     pub line: usize,
     /// 声明位置（M1）：`file` 在多文件合并时回填。
     pub file: Option<String>,
@@ -230,6 +232,8 @@ pub struct EncodingDecl {
     pub y: Option<ChannelDecl>,
     pub series: Option<ChannelDecl>,
     pub color: Option<ChannelDecl>,
+    /// 数值映射（点大小由数据驱动）：字段必须数值
+    pub size: Option<ChannelDecl>,
     /// K 线（candlestick）四字段：开/高/低/收（字段名）
     pub ohlc: Option<OhlcDecl>,
 }
@@ -239,6 +243,13 @@ pub struct EncodingDecl {
 pub struct ThresholdDecl {
     pub value: f64,
     pub label: String,
+}
+
+/// 数据标签（V0.6）：显示字段 + 格式（currency/percent/integer/decimal）。
+#[derive(Debug, Clone)]
+pub struct ChartLabel {
+    pub field: String,
+    pub format: String,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -1945,6 +1956,7 @@ impl<'a> Parser<'a> {
             theme: None,
             threshold: None,
             map_region: None,
+            label: None,
             line: name_tok.line,
             file: None,
         };
@@ -2006,6 +2018,26 @@ impl<'a> Parser<'a> {
                 "theme" if tok.kind == TokKind::Ident => {
                     self.next();
                     decl.theme = Some(self.expect_ident().unwrap_or_default());
+                }
+                // V0.6 数据标签：label <field> { format "..." }
+                "label" if tok.kind == TokKind::Ident => {
+                    self.next();
+                    let field = self.expect_ident().unwrap_or_default();
+                    let mut format = String::new();
+                    if self.eat_punct("{") {
+                        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+                            if self.is_kw("format") {
+                                self.next();
+                                if self.peek().kind == TokKind::Str {
+                                    format = self.next().value.clone();
+                                }
+                            } else {
+                                self.next();
+                            }
+                        }
+                        self.expect_punct("}");
+                    }
+                    decl.label = Some(ChartLabel { field, format });
                 }
                 // V0.6 GIS：地图区域（GeoJSON 数据源名）
                 "map" if tok.kind == TokKind::Ident => {
@@ -2171,13 +2203,14 @@ impl<'a> Parser<'a> {
                     }
                     enc.ohlc = Some(ohlc);
                 }
-                "x" | "y" | "series" | "color" => {
+                "x" | "y" | "series" | "color" | "size" => {
                     self.next();
                     let ch = self.parse_channel(false);
                     match tok.value.as_str() {
                         "x" => enc.x = Some(ch),
                         "y" => enc.y = Some(ch),
                         "series" => enc.series = Some(ch),
+                        "size" => enc.size = Some(ch),
                         _ => enc.color = Some(ch),
                     }
                 }

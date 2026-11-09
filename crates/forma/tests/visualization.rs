@@ -500,7 +500,7 @@ fn mcp_viz_catalog_and_describe() {
         .iter()
         .map(|t| t["type"].as_str().unwrap().to_string())
         .collect();
-    assert_eq!(types.len(), 14); // V0.6：candlestick + map 加入目录
+    assert_eq!(types.len(), 15); // V0.6：candlestick + map + scattermap 加入目录
     assert!(types.contains(&"line".to_string()));
     // V0.2：metric / table 已在目录中
     assert!(types.contains(&"metric".to_string()));

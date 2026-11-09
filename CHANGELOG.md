@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **可视化 V0.6 续：地图散点 scattermap（ECharts 专属）**：
+  - DSL `type scattermap` + `map "region"` + x=lng/y=lat 数值通道（二维点形状）；
+  - ECharts `geo` 底图 + scatter（coordinateSystem: geo）+ GeoJSON registerMap；
+  - 检查层 3 条（缺 region / 缺通道 / 未知字段、非数值）；
+  - 回归 17 项；全量 `cargo test` **463 项 / 74 套件**。
+
 - **可视化 V0.6 续：GIS 地图（ECharts 专属，§16-6 收口）**：
   - DSL `type map` + `map "region"`（数据源契约：工程内 `geo/<region>.json` GeoJSON）；
   - ECharts `registerMap`（GeoJSON 内联）+ map series；AntV/Flutter 显式处理

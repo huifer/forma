@@ -35,6 +35,14 @@ export function antvOption(spec: ChartSpec): AntVOption {
   if (spec.chartType === "scatter") {
     option.size = 4;
   }
+  // 数据标签（V0.6）
+  if (spec.label) {
+    option.label = { content: spec.label.field, style: { fontSize: 11 } };
+  }
+  // 数值映射（点大小由数据驱动）
+  if (spec.encoding.size) {
+    option.size = [spec.encoding.size.field, [6, 20]];
+  }
   if (spec.chartType === "candlestick") {
     // G2Plot Candlestick 契约：yField = [open, close, high, low] 四元数组
     const ohlc = spec.encoding.ohlc;

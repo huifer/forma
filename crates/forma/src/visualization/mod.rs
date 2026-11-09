@@ -50,10 +50,12 @@ pub enum ChartType {
     Candlestick,
     /// 地图（V0.6 / ECharts）：GeoJSON 底图 + 区域数值（value/name 通道）
     Map,
+    /// 地图散点（V0.6 续 / ECharts）：GeoJSON 底图 + 经纬度散点（x=lng, y=lat）
+    ScatterMap,
 }
 
 impl ChartType {
-    pub const ALL: [ChartType; 14] = [
+    pub const ALL: [ChartType; 15] = [
         ChartType::Line,
         ChartType::Bar,
         ChartType::Area,
@@ -68,6 +70,7 @@ impl ChartType {
         ChartType::Table,
         ChartType::Candlestick,
         ChartType::Map,
+        ChartType::ScatterMap,
     ];
 
     pub fn parse(s: &str) -> Option<Self> {
@@ -86,6 +89,7 @@ impl ChartType {
             "table" => Some(ChartType::Table),
             "candlestick" => Some(ChartType::Candlestick),
             "map" => Some(ChartType::Map),
+            "scattermap" => Some(ChartType::ScatterMap),
             _ => None,
         }
     }
@@ -106,6 +110,7 @@ impl ChartType {
             ChartType::Table => "table",
             ChartType::Candlestick => "candlestick",
             ChartType::Map => "map",
+            ChartType::ScatterMap => "scattermap",
         }
     }
 
@@ -124,6 +129,8 @@ impl ChartType {
             ChartType::Candlestick => ShapeFamily::Cartesian,
             // 地图：区域名 + 数值（部分-整体形状）
             ChartType::Map => ShapeFamily::PartToWhole,
+            // 地图散点：经纬度（x=lng/y=lat 都是数值 → 二维点形状）
+            ChartType::ScatterMap => ShapeFamily::Xy,
         }
     }
 }
@@ -263,6 +270,8 @@ pub struct Encoding {
     pub y: Option<Channel>,
     pub series: Option<Channel>,
     pub color: Option<Channel>,
+    /// 数值映射（点大小由数据驱动）
+    pub size: Option<Channel>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -469,12 +478,21 @@ pub struct ChartSpec {
     pub threshold: Option<ThresholdSpec>,
     /// V0.6 GIS：地图区域名（geo/<region>.json）
     pub map_region: Option<String>,
+    /// V0.6 数据标签：显示字段 + 格式
+    pub label: Option<ChartLabelSpec>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ThresholdSpec {
     pub value: f64,
     pub label: String,
+}
+
+/// 数据标签（V0.6）：显示字段 + 格式。
+#[derive(Debug, Clone)]
+pub struct ChartLabelSpec {
+    pub field: String,
+    pub format: String,
 }
 
 // ── IR → JSON 投影（给 Runtime 消费）─────────────────────
@@ -515,6 +533,12 @@ pub fn spec_json(spec: &ChartSpec) -> serde_json::Value {
     if let Some(region) = &spec.map_region {
         m.insert("mapRegion".into(), json!(region));
     }
+    if let Some(label) = &spec.label {
+        m.insert(
+            "label".into(),
+            json!({ "field": label.field, "format": label.format }),
+        );
+    }
     m.insert(
         "ariaLabel".into(),
         json!(spec
@@ -553,6 +577,9 @@ fn encoding_json(enc: &Encoding) -> serde_json::Value {
     }
     if let Some(c) = &enc.color {
         m.insert("color".into(), channel_json(c));
+    }
+    if let Some(c) = &enc.size {
+        m.insert("size".into(), channel_json(c));
     }
     Value::Object(m)
 }
@@ -814,6 +841,115 @@ pub fn lower_chart(
         }
     }
 
+    // V0.6 续 地图散点：需要 map region + x(lng)/y(lat) 数值通道
+    if chart_type == ChartType::ScatterMap {
+        if decl.map_region.is_none() {
+            errors.push(diag(
+                "viz-scattermap-missing-region",
+                format!(
+                    "chart '{}' (scattermap) requires map <region> declaration",
+                    decl.name
+                ),
+                decl.line,
+            ));
+        }
+        let Some(ent) = program.entities.iter().find(|e| e.name == entity) else {
+            return Err(vec![diag(
+                "viz-unknown-entity",
+                format!("unknown entity '{entity}'"),
+                decl.line,
+            )]);
+        };
+        for (label, ch) in [("x (lng)", &decl.encoding.x), ("y (lat)", &decl.encoding.y)] {
+            let Some(ch) = ch else {
+                errors.push(diag(
+                    "viz-scattermap-missing-channel",
+                    format!(
+                        "chart '{}' (scattermap) requires both x(lng) and y(lat) channels",
+                        decl.name
+                    ),
+                    decl.line,
+                ));
+                continue;
+            };
+            let Some(fd) = ent.fields.iter().find(|f| f.name == ch.field) else {
+                errors.push(diag(
+                    "viz-scattermap-unknown-field",
+                    format!(
+                        "chart '{}' channel {label} references unknown field '{}.{}'",
+                        decl.name, entity, ch.field
+                    ),
+                    decl.line,
+                ));
+                continue;
+            };
+            if !matches!(fd.type_name.as_str(), "Int" | "Float" | "Decimal") {
+                errors.push(diag(
+                    "viz-scattermap-non-numeric",
+                    format!(
+                        "chart '{}' channel {label} field '{}.{}' must be numeric",
+                        decl.name, entity, ch.field
+                    ),
+                    decl.line,
+                ));
+            }
+        }
+    }
+
+    // 数据标签：字段必须存在于实体
+    if let Some(label) = &decl.label {
+        let Some(ent) = program.entities.iter().find(|e| e.name == entity) else {
+            return Err(vec![diag(
+                "viz-unknown-entity",
+                format!("unknown entity '{entity}'"),
+                decl.line,
+            )]);
+        };
+        if !ent.fields.iter().any(|f| f.name == label.field) {
+            errors.push(diag(
+                "viz-label-unknown-field",
+                format!(
+                    "chart '{}' label references unknown field '{}.{}'",
+                    decl.name, entity, label.field
+                ),
+                decl.line,
+            ));
+        }
+    }
+
+    // 数值映射通道：字段必须数值（点大小由数据驱动）
+    if let Some(size_ch) = &decl.encoding.size {
+        let Some(ent) = program.entities.iter().find(|e| e.name == entity) else {
+            return Err(vec![diag(
+                "viz-unknown-entity",
+                format!("unknown entity '{entity}'"),
+                decl.line,
+            )]);
+        };
+        match ent.fields.iter().find(|f| f.name == size_ch.field) {
+            None => errors.push(diag(
+                "viz-size-unknown-field",
+                format!(
+                    "chart '{}' size channel references unknown field '{}.{}'",
+                    decl.name, entity, size_ch.field
+                ),
+                decl.line,
+            )),
+            Some(fd) => {
+                if !matches!(fd.type_name.as_str(), "Int" | "Float" | "Decimal") {
+                    errors.push(diag(
+                        "viz-size-non-numeric",
+                        format!(
+                            "chart '{}' size channel field '{}.{}' must be numeric (got {})",
+                            decl.name, entity, size_ch.field, fd.type_name
+                        ),
+                        decl.line,
+                    ));
+                }
+            }
+        }
+    }
+
     // 聚合输出字段（如 `op count` 产生 value）：编码通道可直接引用它
     let agg_output = aggregate_output_name(decl);
 
@@ -881,6 +1017,10 @@ pub fn lower_chart(
             label: t.label.clone(),
         }),
         map_region: decl.map_region.clone(),
+        label: decl.label.as_ref().map(|l| ChartLabelSpec {
+            field: l.field.clone(),
+            format: l.format.clone(),
+        }),
     };
 
     // 形状级校验（必需通道 / 类型匹配）
@@ -1030,6 +1170,11 @@ fn lower_encoding(
         color: decl
             .encoding
             .color
+            .as_ref()
+            .and_then(|c| lower_channel(program, decl, entity, agg_output, c, errors)),
+        size: decl
+            .encoding
+            .size
             .as_ref()
             .and_then(|c| lower_channel(program, decl, entity, agg_output, c, errors)),
     }
