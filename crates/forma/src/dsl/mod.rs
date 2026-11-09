@@ -275,6 +275,7 @@ pub fn load_program(
         commands: Vec::new(),
         charts: Vec::new(),
         auth: None,
+        extensions: Vec::new(),
         pages: Vec::new(),
     };
     let mut diagnostics = Vec::new();
@@ -487,6 +488,25 @@ fn merge_program(
             });
         } else {
             program.exports.push(e);
+        }
+    }
+    for mut x in part.extensions {
+        x.file = Some(file.to_string());
+        if program
+            .extensions
+            .iter()
+            .any(|y| y.namespace == x.namespace && y.key == x.key)
+        {
+            diagnostics.push(Diagnostic {
+                severity: "error".into(),
+                code: "dsl-duplicate-extension".into(),
+                message: format!("duplicate extension '{}.{}'", x.namespace, x.key),
+                file: Some(file.into()),
+                line: Some(x.line),
+                nodes: None,
+            });
+        } else {
+            program.extensions.push(x);
         }
     }
 }

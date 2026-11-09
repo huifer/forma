@@ -117,7 +117,15 @@ pub fn lower_to_graph(program: &Program) -> anyhow::Result<LoweredGraph> {
                 to: f_uri.clone(),
                 kind: EdgeKind::Defines,
             })?;
-            // 字段 → 关系目标实体 / 枚举类型：引用（目标变更 → 本字段受影响）
+        }
+    }
+
+    // ── 字段 → 关系目标实体 / 枚举类型：引用边（第二遍，确保前向声明也连通）──
+    // 单遍处理时，引用「后声明的实体」的字段拿不到目标节点（graph.has 为假）→
+    // 引用边缺失 → 影响闭包漏报。两遍处理消除声明顺序依赖。
+    for entity in &program.entities {
+        for field in &entity.fields {
+            let f_uri = entity_field_uri(&project, &entity.name, &field.name);
             if is_relation(program, &field.type_name) {
                 let target = entity_uri(&project, &field.type_name);
                 if graph.has(&target) {

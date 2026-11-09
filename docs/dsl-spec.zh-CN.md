@@ -24,10 +24,10 @@
 ## 3. 顶层构造
 
 ```ebnf
-file        = { app | enum | entity | rules | api | page | chart | config } ;
+file        = { app | enum | entity | rules | api | page | chart | job | live | export | extensions | config } ;
 ```
 
-八个构造一节一个；全部可跨文件引用（按标识符全局解析）。
+十一个构造一节一个；全部可跨文件引用（按标识符全局解析）。
 
 ## 4. app
 
@@ -323,6 +323,23 @@ page OrderDetail {
 
 - `component` 提示：`Input email`、`badge`、`money`、`datetime`、`select` —— 语义级控件类型，适配层映射为具体组件（web → shadcn Input/Badge/…）。
 - 权限联动：`guard/access` 规则自动控制按钮显隐与路由守卫。
+
+## 11c. extensions（IR 扩展，RFC-0004 §9）
+
+```fm
+extensions {
+  visualization.echarts.animation = true
+  acme.audit.level                = "strict"
+  acme.quota.max                  = 1000
+}
+```
+
+点分路径：**命名空间 = 除最后一段**（如 `visualization.echarts`），**键 = 最后一段**；
+值仅支持标量（字符串 / 数字 / 布尔；嵌套结构以 JSON 字符串承载，由消费方自行解析）。
+
+语义（RFC-0004 §9）：未知扩展**可保留**、**不可擅自解释**——Adapter 只处理自己声明支持的扩展；
+当前无 emitter 声明扩展支持，因此扩展对全部产物 byte 级不敏感（回归 `tests/ir_extensions.rs`）。
+非法键（不足两段）→ `dsl-parse`；重复键 → `dsl-duplicate-extension`。
 
 ## 12. forma.yaml（项目清单）
 

@@ -372,17 +372,22 @@ pub trait Lower {
 
 ## 18. Open Questions
 
-> 收口（2026-11-08）：2 项关闭、2 项显式保留。
+> 收口（2026-11-09）：4 项全部关闭。
 
 - [x] ~~StableId 是否需要在**跨项目**场景下唯一？~~
   **已决议**：项目内唯一（`forma://project/{p}/…`）；多仓库合并同一业务对象不在 v0.3 范围。
-- [ ] 依赖边的粒度：字段级边是否足够，还是需要表达式级依赖（规则引用了哪些字段）？
-  ⏸ **保留**：字段级边已满足影响闭包主用例（`tests/dsl_ir_bridge.rs`）；表达式级依赖成本高，
-  待「补丁影响面误报/漏报」真实案例出现再评估。
+- [x] ~~依赖边的粒度：字段级边是否足够，还是需要表达式级依赖（规则引用了哪些字段）？~~
+  **已落地（2026-11-09 核实，P3 已收口、文档补记）**：表达式级依赖已实现——
+  `lower.rs` 的 `add_rule_field_edges`（access / 字段级策略 / guards / checks / field rules）、
+  命令的 pre 条件与 effect 目标字段、图表编码通道字段，均生成 `→ field` 引用边。
+  回归：`tests/dsl_ir_bridge.rs::rules_are_nodes_and_reference_their_fields` /
+  `mcp_impact_includes_rules_that_reference_the_field` / `command_pre_and_effects_reference_fields`。
+  结论：**表达式级已足够**，无需更细粒度（表达式内部子字段在 v0.3 类型系统下不可寻址）。
 - [x] ~~联邦 importer 降级到 Semantic Core 后，`adapters/*` 是否应逐步删除对 `graph.rs` 的直接依赖？~~
   **已决议**：保留 `graph.rs` 为内部表示（桥接已让 DSL 与联邦两条路径共用同一套图 API，见 spec:ir §15）。
-- [ ] 表达式级依赖是否需要独立的 `spec:dependencies` 文档？
-  ⏸ **保留**（跟随上一条）。
+- [x] ~~表达式级依赖是否需要独立的 `spec:dependencies` 文档？~~
+  **已决议（2026-11-09）**：不需要独立文档——表达式级依赖的权威定义在 `lower.rs` 的边生成逻辑，
+  语义（方向与闭包规则）由 spec:ir §3 的边语义 + 回归测试承载；独立 spec 属过度设计。
 
 
 ## 19. References

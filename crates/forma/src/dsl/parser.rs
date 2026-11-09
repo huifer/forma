@@ -24,6 +24,8 @@ pub struct Program {
     pub exports: Vec<ExportDecl>,
     /// 认证模块（M5）；None = 纯公开应用
     pub auth: Option<AuthDecl>,
+    /// IR 扩展（RFC-0004 §9）：命名空间化的可选元数据；emitter 不解释、只保留。
+    pub extensions: Vec<ExtensionDecl>,
 }
 
 #[derive(Debug, Clone)]
@@ -422,6 +424,34 @@ pub struct ExportDecl {
     pub file: Option<String>,
 }
 
+/// IR 扩展条目（RFC-0004 §9）：`extensions { <namespace>.<key> = <value> }`。
+///
+/// 语义（spec:ir / RFC-0004 §9）：未知扩展**可保留**、**不可擅自解释**——
+/// Adapter 只处理自己声明支持的扩展；当前无 emitter 声明扩展支持，
+/// 因此扩展对全部产物 byte 级不敏感（回归 `tests/ir_extensions.rs`）。
+#[derive(Debug, Clone)]
+pub struct ExtensionDecl {
+    /// 命名空间（点分路径除最后一段，如 `visualization.echarts`）
+    pub namespace: String,
+    /// 键名（最后一段）
+    pub key: String,
+    pub value: ExtensionValue,
+    /// 声明位置（M1）：`line` 解析期确定；`file` 在多文件合并时回填。
+    pub line: usize,
+    pub file: Option<String>,
+}
+
+/// 扩展值：字符串 / 数字 / 布尔。
+///
+/// 不支持嵌套对象——嵌套结构以 JSON 字符串承载并由消费方自行解析
+/// （保持「不擅自解释」边界；嵌套对象留待扩展 v2）。
+#[derive(Debug, Clone)]
+pub enum ExtensionValue {
+    Str(String),
+    Num(f64),
+    Bool(bool),
+}
+
 #[derive(Debug, Clone)]
 pub struct CommandDecl {
     pub name: String,
@@ -742,6 +772,7 @@ impl<'a> Parser<'a> {
             pages: Vec::new(),
             charts: Vec::new(),
             auth: None,
+            extensions: Vec::new(),
         };
         while self.peek().kind != TokKind::Eof {
             let tok = self.peek().clone();
@@ -802,6 +833,9 @@ impl<'a> Parser<'a> {
                     if let Some(e) = self.parse_export() {
                         program.exports.push(e);
                     }
+                }
+                "extensions" if tok.kind == TokKind::Ident => {
+                    program.extensions = self.parse_extensions();
                 }
                 _ => {
                     self.error_at(
@@ -1932,6 +1966,79 @@ impl<'a> Parser<'a> {
         }
         decl.name = format!("{}-export", decl.api);
         Some(decl)
+    }
+
+    /// `extensions { <namespace>.<key> = "str" | 123 | true|false }`
+    ///
+    /// 命名空间 = 点分路径除最后一段；键 = 最后一段。
+    /// 至少两段（namespace.key），否则报 parse error（fail-closed）。
+    fn parse_extensions(&mut self) -> Vec<ExtensionDecl> {
+        self.next(); // extensions
+        let mut out = Vec::new();
+        if !self.expect_punct("{") {
+            return out;
+        }
+        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+            if self.is_punct(";") {
+                self.next();
+                continue;
+            }
+            let line = self.peek().line;
+            let Some(first) = self.expect_ident() else {
+                self.next();
+                continue;
+            };
+            let mut segs = vec![first];
+            while self.is_punct(".") {
+                self.next();
+                if let Some(seg) = self.expect_ident() {
+                    segs.push(seg);
+                } else {
+                    break;
+                }
+            }
+            if !self.eat_punct("=") {
+                let t = self.peek().clone();
+                self.error_at(&t, "expected '=' after extension key");
+                self.next();
+                continue;
+            }
+            let value = match self.peek().kind {
+                TokKind::Str => ExtensionValue::Str(self.next().value),
+                TokKind::Num => {
+                    let t = self.next();
+                    ExtensionValue::Num(t.value.parse().unwrap_or(0.0))
+                }
+                TokKind::Ident if self.peek().value == "true" || self.peek().value == "false" => {
+                    ExtensionValue::Bool(self.next().value == "true")
+                }
+                _ => {
+                    let t = self.peek().clone();
+                    self.error_at(&t, "extension value must be a string, number, or boolean");
+                    self.next();
+                    continue;
+                }
+            };
+            if segs.len() < 2 {
+                self.errors.push(ParseError {
+                    line,
+                    col: 0,
+                    message: "extension key must be '<namespace>.<key>' (at least two dot-separated segments)".into(),
+                });
+                continue;
+            }
+            let namespace = segs[..segs.len() - 1].join(".");
+            let key = segs[segs.len() - 1].clone();
+            out.push(ExtensionDecl {
+                namespace,
+                key,
+                value,
+                line,
+                file: None,
+            });
+        }
+        self.expect_punct("}");
+        out
     }
 
     // ── chart（可视化，RFC-0001）──

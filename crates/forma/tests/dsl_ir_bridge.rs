@@ -261,6 +261,123 @@ fn lowered(dir: &Path) -> (forma::dsl::Program, forma::graph::UnifiedSemanticGra
     (program, lowered.graph)
 }
 
+// ── spec:ir §13：依赖图无环语义 ──────────────────────────────
+
+/// 互相关联（Teacher.department ⇄ Department.head）的工程：
+/// 引用边可以成环（业务常态），但结构边必须无环、影响闭包必须终止。
+const MUTUAL_FM: &str = r#"
+app irbridge {
+  version = "0.1.0"
+}
+
+entity Teacher {
+  id         Uuid @id @default(uuid)
+  name       String(50) @required
+  department Department?
+}
+
+entity Department {
+  id   Uuid @id @default(uuid)
+  name String(50) @required
+  head Teacher?
+}
+
+api Teachers { entity Teacher operations [list get] }
+api Departments { entity Department operations [list get] }
+"#;
+
+#[test]
+fn structural_edges_are_acyclic_and_reference_cycles_terminate() {
+    let dir = tmp_dir("acyclic");
+    write_project(&dir, MUTUAL_FM);
+    let (_p, graph) = lowered(&dir);
+
+    // 结构边（defines / belongs-to / generates / binds）投影必须无环。
+    fn has_cycle_over(graph: &forma::graph::UnifiedSemanticGraph, kinds: &[forma::graph::EdgeKind]) -> bool {
+        use std::collections::HashMap;
+        let mut adj: HashMap<String, Vec<String>> = HashMap::new();
+        for n in graph.all_nodes() {
+            for e in graph.edges_from(&n.uri) {
+                if kinds.contains(&e.kind) {
+                    adj.entry(e.from.clone()).or_default().push(e.to.clone());
+                }
+            }
+        }
+        fn dfs(
+            node: &str,
+            adj: &HashMap<String, Vec<String>>,
+            state: &mut HashMap<String, u8>,
+        ) -> bool {
+            match state.get(node) {
+                Some(1) => return true,
+                Some(2) => return false,
+                _ => {}
+            }
+            state.insert(node.to_string(), 1);
+            if let Some(next) = adj.get(node) {
+                for n in next {
+                    if dfs(n, adj, state) {
+                        return true;
+                    }
+                }
+            }
+            state.insert(node.to_string(), 2);
+            false
+        }
+        let nodes: Vec<String> = adj.keys().cloned().collect();
+        let mut state: HashMap<String, u8> = HashMap::new();
+        for n in &nodes {
+            if dfs(n, &adj, &mut state) {
+                return true;
+            }
+        }
+        false
+    }
+
+    use forma::graph::EdgeKind;
+    let structural = [
+        EdgeKind::Defines,
+        EdgeKind::BelongsTo,
+        EdgeKind::Generates,
+        EdgeKind::Binds,
+    ];
+    assert!(
+        !has_cycle_over(&graph, &structural),
+        "structural edges must be acyclic"
+    );
+
+    // 互引用的关系在**全图**中形成环（defines+references 混合路径）：
+    // Teacher → field.department → Department → field.head → Teacher。
+    // 该夹具确实覆盖了「含环图」场景。
+    let all_kinds = [
+        EdgeKind::Defines,
+        EdgeKind::BelongsTo,
+        EdgeKind::Generates,
+        EdgeKind::Binds,
+        EdgeKind::References,
+    ];
+    assert!(
+        has_cycle_over(&graph, &all_kinds),
+        "mutual relations must produce a cycle in the full graph"
+    );
+
+    // 影响闭包在含引用环的图上必须终止且确定
+    let a = graph.affected_by("forma://project/irbridge/entity/Teacher");
+    let b = graph.affected_by("forma://project/irbridge/entity/Teacher");
+    assert!(a.len() < 1000, "closure must terminate");
+    assert_eq!(a.len(), b.len(), "closure must be deterministic");
+
+    // 前向声明也不漏边：Teacher（先声明）的 department 字段引用 Department（后声明）
+    let affected = graph.affected_by("forma://project/irbridge/entity/Department");
+    assert!(
+        affected
+            .iter()
+            .any(|n| n.uri.ends_with("/entity/Teacher/field/department")),
+        "forward-declared relation must appear in the impact closure: {:?}",
+        affected.iter().map(|n| n.uri.as_str()).collect::<Vec<_>>()
+    );
+}
+
 #[test]
 fn bridge_produces_stable_ids_and_source_refs() {
     let dir = tmp_dir("m3-ids");

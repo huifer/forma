@@ -306,6 +306,7 @@ lint-*   风格与最佳实践
 | R2 | 序列化**必须**确定性：相同 IR 两次序列化字节一致（对象键排序） |
 | R3 | 序列化**不得**包含非确定性内容（时间戳、随机数）——非确定性信息（如 `generatedAt`）只在产物清单层 |
 | R4 | 序列化形式随 IR Version 演进；消费者须容忍未知字段 |
+| R5 | `extensions` 条目（RFC-0004 §9）在序列化中**原样保留**（namespace/key/value + 来源），消费者**不得擅自定义**其语义 |
 
 ---
 
@@ -329,14 +330,29 @@ lint-*   风格与最佳实践
 
 实现必须通过的检查：
 
-- [ ] 同一规格两次降级 / 检查结果**字节级一致**。
+- [x] 同一规格两次降级 / 检查结果**字节级一致**。
+  证据：`tests/dsl_ir_bridge.rs::lowering_output_is_byte_identical_across_runs`（同一 Program 两次
+  lower 输出 byte 级一致）+ `tests/adapter_roundtrip.rs::repeated_check_program_is_deterministic`
+  （同一规格 3 次 check 结果序列一致）+ `tests/ir_schema.rs::ir_json_view_is_deterministic_and_free_of_nondeterminism`。
 - [x] 全部 `dsl-*` 诊断携带 `file` + `line`（M1；回归 `tests/dsl_ir_bridge.rs`）。
 - [x] 检查层与各生成层的类型集合一致（新增类型须三端同步，否则测试失败；M2 回归逐类型断言四目标映射）。
 - [x] DSL 侧节点/边集合与联邦语义图**同构**（同一实体得到同一标识串；M3 回归断言 URI 与边集合）。
-- [ ] 依赖图**无环**。
-- [ ] 含 `error` 诊断时构建被阻断。
-- [ ] 未支持的语义产生显式诊断（无静默忽略）。
-- [ ] IR 序列化不含非确定性内容。
+- [x] 依赖图**无环**（2026-11-09 精确化）。
+  语义：**结构边**（defines / belongs-to / generates / binds）投影必须无环——这是声明层级的
+  DAG 不变量；**引用边**（references）允许成环（互相关联的业务实体是常态），影响闭包
+  靠访问集终止且结果确定。回归 `tests/dsl_ir_bridge.rs::structural_edges_are_acyclic_and_reference_cycles_terminate`
+  （互引用夹具：结构投影无环 + 全图含环 + 闭包终止）。
+  同时修复桥接真实缺口：引用边此前单遍生成，**前向声明的关联实体拿不到引用边**
+  （影响闭包漏报）；改为两遍处理后声明顺序无关。
+- [x] 含 `error` 诊断时构建被阻断。
+  证据：`crates/forma/src/build.rs::load_dsl_program` 对硬错误 `bail`；
+  回归 `tests/dsl_validate.rs::semantic_error_blocks_build_pipeline`。
+- [x] 未支持的语义产生显式诊断（无静默忽略）。
+  证据：`tests/domain_validators.rs`（17 条领域哨兵）+ `tests/cursor_pagination.rs` /
+  `tests/nestjs.rs` / `tests/fastapi.rs` 的显式拒绝断言 + `dsl-parse` 对未知顶层构造报错。
+- [x] IR 序列化不含非确定性内容。
+  证据：`tests/ir_schema.rs::ir_json_view_is_deterministic_and_free_of_nondeterminism`
+  （同一 Program 两次视图 byte 级一致 + 无时间戳/随机数字段；非确定性信息只在产物清单层，R3）。
 
 ---
 

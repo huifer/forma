@@ -230,10 +230,14 @@ extensions:
   已结构化；resolve 构建期强制「弃用必须指向已注册 successor」（`capability-deprecation-*` 诊断）；
   `tests/capability.rs::builtin_manifests_cover_the_ten_contracts` 逐 manifest 断言字段面，
   `deprecation_requires_registered_successor` 锁定契约。
-- [ ] 未知 IR 扩展被保留且不被擅解释（测试覆盖）。
-  ⚠️ 已核实（2026-11-08，G-3）：DSL v0.3 **无 `extensions` 语法**——未知顶层构造按 fail-closed
-  显式报错（`dsl-parse`，回归 `tests/domain_validators.rs`）；spec:compatibility §8 已标注
-  「保留」语义待 extensions 语法引入后生效。本条保留未勾选，避免为不存在的语法假绿。
+- [x] 未知 IR 扩展被保留且不被擅解释（测试覆盖）。
+  证据（2026-11-09，RFC-0004 §16-3 收口）：DSL `extensions { <namespace>.<key> = <value> }`
+  构造落地——`Program.extensions`（点分路径拆 namespace/key；标量值：字符串/数字/布尔；
+  至少两段，否则 `dsl-parse` fail-closed）；多文件合并保留来源（`file`/`line`）；
+  重复键 `dsl-duplicate-extension`。**不被擅解释**：当前无 emitter 声明扩展支持，
+  回归 `tests/ir_extensions.rs::extensions_do_not_change_any_generated_artifact`
+  证明同一工程加不加扩展，全部产物 byte 级一致；IR 契约视图（spec:ir）保留扩展条目。
+  嵌套对象留 v2（JSON 字符串承载 + 消费方自行解析，保持不擅自解释边界）。
 
 ## 17. Acceptance Criteria
 

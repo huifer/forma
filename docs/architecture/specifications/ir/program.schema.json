@@ -74,6 +74,13 @@
     "exports": {
       "type": "array"
     },
+    "extensions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Extension"
+      },
+      "description": "IR 扩展（RFC-0004 §9）：命名空间化的可选元数据；保留但不被 emitter 解释"
+    },
     "charts": {
       "type": "array"
     },
@@ -214,6 +221,38 @@
         },
         "route": {
           "type": "string"
+        },
+        "line": {
+          "type": "integer"
+        },
+        "file": {
+          "type": "string"
+        }
+      }
+    },
+    "Extension": {
+      "type": "object",
+      "required": [
+        "namespace",
+        "key",
+        "value"
+      ],
+      "properties": {
+        "namespace": {
+          "type": "string",
+          "description": "命名空间（点分路径除最后一段）"
+        },
+        "key": {
+          "type": "string",
+          "description": "键名（最后一段）"
+        },
+        "value": {
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ],
+          "description": "标量值（字符串/数字/布尔）；嵌套结构以 JSON 字符串承载"
         },
         "line": {
           "type": "integer"

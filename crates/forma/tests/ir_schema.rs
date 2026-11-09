@@ -132,12 +132,28 @@ page StudentList {
     )
     .unwrap();
     let (program, _) = forma::dsl::load_program(&dir, &["forma/**/*.fm".into()]).unwrap();
+    let view = ir_view(&program);
+    let s = schema();
+    let errs = validate(&view, &s, &s, "$");
+    assert!(errs.is_empty(), "schema violations:\n{}", errs.join("\n"));
+    // 契约字段与实现一致
+    assert_eq!(view["ir_version"], forma::dsl::IR_VERSION);
+    assert_eq!(view["entities"][0]["name"], "Student");
+    assert_eq!(view["enums"][0]["name"], "Status");
+    assert_eq!(view["apis"][0]["entity"], "Student");
+    // 无扩展时数组存在且为空（视图恒定输出 extensions 数组）
+    assert_eq!(view["extensions"], serde_json::json!([]));
+}
 
-    // IR 契约视图：从 Program 提取 schema 描述的关键字段面。
-    // （Program 未启用 serde 直出——避免把内部声明结构暴露为公开契约；
-    //   机器可读契约覆盖 IR 的稳定字段面，见 spec:ir 的引用。）
+/// IR 契约视图：从 Program 提取 schema 描述的关键字段面。
+///
+/// （Program 未启用 serde 直出——避免把内部声明结构暴露为公开契约；
+///   机器可读契约覆盖 IR 的稳定字段面，见 spec:ir 的引用。）
+///
+/// 抽为函数供确定性与 schema 校验共用（同一 Program 的两次视图必须 byte 级一致）。
+fn ir_view(program: &forma::Program) -> serde_json::Value {
     let app = program.app.as_ref();
-    let view = serde_json::json!({
+    serde_json::json!({
         "ir_version": program.ir_version,
         "app": app.map(|a| serde_json::json!({
             "name": a.name,
@@ -202,6 +218,17 @@ page StudentList {
             "format": e.format,
             "api": e.api,
         })).collect::<Vec<_>>(),
+        "extensions": program.extensions.iter().map(|x| serde_json::json!({
+            "namespace": x.namespace,
+            "key": x.key,
+            "value": match &x.value {
+                forma::dsl::parser::ExtensionValue::Str(s) => serde_json::Value::String(s.clone()),
+                forma::dsl::parser::ExtensionValue::Num(n) => serde_json::json!(n),
+                forma::dsl::parser::ExtensionValue::Bool(b) => serde_json::Value::Bool(*b),
+            },
+            "line": x.line,
+            "file": x.file,
+        })).collect::<Vec<_>>(),
         "charts": program.charts.iter().map(|c| serde_json::json!({
             "name": c.name,
             "chart_type": c.chart_type,
@@ -214,15 +241,46 @@ page StudentList {
             "roles": a.roles,
             "token_hours": a.token_hours,
         })),
-    });
-    let s = schema();
-    let errs = validate(&view, &s, &s, "$");
-    assert!(errs.is_empty(), "schema violations:\n{}", errs.join("\n"));
-    // 契约字段与实现一致
-    assert_eq!(view["ir_version"], forma::dsl::IR_VERSION);
-    assert_eq!(view["entities"][0]["name"], "Student");
-    assert_eq!(view["enums"][0]["name"], "Status");
-    assert_eq!(view["apis"][0]["entity"], "Student");
+    })
+}
+
+#[test]
+fn ir_json_view_is_deterministic_and_free_of_nondeterminism() {
+    // spec:ir §13：IR 序列化不含非确定性内容——同一 Program 两次视图 byte 级一致，
+    // 且不携带时间戳 / 随机数类字段（非确定性信息只在产物清单层，spec:ir §11 R3）。
+    let dir = tmp("determinism");
+    fs::write(
+        dir.join("forma.yaml"),
+        "project:\n  name: irschema\n  version: 0.1.0\nsource: [\"forma/**/*.fm\"]\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app irschema { version = "0.1.0" }
+entity Student {
+  id Uuid @id @default(uuid)
+  name String(50) @required
+}
+api Students { entity Student operations [list get create] }
+extensions {
+  acme.audit.level = "strict"
+  visualization.echarts.animation = true
+}
+"#,
+    )
+    .unwrap();
+    let load = || forma::dsl::load_program(&dir, &["forma/**/*.fm".into()]).unwrap().0;
+    let a = serde_json::to_string(&ir_view(&load())).unwrap();
+    let b = serde_json::to_string(&ir_view(&load())).unwrap();
+    assert_eq!(a, b, "IR view serialization must be byte-identical");
+    // 扩展被保留
+    assert!(a.contains("acme.audit"), "{a}");
+    assert!(a.contains("visualization.echarts"), "{a}");
+    // 无非确定性字段（时间戳 / 随机数）
+    for banned in ["generated_at", "generatedAt", "timestamp", "created_at", "createdTime"] {
+        assert!(!a.contains(banned), "IR view must not contain {banned}: {a}");
+    }
 }
 
 #[test]

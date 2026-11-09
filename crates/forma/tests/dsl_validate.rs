@@ -68,6 +68,21 @@ entity Order {
 // ── 1. 假绿修复 ────────────────────────────────────────────────
 
 #[test]
+fn semantic_error_blocks_build_pipeline() {
+    // spec:ir §13：含 error 诊断时构建被阻断（不是静默生成）。
+    // 走的是 `forma build` 的同一条管线（build::load_dsl_program）。
+    let dir = tmp_dir("build-blocked");
+    write_project(&dir, BAD_FM);
+    let err = forma::build::load_dsl_program(&dir).unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("build failed"), "{msg}");
+    assert!(
+        msg.contains("dsl-unknown-type"),
+        "blocked build must name the diagnostic code: {msg}"
+    );
+}
+
+#[test]
 fn dsl_project_with_semantic_error_is_reported() {
     let dir = tmp_dir("bad");
     write_project(&dir, BAD_FM);
