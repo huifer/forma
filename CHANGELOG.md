@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **可视化 V0.6 收尾（二）：tooltip 交互 + 类型缺口补全**：
+  - AntV 多系列 tooltip 共享 crosshair（`shared: Boolean(spec.encoding.series)`）、
+    单系列 item tooltip（showMarkers）；ECharts 侧已有 valueFormatter；
+  - 补 spec.ts 模板缺的 `size`/`label` 类型（AntV 生成工程 tsc 验证时暴露）；
+  - 回归 24 项；全量 `cargo test` **470 项 / 74 套件**。
+
 - **可视化 V0.6 收尾（一）：legend 交互 + 多系列验证**：
   - legend 点击（系列）→ dashboard 筛选联动（series 字段在 `filters` 中声明时接线；
     与 select/drilldown 分支合并生成，`if`/`else if` 按分支存在性选择）；

@@ -72,7 +72,16 @@ export function antvOption(spec: ChartSpec): AntVOption {
       },
     ];
   }
-  if (spec.tooltip === false) option.tooltip = false;
+  // V0.6 收尾：tooltip 交互——多系列共享 crosshair；单系列显示 item tooltip
+  if (spec.tooltip === false) {
+    option.tooltip = false;
+  } else {
+    option.tooltip = {
+      shared: Boolean(spec.encoding.series),
+      showMarkers: true,
+      showTitle: Boolean(spec.encoding.series),
+    };
+  }
   if (spec.legend) option.legend = { position: "top" as const };
   return option;
 }

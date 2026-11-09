@@ -37,6 +37,8 @@ export interface Encoding {
   color?: Channel;
   /** V0.6 K 线：开高低收四字段 */
   ohlc?: { open: string; high: string; low: string; close: string };
+  /** V0.6 数值映射：点大小由数据驱动 */
+  size?: Channel;
 }
 
 export type TransformPlan =
@@ -77,6 +79,8 @@ export interface ChartSpec {
   theme: VizThemeToken;
   /** V0.6 工业监控：阈值线 */
   threshold?: { value: number; label: string };
+  /** V0.6 数据标签：显示字段 + 格式 */
+  label?: { field: string; format: string };
   /** V0.6 GIS：地图区域名（geo/<region>.json） */
   mapRegion?: string;
 }

@@ -969,3 +969,80 @@ page OrderList {
     let chart = read(&dir, "generated/web/src/viz/charts/Trend.ts");
     assert!(chart.contains("\"legend\""), "{chart}");
 }
+
+// ── V0.6 收尾（二）：tooltip 交互增强（crosshair/item tooltip）────────
+
+#[test]
+fn antv_tooltip_is_shared_for_multiseries_and_item_for_single() {
+    // 多系列：共享 crosshair
+    let dir = tmp("tooltip-multi");
+    project(&dir, Some("antv"));
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app viz06 { version = "0.1.0" }
+entity Order {
+  id     Uuid @id @default(uuid)
+  month  String(10)
+  region String(20)
+  amount Decimal(12,2)
+}
+api Orders { entity Order operations [list get] list { filters [region] } }
+chart Trend {
+  type line
+  title { en "Trend" }
+  source Orders.list
+  encoding {
+    x      { field month type nominal }
+    y      { field amount type quantitative }
+    series { field region type nominal }
+  }
+}
+page Dashboard {
+  route "/dashboard"
+  title { en "Dashboard" }
+  dashboard {
+    grid { Trend w 12 h 300 }
+    filters [region]
+  }
+}
+page OrderList {
+  route "/orders"
+  title { en "Orders" }
+  table {
+    query   Orders.list
+    columns [month]
+    actions { row [delete → Orders.delete confirm] }
+  }
+}
+"#,
+    )
+    .unwrap();
+    forma::build::run_build(&dir).unwrap();
+    let opt = read(&dir, "generated/web/src/viz/echarts.ts");
+    assert!(
+        opt.contains("shared: Boolean(spec.encoding.series)"),
+        "{opt}"
+    );
+    assert!(opt.contains("showMarkers: true"), "{opt}");
+    assert!(
+        opt.contains("showTitle: Boolean(spec.encoding.series)"),
+        "{opt}"
+    );
+
+    // 单系列：item tooltip（无 crosshair 共享）
+    let fm_single = fs::read_to_string(dir.join("forma/app.fm"))
+        .unwrap()
+        .replace("    series { field region type nominal }\n", "")
+        .replace("    filters [region]\n", "");
+    let dir2 = tmp("tooltip-single");
+    project(&dir2, Some("antv"));
+    fs::write(dir2.join("forma/app.fm"), fm_single).unwrap();
+    forma::build::run_build(&dir2).unwrap();
+    let opt2 = read(&dir2, "generated/web/src/viz/echarts.ts");
+    // 模板统一，运行时由 spec.encoding.series 决定 shared（false → item tooltip）
+    assert!(
+        opt2.contains("shared: Boolean(spec.encoding.series)"),
+        "{opt2}"
+    );
+}
