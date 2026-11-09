@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **IR 扩展（RFC-0004 §9 / §16-3 收口）**：DSL `extensions { <namespace>.<key> = <value> }`
+  构造落地——`Program.extensions`（点分路径拆 namespace/key；标量值；至少两段，否则
+  `dsl-parse` fail-closed；重复键 `dsl-duplicate-extension`）；多文件合并保留来源；
+  **不被擅解释**：无 emitter 声明扩展支持，全部产物 byte 级不敏感
+  （回归 `tests/ir_extensions.rs` 5 项）；IR 契约视图与 `program.schema.json` 同步。
+- **Secret Provider `file` 实现（RFC-0005 T3 / §16-4 收口）**：生成的 `src/secret.rs`
+  支持 `{name}_FILE` 挂载文件（Docker/K8s secrets 约定）+ 环境变量两种实现；
+  已配置但不可读 → fail-closed（`FORMA_SECRET_UNREADABLE`，不回显值）；
+  回归 `tests/runtime_probes.rs`。
+- **Next.js 关系选择器 + QueryClient Provider**：表单页关系字段渲染为 select
+  （options 查询 + 编辑页 `{rel}_id` → 裸名初始值）；`app/providers.tsx` 提供
+  QueryClientProvider；`package.json` 增加 `@tanstack/react-query`；
+  `tsc --noEmit` + `next build` 通过。
+- **Vue target 功能对齐**：列表页（搜索 / 过滤器[关系/枚举 select + options 查询] /
+  分页 / 导出 / 命令按钮 / 删除 / 关系列 `{rel}_name`）；表单页（create/update 提交 +
+  validators 同源校验 + 关系选择 + `{rel}_id` → 裸名映射）；详情页（分节 descriptions）；
+  Pinia store（filters/search/分页）；`vue-tsc --noEmit && vite build` 通过。
+- **spec:ir §13 全部验收项**：新增 3 项回归（结构边无环 + 引用环终止、构建阻断、
+  IR 序列化确定性/无时间戳）+ 引用既有 2 项证据（`tests/dsl_ir_bridge.rs` /
+  `tests/dsl_validate.rs` / `tests/ir_schema.rs`）。
+
+### Fixed
+- **IR 桥接前向引用漏边**：`lower_to_graph` 单遍处理时，引用「后声明实体」的字段
+  拿不到引用边（`graph.has` 为假）→ 影响闭包漏报；改为两遍处理，声明顺序无关
+  （回归 `tests/dsl_ir_bridge.rs::structural_edges_are_acyclic_and_reference_cycles_terminate`）。
+- **Web 编辑页关系初始值丢失**（web_react 普通表单 + RHF）：实体响应是 `{rel}_id`，
+  表单读裸名 `{rel}` → 编辑时关系选择初始为空；加载时显式映射
+  （回归 `tests/emit.rs::web_form_edit_maps_relation_id_to_bare_input_name`）。
+
+### Changed
+- **治理收口**：RFC-0003 §18 两项开放问题关闭（表达式级依赖已实现）；RFC-0004 §16-3、
+  RFC-0005 §16-4、RFC-0008 §16-3（ADR-0005 取代）全部勾选；spec:ir §13 全部勾选；
+  `docs validate` / `docs lint` 0 warning / 0 info。
+- **文档同步**：next-milestone 的 F-002 / F-005 滞后「余项」清除；roadmap 的
+  Vue / Next.js / 移动端图表状态更新；RFC-0010 §16-4 补 pie。
+
 ### Fixed
 - **CI 在干净 checkout 上的三类 P0 失败**（HEAD `50b5804` 的 GitHub Actions 全量 job 首次运行暴露）：
   - `clippy`：`visualization/mod.rs` 的 `////` 注释触发 Rust 1.99 新 lint

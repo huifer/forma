@@ -353,12 +353,11 @@ Response 序列化：字段级裁剪
   证据：检查层 7 条 `dsl-auth-*` / `dsl-access-*` 诊断；`tests/api_auth.rs`。
 - [x] 权限判定在服务端强制：越权请求返回 403/404。
   证据：ADR-0004 服务端权威；`tests/api_auth.rs` + `tests/access_relation_depth.rs`（关系行缺失 403）。
-- [ ] 列表查询的权限条件注入 WHERE（非后置过滤）。
+- [x] ~~列表查询的权限条件注入 WHERE（非后置过滤）。~~
   **已由 [ADR-0005](../adr/accepted/ADR-0005-list-authorization-boundary.zh-CN.md) 取代（2026-11-08，G-8 收口）**：
   选项 A 固化为显式语言边界——行级条件只约束 get/update/delete（取行后授权，ADR-0004）；
   list/create 保持 `dsl-access-row-unsupported` 显式拒绝；列表过滤由 api 级 auth + filters +
-  `@tenant` 服务端绑定满足。本条不再作为缺口（需求被 ADR 重新定义），保留 `[ ]` 以免被
-  误读为「WHERE 注入已实现」。
+  `@tenant` 服务端绑定满足。本条不再作为缺口（需求被 ADR 重新定义），按取代决议关闭。
 - [x] 策略求值失败时 fail-closed。
   证据：关系行缺失 → 403（P2/A-2）；租户 `None` → `col = NULL` 恒不命中 → 空集；
   未设 `TENANT_ADMIN_TOKEN` → 403 关闭；`tests/access_relation_depth.rs` / `runtime_probes.rs`。

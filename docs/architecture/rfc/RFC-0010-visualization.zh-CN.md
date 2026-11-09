@@ -879,12 +879,12 @@ V0.6（AntV / G2Plot、legend/tooltip、size/label、GIS、工业监控阈值线
 4. [x] ~~**图表是否进入 Flutter 适配层**~~
    **评估完成并落地最小集（2026-11-08）**：移动端图表需求弱（屏幕小、以列表/表单为主），
    但 bar/line 两类高频图表值得支持。落地形态：
-   - **支持**：`bar` / `line` + 无 transform + x/y 为实体直接字段 → 生成 `fl_chart` 图表页
-     （x 为 nominal 时用索引，y 取字段值）；
+   - **支持**：`bar` / `line` / `pie` + 无 transform + x/y 为实体直接字段 → 生成 `fl_chart` 图表页
+     （x 为 nominal 时用索引，y 取字段值；line 支持 V0.6 threshold 阈值线）；
    - **占位**：其余类型 / 带 transform / 字段缺失 → 保持占位页（路由与导航结构完整）；
    - 依赖：仅当存在可支持图表时 `pubspec.yaml` 引入 `fl_chart`（零变化原则）；
    - 验证：`flutter analyze` 零 issue（school 的 CourseCapacity bar 页）。
-   **未支持**：pie/gauge/radar 等复杂类型与 transform 聚合——留待真实需求。
+   **未支持**：gauge/radar 等复杂类型与 transform 聚合——留待真实需求。
 
 5. ~~**Drill-down（下钻明细）评估**~~ **已落地（2026-11-08）**：dashboard 条目
    `drilldown "/route"` → 点击图表元素跳转该路由，携带 x 维度值作为 URL query；

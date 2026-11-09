@@ -8,7 +8,13 @@
 > 可视化 V0.4–V0.6（Dashboard 联动/下钻、AntV/G2Plot、legend/tooltip、size/label、GIS、
 > 工业监控阈值线、K 线）与 CLI 端到端回归已提交但尚未同步到治理叙事。
 > 本阶段只校准文档状态，不新增 target、不改 emitter 契约。
-> 当前实测：`cargo test` 494 项 / 76 套件；已同步到 `origin/main`（0 ahead / 0 behind）。
+> 当前实测：`cargo test` 506 项 / 77 套件；已同步到 `origin/main`（0 ahead / 0 behind）。
+
+> **全面收口（2026-11-09）**：治理层 5 项 RFC 未勾选项全部关闭（RFC-0003 §18 表达式级依赖、
+> RFC-0004 §16-3 未知 IR 扩展、RFC-0005 §16-4 Secret Provider、RFC-0008 §16-3 由
+> ADR-0005 取代）+ spec:ir §13 五项验收全勾；新增 IR 扩展语法、Secret Provider file
+> 实现、Next.js 关系选择器、Vue target 功能对齐（列表/表单/详情 + Pinia）；修复
+> IR 桥接前向引用漏边与 Web 编辑页关系初始值丢失两个真实缺陷。详见 CHANGELOG。
 
 > **P2 轨道 A 已全面收尾（2026-11-08）**：F-001…F-008 之后，P2 的 8 项余项
 > （多层关系遍历 / GraphQL 逆向关系 / 多租户管理 UI / 产物清单来源规格与锚点 /
@@ -24,7 +30,7 @@
 | # | 任务 | 优先级 | 当前状态 | 说明 |
 |---|---|---|---|---|
 | F-001 | 定义 Unified IR 稳定契约（版本 / 节点 ID / 类型 / 来源映射 / 兼容策略） | P0 | ✅ 已完成 | IR 版本（`IR_VERSION` + `Program.ir_version`）、稳定标识（DSL 与联邦**同一套** `forma://` URI 构造函数）、类型单一权威清单（`BUILTIN_TYPES` + 四目标映射一致性回归）、来源映射（声明级 `file`/`line`）、兼容策略（弃用窗口 ≥ 2 个次版本且 ≥ 6 个月，见 spec:compatibility §10）全部落地；DSL → 语义图**单向桥接**（`dsl::lower`）使两条路径语义能力合流（spec:ir §15 M1–M4） |
-| F-002 | Provenance + 产物 Manifest（哈希 / 所有权 / 人工修改检测） | P0 | ✅ 已完成 | **产物清单落地（2026-11-05，ADR-0003 实现版）**：`.forma/artifacts.json` 记录逐文件哈希 / 归属（Generated/Adopted）/ 生成器；构建前快照受保护产物、构建后恢复——**人工修改不被静默覆盖**（`artifact-modified` 警告 + 保留人工版本）；裁决旗标 `--adopt`（登记 Adopted，永不覆盖）/ `--overwrite`（显式覆盖 + 审计）/ `--strict`（冲突提升 error）。余项：Extension 锚点机制、清单的来源规格/依赖节点字段 |
+| F-002 | Provenance + 产物 Manifest（哈希 / 所有权 / 人工修改检测） | P0 | ✅ 已完成 | **产物清单落地（2026-11-05，ADR-0003 实现版）**：`.forma/artifacts.json` 记录逐文件哈希 / 归属（Generated/Adopted）/ 生成器；构建前快照受保护产物、构建后恢复——**人工修改不被静默覆盖**（`artifact-modified` 警告 + 保留人工版本）；裁决旗标 `--adopt`（登记 Adopted，永不覆盖）/ `--overwrite`（显式覆盖 + 审计）/ `--strict`（冲突提升 error）。**余项已清零（2026-11-08，轨道 A-6）**：`ArtifactEntry.source`（生成器版本 / IR 版本 / 输入指纹 / 依赖）+ `Ownership::Extension` 锚点（`artifact-extension-preserved`，`--overwrite` 也不得覆盖）；回归 `tests/artifact_ownership.rs` |
 | F-003 | Semantic Impact Analysis（字段 / API / 规则 / 页面的依赖闭包） | P0 | ✅ 已完成 | `crates/forma/src/graph.rs` 的 `UnifiedSemanticGraph` + `forma_graph` / `forma_impact` |
 | F-004 | 规则跨语言一致性测试（Rust / TS / Dart 共享语义向量） | P0 | ✅ 已完成 | **行为向量从 DSL 派生（2026-11-05）**：`validation_vectors.rs` 从规则约束（min/max/required）派生边界用例，生成两端行为测试——`validators.test.ts`（vitest，**Web 测试运行器补齐**）与 `rule_vector_test.dart`（flutter_test），由同一派生函数产出（同源保证）；CI 执行 `npx vitest run` + `flutter test`；Rust 侧保留三端字面量一致性断言（`tests/rule_vectors.rs`） |
 | F-005 | OpenAPI / JSON Schema 导入 | P0 | ✅ 已完成 | `adapters/` 已有 openapi / jsonschema / sql / jsonforms / bpmn 适配器（导入 + 导出）；**`forma import openapi <spec> [--out]` 逆向生成 `.fm` 源文件**（components.schemas → 实体、paths → api、类型映射 + @id 主键保证，生成物通过 check_program，P1-#1） |
@@ -58,7 +64,8 @@ Phase 2 — Agent 原生化（P0）
   F-005 ✅ OpenAPI / JSON Schema 导入（已完成，纳入验收）
 
 Phase 3 — 标准生态互通（P1）
-  F-005   既有项目 导入 → IR → 导出 语义等价验收（余项）
+  F-005 ✅ 既有项目 导入 → IR → 导出 语义等价验收（回归 `tests/adapter_roundtrip.rs`：
+       OpenAPI / SQL DDL 往返 + 损失报告 + 确定性）
   F-008 ✅ Generated Project Benchmark（已完成）
 
 Phase 4 — 目标技术扩展（P2，前序稳定后再做）

@@ -12,7 +12,7 @@ backend code, frontend code, APIs, validation, and diagrams.
 [![CI](https://github.com/huifer/forma/actions/workflows/ci.yml/badge.svg)](https://github.com/huifer/forma/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org/)
-[![Tests](https://img.shields.io/badge/tests-494%20passing-brightgreen.svg)](#development)
+[![Tests](https://img.shields.io/badge/tests-506%20passing-brightgreen.svg)](#development)
 [![MCP](https://img.shields.io/badge/MCP-compatible-purple.svg)](#ai-integration)
 
 [English](README.md) · [简体中文](README.zh-CN.md)

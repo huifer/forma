@@ -58,7 +58,7 @@ P2 余项 Closure（轨道 A 8/8 完成，轨道 B 撤销）→ P3 治理收尾�
 | ✅ 已完成 | **Node：NestJS** | M10 | NestJS 10 + TypeORM 0.3 + MySQL + class-validator；CRUD 子集（标量字段/枚举/Decimal/必填/min/max）；auth/access/tenant/commands 显式拒绝（不静默降级安全语义）；`backend.language: typescript` + `framework: nestjs` 路由到 `backend-nestjs` 构建步骤；npm run build + tsc --noEmit 通过 |
 | ✅ 已完成 | **Node：Hono** | M10 | Hono 4 + @hono/node-server + mysql2 + zod；轻量 CRUD（list/get/create/update/delete、offset 分页、字段 min/max/required）；auth/access/tenant/commands/cross-field rules 显式拒绝；`backend.language: typescript` + `framework: hono` 路由到 `backend-hono` 构建步骤 |
 | ✅ 已完成 | **Python：FastAPI** | M10 | FastAPI + SQLAlchemy 2.0 + Pydantic 2 + PyMySQL；`models.py`（Mapped/mapped_column）/`schemas.py`（Create/Read DTO + ge/le）/`routes.py`（CRUD router）；auth/access/tenant/commands/cross-field rules 显式拒绝；`backend.language: python` + `framework: fastapi` → `backend-fastapi` 构建步骤；`python -m compileall` 通过 |
-| ✅ 已完成 | **Vue 3 前端** | M10 | Vue 3 + Vite + TypeScript + Vue Router + Pinia + Element Plus；`frontend.framework: vue`（或 `vue3`）路由到 `frontend-vue` 构建步骤；复用 web_react 的 `types_ts`/`validators_ts`/`format_ts`/`access` 契约；auth（`AuthApi`）+ 命令操作（`XxxApi.execute`）+ 角色感知（`access.ts` 用 `@tanstack/vue-query` 的 Vue 原生 `useCurrentRole`/`useCan`）；`vue-tsc --noEmit && vite build` 通过；默认（无 framework 或 `react`）仍生成 React，产物零变化 |
+| ✅ 已完成 | **Vue 3 前端** | M10 | Vue 3 + Vite + TypeScript + Vue Router + Pinia + Element Plus；`frontend.framework: vue`（或 `vue3`）路由到 `frontend-vue` 构建步骤；复用 web_react 的 `types_ts`/`validators_ts`/`format_ts`/`access` 契约；auth（`AuthApi`）+ 命令操作（`XxxApi.execute`）+ 角色感知（`access.ts` 用 `@tanstack/vue-query` 的 Vue 原生 `useCurrentRole`/`useCan`）；列表页：搜索/过滤器（关系/枚举 select + options 查询）/分页/导出/命令按钮/删除；表单页：create/update 提交 + validators 同源校验 + 关系选择（`{rel}_id` → 裸名映射）；详情页：分节 descriptions；Pinia store（filters/search/分页）；`vue-tsc --noEmit && vite build` 通过；默认（无 framework 或 `react`）仍生成 React，产物零变化 |
 | 👁 P2 | Java：Spring Boot | M11 | JPA + Spring Security |
 | 👁 P2 | Go：Gin + GORM / PHP：Laravel / .NET | M11 | |
 
@@ -79,9 +79,9 @@ P2 余项 Closure（轨道 A 8/8 完成，轨道 B 撤销）→ P3 治理收尾�
 | ✅ 首批 | **React + TanStack Router/Query/Table + shadcn/ui + Tailwind** | M4 | 校验 zod 与后端同源 |
 | ✅ 首批 | **i18n 资源生成**（react-i18next） | M4 | DSL 内 message → 语言包 |
 | ✅ 已完成 | React Hook Form 适配 | M9 | `targets.frontend.usesRhf` opt-in；useForm/register/useController + 校验复用 validators.ts（P1-#5） |
-| ✅ 已完成 | 状态管理生成（Zustand） | M9 | `usesZustand` opt-in；store 从列表页数据依赖派生（filters/search），setter 签名兼容（P1-#6）。Pinia（Vue）留待 Vue 列表页引入过滤/搜索依赖面后跟进 |
+| ✅ 已完成 | 状态管理生成（Zustand） | M9 | `usesZustand` opt-in；store 从列表页数据依赖派生（filters/search），setter 签名兼容（P1-#6）。Pinia（Vue）已跟进（2026-11-09）：Vue 列表页引入 filters/search/分页依赖面后生成 `src/stores/{page}.ts` Pinia store |
 | ✅ 已完成 | **Vue 3 + Vue Router + Pinia + Element Plus** | M10 | `frontend.framework: vue` → 复用 React 契约；auth/命令/角色感知双端对齐 |
-| ✅ 已完成 | **Next.js（App Router / SSR 变体）** | M10 | `frontend.framework: nextjs`（或 `next`）→ `frontend-nextjs` 构建步骤；复用 web_react 的 `types_ts`/`validators_ts`/`api_ts`/`format_ts`；列表页 = Server Component（`src/api-server.ts` + `API_BASE` env + `force-dynamic`）；变更/命令 = Server Actions（`app/actions.ts` + `revalidatePath`）；表单 = client 组件复用 validators 同源校验；new/[id] 页按 api operations 裁剪；`next.config.mjs` rewrites `/api/*`；自带 CI（tsc + next build，无 vitest）；`tsc --noEmit` + `next build` 通过；默认（react）零变化 |
+| ✅ 已完成 | **Next.js（App Router / SSR 变体）** | M10 | `frontend.framework: nextjs`（或 `next`）→ `frontend-nextjs` 构建步骤；复用 web_react 的 `types_ts`/`validators_ts`/`api_ts`/`format_ts`；列表页 = Server Component（`src/api-server.ts` + `API_BASE` env + `force-dynamic`）；变更/命令 = Server Actions（`app/actions.ts` + `revalidatePath`）；表单 = client 组件复用 validators 同源校验 + **关系选择器**（options 查询 + `{rel}_id` → 裸名初始值）；根布局 `app/providers.tsx` 提供 QueryClientProvider（`@tanstack/react-query` 依赖）；new/[id] 页按 api operations 裁剪；`next.config.mjs` rewrites `/api/*`；自带 CI（tsc + next build，无 vitest）；`tsc --noEmit` + `next build` 通过；默认（react）零变化 |
 | 👁 P2 | SvelteKit / Angular | M11 | |
 | 👁 P2 | 桌面：Tauri / Electron | M11 | |
 
@@ -98,7 +98,7 @@ P2 余项 Closure（轨道 A 8/8 完成，轨道 B 撤销）→ P3 治理收尾�
 | ✅ 已完成 | legend / tooltip / size / label 交互与通道 | V0.6 | 多系列 crosshair、数据驱动点大小、数据标签；`tests/visualization_v06.rs` |
 | ✅ 已完成 | GIS / 工业监控 / K 线 | V0.6 | ECharts map + GeoJSON 契约；三端 threshold；AntV Candlestick（echarts 显式拒绝） |
 | 👁 P2 | AntV 图分析/关系可视化 | V0.6+ | 网络图、关系图等仍需新语义/Adapter |
-| 👁 P2 | 移动端图表投影 | V0.6+ | Flutter 自绘/内嵌图 |
+| ✅ 已完成（最小集） | 移动端图表投影 | V0.6+ | Flutter fl_chart：bar/line/pie + 无 transform + x/y 为实体直接字段；其余类型/带 transform 仍为占位页（路由完整）。复杂图表（gauge/radar 等）留待真实需求 |
 
 设计全文：[architecture/rfc/RFC-0010-visualization.zh-CN.md](architecture/rfc/RFC-0010-visualization.zh-CN.md)。
 
