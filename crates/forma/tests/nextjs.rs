@@ -118,6 +118,47 @@ fn nextjs_target_generates_app_router_project() {
 }
 
 #[test]
+fn nextjs_forms_render_relation_selects() {
+    // 关系字段渲染为选择器：options 从目标实体 list 拉取；
+    // 输入体键为裸关系名（值为 id 或 null）；编辑页 defaultValue 取实体响应的 `{rel}_id`。
+    const REL_FM: &str = r#"
+app nextrel { version = "0.1.0" }
+entity School {
+  id Uuid @id @default(uuid)
+  name String(50) @required
+}
+entity Student {
+  id Uuid @id @default(uuid)
+  name String(50) @required
+  school School?
+}
+api Schools { entity School operations [list get create update delete] }
+api Students { entity Student operations [list get create update delete] }
+page StudentList {
+  route "/students"
+  title { en "Students" }
+  table { query Students.list columns [name] }
+}
+"#;
+    let dir = tmp_dir("relation");
+    let yaml = "project:\n  name: nextrel\n  version: 0.1.0\nsource: [\"forma/**/*.fm\"]\n\ntargets:\n  frontend:\n    framework: nextjs\n    out: generated/web\n";
+    fs::write(dir.join("forma.yaml"), yaml).unwrap();
+    fs::write(dir.join("forma/app.fm"), REL_FM).unwrap();
+    forma::build::run_build(&dir).unwrap();
+
+    let new_page = fs::read_to_string(dir.join("generated/web/app/students/new/page.tsx")).unwrap();
+    assert!(new_page.contains("SchoolOptionsQuery"), "{new_page}");
+    assert!(new_page.contains("<select name=\"school\""), "{new_page}");
+    assert!(new_page.contains("formData.get(\"school\") || null"), "{new_page}");
+    assert!(new_page.contains("import { useQuery } from \"@tanstack/react-query\";"), "{new_page}");
+
+    let edit_page = fs::read_to_string(dir.join("generated/web/app/students/[id]/page.tsx")).unwrap();
+    assert!(edit_page.contains("<select name=\"school\""), "{edit_page}");
+    assert!(edit_page.contains("defaultValue={row[\"school_id\"]"), "{edit_page}");
+    assert!(edit_page.contains("SchoolOptionsQuery"), "{edit_page}");
+}
+
+#[test]
 fn nextjs_target_keeps_default_react_target_unchanged() {
     let dir = tmp_dir("default");
     setup(&dir, "react");

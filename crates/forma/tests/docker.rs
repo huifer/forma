@@ -154,6 +154,7 @@ fn no_entities_means_no_docker_artifacts() {
         lives: Vec::new(),
         exports: Vec::new(),
         auth: None,
+        extensions: Vec::new(),
     };
     assert!(emit_docker(&dir, &program, ".", "empty")
         .unwrap()

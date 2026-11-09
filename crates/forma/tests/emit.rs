@@ -118,6 +118,37 @@ fn web_emits_pages_and_validators() {
 }
 
 #[test]
+fn web_form_edit_maps_relation_id_to_bare_input_name() {
+    // 编辑页初始值：实体响应是 `{rel}_id`，Create/Update 输入体是裸关系名 `{rel}`。
+    // 后端 serde 两套键名体系——表单加载时必须显式映射，否则关系选择初始值为空。
+    let (dir, program) = school_program();
+    let files = emit_web_react(
+        &dir,
+        &program,
+        "generated/web",
+        "school",
+        false,
+        false,
+        "echarts",
+    )
+    .unwrap();
+    let edit = files
+        .iter()
+        .find(|f| f.path.ends_with("EnrollmentEdit.tsx"))
+        .unwrap();
+    assert!(
+        edit.content.contains("mapped[\"student\"] = v[\"student_id\"]"),
+        "{}",
+        edit.content
+    );
+    assert!(
+        edit.content.contains("mapped[\"course\"] = v[\"course_id\"]"),
+        "{}",
+        edit.content
+    );
+}
+
+#[test]
 fn openapi_emits_paths_and_schemas() {
     let (dir, program) = school_program();
     let files = emit_openapi(&dir, &program, "generated/api-docs").unwrap();
