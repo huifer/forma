@@ -144,8 +144,24 @@ fn generated_artifacts_do_not_hardcode_secret_values() {
         assert!(!text.contains("BEGIN RSA"), "{}: {}", p.display(), text);
         assert!(!text.contains("password = \""), "{}: {}", p.display(), text);
     }
-    // JWT_SECRET 只作为环境变量名出现（读取点唯一）
-    assert_eq!(auth.matches("JWT_SECRET").count(), 1, "{auth}");
+    // JWT_SECRET 只作为环境变量名出现（读取点唯一；注释里提到 JWT_SECRET_FILE 不算读取点）
+    assert_eq!(auth.matches("\"JWT_SECRET\"").count(), 1, "{auth}");
+}
+
+#[test]
+fn secret_provider_supports_env_and_file_mount_providers() {
+    // RFC-0005 T3：至少 `env` / `file` 两种实现。
+    // file provider = `{name}_FILE` 指向挂载文件（Docker/K8s secrets 约定）；
+    // 已配置但不可读 → fail-closed，且错误消息只含引用名（不回显值）。
+    let dir = tmp("secret-file");
+    project(&dir, FULL);
+    forma::build::run_build(&dir).unwrap();
+    let secret = fs::read_to_string(dir.join("generated/backend/src/secret.rs")).unwrap();
+    assert!(secret.contains("std::env::var(name)"), "{secret}");
+    assert!(secret.contains("{name}_FILE"), "{secret}");
+    assert!(secret.contains("FORMA_SECRET_UNREADABLE"), "{secret}");
+    // 不回显值：读取失败不得 unwrap / 输出文件内容
+    assert!(!secret.contains("read_to_string(path).unwrap"), "{secret}");
 }
 
 #[test]

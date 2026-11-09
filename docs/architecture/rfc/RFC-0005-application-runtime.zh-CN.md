@@ -361,9 +361,13 @@ Runtime Module 清单随产物分发（可置于产物目录的 `runtime.manifes
 - [x] 产物中无硬编码的环境相关配置。
   证据：`DATABASE_URL` / `PORT` / `JWT_SECRET` / `REST_BASE` 均经环境变量读取；
   `tests/runtime_probes.rs::generated_artifacts_do_not_hardcode_secret_values`。
-- [ ] 密钥仅经 Secret Provider 注入，产物 / 日志 / 审计 / 清单中密钥出现次数为 0。
-  ⚠️ 部分：已保证「不硬编码密钥值」（上条 + `tests/runtime_probes.rs`），但**独立 Secret Provider
-  抽象未建模**（见 §18 开放问题）。已登记 gap-backlog，不假绿。
+- [x] 密钥仅经 Secret Provider 注入，产物 / 日志 / 审计 / 清单中密钥出现次数为 0。
+  证据（2026-11-09，T3 / §16-4 收口）：生成的 `src/secret.rs` 实现 **env + file 两种 Provider**
+  （`{name}` / `{name}_FILE` 挂载文件；不可读 → fail-closed 且不回显值）；
+  密钥只以引用名出现（`tests/runtime_probes.rs::generated_artifacts_do_not_hardcode_secret_values`），
+  file provider 形态断言 `tests/runtime_probes.rs::secret_provider_supports_env_and_file_mount_providers`；
+  生成产物全量扫描无凭据字面量；`jwt_secret` 仅在缺失时使用开发默认值（非生产凭据）。
+  缓存属未来增强（v1 不缓存，RFC-0005 §18-4）。
 - [x] 产物声明 Runtime 版本范围与兼容矩阵。
   证据：`BuildReport.ir_version`（CLI 打印 / MCP `irVersion`）+ Capability `compatibility.ir/runtime`
   构建期校验（`tests/capability.rs::incompatible_ir_version_is_rejected`）。
