@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **发布前架构叙事校准（2026-11-09）**：把最近 49 个本地提交（Studio V3 本地历史回放、
+  可视化 V0.4–V0.6、CLI 端到端回归）同步回治理叙事：
+  - README 双语：当前阶段改为「发布前一致性收口」，测试数字更新为 494 项 / 76 套件；
+  - `roadmap` / `next-milestone`：补可视化 V0.4–V0.6 与 Studio V3 本地收尾；
+  - `RFC-0010`：状态注释与 §13 / §16-6 对齐（V0.6 不再是「部分落地」）；
+  - `RFC-0006`：§3.1 / §8.2 区分「立项时」与「当前状态」，`search/get_context/plan/report` 已落地；
+  - Capability Registry：PostgreSQL / SQLite / Redis / AntV 不再列为「规划中」；
+  - Conformance / agent-workflow 的测试与工具状态同步。
+  仅文档变更，不修改 emitter、IR 或 DSL 契约。
+
+### Added
 - **CLI 端到端回归：`docs` 三命令 + `bench --skip-backend`**：
   - `cli_io.rs` 新增 3 项 CLI 回归（`docs check-links` 断链=warning 语义、
     `check-dependencies` 自依赖报错、`check-compatibility` breaking 缺迁移计划报错）；

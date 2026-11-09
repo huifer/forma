@@ -150,7 +150,8 @@ v0.1.0（CRUD 基线）→ v0.2.0（竞选功能：3 新表 + 外键）→ v0.3.
 **v0.3（当前）**——DSL 中间层架构定案；`@generated` 产物、分层验证（L1–L5）、RFC 治理体系齐备。
 
 > **范围决议（2026-11-08）**：P2 只完成「余项 Closure」（8/8），**目标扩栈（Wave 4 的企业级技术栈）已撤销、不再排期**；
-> 当前阶段为 **P3 治理收尾与发布就绪**（RFC 状态对齐、Conformance 证据矩阵、CI 编译门、发布叙事同步）。
+> P3 治理收尾与发布就绪已完成。当前处于 **发布前一致性收口**：把最近 49 个本地提交（Studio V3 本地历史回放、
+> 可视化 V0.4–V0.6、CLI 端到端回归）同步回 README / RFC / roadmap / Conformance 叙事。
 > 详见 [P2 规划](docs/architecture/roadmap/p2-plan.zh-CN.md) / [P3 规划](docs/architecture/roadmap/p3-plan.zh-CN.md)。
 
 波次与当前状态：
@@ -159,6 +160,8 @@ v0.1.0（CRUD 基线）→ v0.2.0（竞选功能：3 新表 + 外键）→ v0.3.
 - **Wave 2（M5–M8）** ✅ Auth 模块 · **Studio v1 可视化** · **生态互通**（OpenAPI/SQL/Postman 双向）· AI 语义补丁闭环
 - **Wave 3（M9–M10）** ✅ 工程化（Docker/上传/导出/审计）+ Studio 双向编辑 · 扩栈：PostgreSQL/SQLite、Node/Python 后端、Vue/Next.js、Expo、GraphQL、多租户、实时
 - **Wave 4（M11）** ✅ 部署产物（K8s manifests / Helm / Terraform）；**企业级扩栈（Spring/Go/.NET、原生移动、小程序、工作流运行时、支付）已撤销**
+- **可视化 V0.4–V0.6** ✅ Dashboard 联动/下钻、AntV（G2Plot）、legend/tooltip、size/label、GIS 地图、工业监控阈值线、K 线
+- **Studio V3 本地收尾** ✅ 变更历史面板 + patchId 幂等回放（多人实时协作仍明确排除）
 - **P2 / P3** ✅ P2 轨道 A 8/8 完成（轨道 B 撤销）；P3 治理收尾与发布就绪
 
 仓库当前含一个可运行的**标准联邦原型**（v0.2，Rust：适配器 + doctor + 增量构建 + 事务式补丁 + MCP，17 个测试全绿）。其语义图、补丁与构建引擎被 DSL 编译器复用；标准适配器转为导出视图（M7）。演化史：[docs/history/](docs/history/README.md)。
@@ -170,7 +173,7 @@ v0.1.0（CRUD 基线）→ v0.2.0（竞选功能：3 新表 + 外键）→ v0.3.
 ## 开发（当前原型）
 
 ```bash
-cargo test            # 71 个集成测试
+cargo test            # 494 项 / 76 个集成测试套件
 cargo build --release
 cargo run -- migrate examples/school status      # 数据库版本链
 cargo run -- migrate examples/school verify      # 链完整性 + 重放校验

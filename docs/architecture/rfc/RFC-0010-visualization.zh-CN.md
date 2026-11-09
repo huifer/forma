@@ -1,11 +1,11 @@
 ---
 id: RFC-0010
 title: Visualization Specification and Rendering System
-status: Accepted            # V0.1–V0.3 / V0.5 已落地（metric/table + dashboard IR + theme/preview/渲染门，见 §13 分期与 CHANGELOG）
-version: 1.0
+status: Accepted            # 设计已接受；V0.1–V0.6 已分期落地（见 §13 / §16-6）
+version: 1.1
 authors: [forma-maintainers]
 created: 2026-11-05
-updated: 2026-11-04
+updated: 2026-11-09
 domain: capability
 supersedes: []
 superseded_by: []
@@ -17,7 +17,7 @@ breaking_change: false
 
 # RFC-0010：Forma 可视化规格与渲染系统
 
-> 状态：**已接受（Accepted）· 实现分期 V0.1 落地中**（本 RFC 由 docs/rfc/0001-visualization.zh-CN.md 迁入治理体系统一编号）
+> 状态：**已接受（Accepted）· 实现分期 V0.1–V0.6 已落地**（本 RFC 由 docs/rfc/0001-visualization.zh-CN.md 迁入治理体系统一编号）
 > 日期：2026-11-05
 > 关联：RFC-0001（架构总览）、RFC-0004（能力系统）、[dsl-spec.zh-CN.md](../../dsl-spec.zh-CN.md) §11、[roadmap.zh-CN.md](../../roadmap.zh-CN.md)
 > 决策人：Forma 维护者
@@ -799,9 +799,10 @@ V0.1 已落地的断言见 `crates/forma/tests/visualization.rs`。
 
 ## Implementation Plan（实施计划）
 
-按 §13 分期推进：V0.1 已落地（Chart IR + 十类图表 + Adapter + React Runtime）；
-V0.2（metric/table + cursor 源）与 V0.3（dashboard grid + 筛选联动）已落地；
-V0.5（theme + preview + 浏览器渲染门）已落地；V0.4 / V0.6 待排期（§13）。
+按 §13 分期推进：V0.1（Chart IR + 十类图表 + Adapter + React Runtime）、
+V0.2（metric/table + cursor 源）、V0.3（dashboard grid + 筛选联动）、
+V0.4（联动/下钻）、V0.5（theme + preview + 浏览器渲染门）、
+V0.6（AntV / G2Plot、legend/tooltip、size/label、GIS、工业监控阈值线、K 线）均已落地；
 每个切片的验收判据见 §12 验收测试矩阵。
 
 ## Conformance Requirements（一致性验收）
@@ -810,7 +811,9 @@ V0.5（theme + preview + 浏览器渲染门）已落地；V0.4 / V0.6 待排期�
 - [x] 确定性：同一 Program 两次构建 byte 级一致（`tests/visualization.rs`）
 - [x] 零变化：无 chart 声明工程不产生 viz 产物与 echarts 依赖（`tests/visualization_v02.rs`）
 - [x] 浏览器渲染门：preview 页面 + mock API 断言渲染状态（V0.5，`tests/visualization_v05.rs`）
-- [x] 回归锚点：`tests/visualization.rs` / `visualization_v02.rs` / `dashboard.rs` / `visualization_v05.rs`
+- [x] 回归锚点：`tests/visualization.rs` / `visualization_v02.rs` / `dashboard.rs` / `visualization_v04.rs` / `visualization_v05.rs` / `visualization_v06.rs`
+- [x] AntV / G2Plot 适配层与生成工程 `tsc --noEmit`（V0.6，`examples/viz-antv` + CI `viz-antv`）
+- [x] V0.4 联动/下钻、V0.6 legend/tooltip/size/label/GIS/阈值线/K 线（`tests/visualization_v04.rs` / `tests/visualization_v06.rs`）
 
 ## 13. 里程碑
 
@@ -821,7 +824,7 @@ V0.5（theme + preview + 浏览器渲染门）已落地；V0.4 / V0.6 待排期�
 | V0.3 | Dashboard IR、Grid/Flex 布局、响应式断点 | **已落地**（dashboard grid + 筛选联动；Flex / 响应式断点未做，见 §16 未决） |
 | V0.4 | Tooltip/Legend/Filter/Drill-down/联动事件模型 | **已落地**（2026-11-08）：Tooltip/Legend 已有；**联动**——图表点击 → dashboard 筛选器（其他图表重取）；**Drill-down**——`drilldown "/route"` 声明 → 点击跳转列表页 + URL query 初始筛选（列表页读 URLSearchParams）；目标路由必须已声明（`dsl-dashboard-unknown-drilldown`）；回归 `tests/visualization_v04.rs` 5 项 |
 | V0.5 | Theme、Preview、Runtime Verification（浏览器渲染门） | **已落地**（theme dark/data-screen + preview + 浏览器渲染门，回归 `tests/visualization_v05.rs`） |
-| V0.6 | AntV Adapter、领域图表扩展（GIS / 金融 / 工业监控）、移动端图表 | **部分落地**（2026-11-08）：AntV（G2Plot）适配层（`targets.visualization.adapter: antv`，与 echarts 共享 ChartSpec/变换，验证适配层无关性）；移动端图表 bar/line/pie（fl_chart，按需依赖）；领域图表评估结论见 §16-6 |
+| V0.6 | AntV Adapter、领域图表扩展（GIS / 金融 / 工业监控）、移动端图表 | **已落地**（2026-11-08/09）：AntV（G2Plot）适配层（`targets.visualization.adapter: antv`，与 echarts 共享 ChartSpec/变换）；legend/tooltip 交互；size/label 通道；GIS map + GeoJSON 契约（ECharts）；工业监控 threshold（三端）；candlestick（AntV 专属）；移动端图表 bar/line/pie（fl_chart，按需依赖）；回归 `tests/visualization_v06.rs` 与 CI `viz-antv` |
 
 ### V0.1 落地记录（实现与 RFC 的偏差均已回写正文）
 
@@ -889,8 +892,10 @@ V0.5（theme + preview + 浏览器渲染门）已落地；V0.4 / V0.6 待排期�
    （检查层 `dsl-dashboard-unknown-drilldown`）。
 
 6. **领域图表（GIS / 金融 / 工业监控）评估（2026-11-08）**：
-   - **GIS/地图**：需要 GeoJSON 数据源 + 地图渲染（ECharts map / L7）——DSL 目前无地图数据构造，
-     属于 RFC 级扩展（数据从哪来、如何绑定）。**结论：v1 不做**，需先立 `geo` 数据契约。
+   - **GIS/地图**：**已落地（2026-11-08，ECharts 专属）**：`type map` + `map "region"`，
+     数据源契约为工程内 `geo/<region>.json` GeoJSON；ECharts `registerMap` + map series；
+     AntV 构建期显式拒绝，Flutter 占位页；geo 文件缺失构建期显式报错。
+     回归 `tests/visualization_v06.rs`（14 项）。
    - **金融 K 线**：**已落地（2026-11-08，AntV 专属）**：`type candlestick` +
      `ohlc { open high low close }` 编码（四字段必须数值）；G2Plot Candlestick 渲染；
      echarts adapter 显式拒绝（无内置 K 线，不静默降级）；检查层

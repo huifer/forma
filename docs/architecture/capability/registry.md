@@ -15,7 +15,11 @@
 |---|---|---|---|---|---|
 | `data.binding` | data | 1.0.0 | `data.binding` | `binding-adapter` | — |
 | `data.mysql` | data | 1.0.0 | `db.ddl` `db.migration` `db.seed` | `mysql-adapter` | — |
-| `visualization.echarts` | visualization | 1.0.0 | `chart.bar` … `chart.treemap`（10 种） | `echarts-adapter` | `data.binding` |
+| `data.postgresql` | data | 1.0.0 | `db.ddl` `db.migration` `db.seed` | `postgres-adapter` | — |
+| `data.sqlite` | data | 1.0.0 | `db.ddl` `db.migration` `db.seed` | `sqlite-adapter` | — |
+| `data.redis` | data | 1.0.0 | `db.key-design` | `redis-key-adapter` | — |
+| `visualization.echarts` | visualization | 1.0.0 | `chart.bar` … `chart.treemap` | `echarts-adapter` | `data.binding` |
+| `visualization.antv` | visualization | 1.0.0 | `chart.bar` … `chart.treemap`（G2Plot 支持子集） | `antv-adapter` | `data.binding` |
 | `ui.form` | ui | 1.0.0 | `ui.form` | `web-react-adapter` | — |
 | `ui.table` | ui | 1.0.0 | `ui.table` | `web-react-adapter` | — |
 | `ui.dialog` | ui | 1.0.0 | `ui.dialog` | `web-react-adapter` | — |
@@ -34,12 +38,12 @@
 |---|---|---|
 | `visualization.echarts` | ✅ 内置 | [capability/visualization/echarts.zh-CN.md](visualization/echarts.zh-CN.md) |
 
+> 说明：PostgreSQL / SQLite / Redis / AntV 等是 `targets.*` 路由的 emitter 能力，不要求每个工程在 `capabilities:` 中声明；上表只列需要显式注册的能力。
+
 ## 规划中（尚未实现）
 
 | ID | 类别 | 说明 |
 |---|---|---|
-| `data.postgresql` | 数据 | PostgreSQL 适配层 |
-| `data.sqlite` | 数据 | SQLite 适配层 |
 | `visualization.vega-lite` | 可视化 | Vega-Lite 渲染器（已有 Manifest 范例语义） |
 | `visualization.maplibre` | 可视化 | 地图 |
 | `visualization.react-flow` | 可视化 | 流程图 |

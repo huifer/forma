@@ -2,10 +2,10 @@
 id: RFC-0006
 title: Agent Engineering Protocol
 status: Implemented
-version: 1.0
+version: 1.1
 authors: [forma-maintainers]
 created: 2026-11-04
-updated: 2026-11-04
+updated: 2026-11-09
 domain: agent
 supersedes: []
 superseded_by: []
@@ -33,7 +33,7 @@ Forma 的核心承诺是「AI 只面对 DSL」。但当前实现中这条承诺*
 
 ### 3.1 Current Problem
 
-**MCP 工具面现状**（`crates/forma/src/mcp.rs`，共 10 个工具）：
+**MCP 工具面现状**（本 RFC 立项时；当前状态见下方「实施状态」）：
 
 | 工具 | DSL 工程 | 联邦工程 | 说明 |
 |---|---|---|---|
@@ -46,9 +46,9 @@ Forma 的核心承诺是「AI 只面对 DSL」。但当前实现中这条承诺*
 | `forma_impact` | ❌ **拒绝** | ✅ | 影响闭包 |
 | `forma_patch` | ❌ **拒绝** | ✅ | 事务式补丁 |
 
-**三个实质缺口**：
+**三个实质缺口（本 RFC 立项时）**：
 
-1. **DSL 工程没有影响闭包与补丁**。`forma_impact` / `forma_patch` 对 DSL 工程直接 `bail!`（`crates/forma/src/mcp.rs` 的 `forma_impact` / `forma_patch` 分支），并提示「请直接编辑 `.fm` 后调 `forma_build`」。这让 Agent 无法回答「改这个字段会影响哪些产物？」——而这正是多轮次演进的关键问题。
+1. **DSL 工程没有影响闭包与补丁**。当时 `forma_impact` / `forma_patch` 对 DSL 工程直接 `bail!`，并提示「请直接编辑 `.fm` 后调 `forma_build`」。
 2. **补丁能力已经存在但不通用**。`crates/forma/src/patch.rs` 已实现事务式补丁：快照 → 应用 → 失败回滚（`crates/forma/src/patch.rs` 的 `rollback` 闭包）、返回 `PatchReport`、失败时产出 `patch-rollback` 诊断。但它只支持 3 个操作（`add-entity-field` / `rename-entity-field` / `set-entity-field-required`），且只作用于联邦工程。
 3. **工具面按 CLI 命令镜像，而非按任务组织**。`docs/agent-workflow.zh-CN.md` §5 已指出这一点并列出 15 个任务型工具（`forma_search` / `forma_get_context` / `forma_plan` / `forma_report` / `forma_explain` / `forma_adopt` 等），其中 6 个仍为「🔨 规划」。
 
@@ -135,22 +135,22 @@ Agent 工作流是**收敛的**闭环，而非发散的对话：
 
 ### 8.2 Architecture
 
-**任务型工具面**（在现有 10 个工具之上扩展）：
+**任务型工具面**（本 RFC 目标；当前状态见 §16）：
 
-| 工具 | 任务 | 现状 | 本 RFC 目标 |
+| 工具 | 任务 | 本 RFC 目标 | 当前状态 |
 |---|---|---|---|
-| `forma_inspect` | 项目概览 + 规格摘要 | `forma_graph`（DSL 侧） | 保留 `forma_graph`，补 `forma_inspect` 语义 |
-| `forma_search` | 搜索实体/字段/API/规则/页面 | 🔨 规划 | 新增：跨声明块的模式搜索 |
-| `forma_get_context` | 取指定任务所需的最小上下文 | 🔨 规划 | 新增：按节点收敛上下文子图 |
-| `forma_check` | 语法 + 语义校验 | ✅ | 保持 |
-| `forma_impact` | 变更影响闭包 | 联邦侧 ✅ / DSL 侧 ❌ | **DSL 侧补齐**（依赖 RFC-0003 M3） |
-| `forma_plan` | 生成执行计划 | 🔨 规划 | 新增：受影响产物清单 + 迁移操作清单 + 风险等级 |
-| `forma_patch` | 事务式语义补丁 | 联邦侧 ✅ / DSL 侧 ❌ | **DSL 侧补齐**，并扩展操作集 |
-| `forma_build` | 编译产物 | ✅ | 保持 |
-| `forma_verify` | 验证编译与行为 | 部分（`forma_migrate verify`） | 新增统一入口：L1–L5 分级结论 |
-| `forma_report` | 完整审查报告 | 🔨 规划 | 新增：变更集 + 影响 + 风险 + 证据汇总 |
-| `forma_explain` | 解释规格与产物的对应关系 | 🔨 规划 | 新增（可选） |
-| `forma_adopt` | 接管人工修改的产物 | 🔨 规划 | 依赖 RFC-0007 的 Artifact 归属模型 |
+| `forma_inspect` | 项目概览 + 规格摘要 | 保留 `forma_graph`，补 `forma_inspect` 语义 | ✅ `forma_graph` / MCP 模型摘要 |
+| `forma_search` | 搜索实体/字段/API/规则/页面 | 跨声明块的模式搜索 | ✅ `src/agent.rs` + MCP `forma_search` |
+| `forma_get_context` | 取指定任务所需的最小上下文 | 按节点收敛上下文子图 | ✅ `src/agent.rs` + MCP `forma_get_context` |
+| `forma_check` | 语法 + 语义校验 | 保持 | ✅ |
+| `forma_impact` | 变更影响闭包 | **DSL 侧补齐**（依赖 RFC-0003 M3） | ✅ DSL 侧 `forma_impact` |
+| `forma_plan` | 生成执行计划 | 受影响产物清单 + 迁移操作清单 + 风险等级 | ✅ `src/agent.rs` + MCP `forma_plan` |
+| `forma_patch` | 事务式语义补丁 | **DSL 侧补齐**，并扩展操作集 | ✅ `dsl::patch` + MCP `forma_patch` |
+| `forma_build` | 编译产物 | 保持 | ✅ |
+| `forma_verify` | 验证编译与行为 | L1–L5 分级结论 | ✅ `forma_migrate verify` + 生成工程编译门 |
+| `forma_report` | 完整审查报告 | 变更集 + 影响 + 风险 + 证据汇总 | ✅ `src/agent.rs` + MCP `forma_report` |
+| `forma_explain` | 解释规格与产物的对应关系 | 新增（可选） | 🔨 显式保留（未立项） |
+| `forma_adopt` | 接管人工修改的产物 | 依赖 RFC-0007 的 Artifact 归属模型 | ✅ `--adopt` / `Ownership::Adopted`（Artifact 归属模型） |
 
 > **命名约定**：沿用现有 `forma_<verb>` 下划线风格（现有 10 个工具均为此风格），不引入 `forma.project.inspect` 这类点号命名——点号命名会与既有 MCP 工具面并存两套体系。
 
@@ -407,3 +407,4 @@ Commit / Report     →  证据报告
 | 版本 | 日期 | 摘要 |
 |---|---|---|
 | 1.0 | 2026-11-04 | 初版提案：定义任务型 Agent 工具面、补丁事务协议、风险分级与人工审批门 |
+| 1.1 | 2026-11-09 | 校准 §3.1 / §8.2 的「立项时」与「当前状态」；`forma_search` / `forma_get_context` / `forma_plan` / `forma_report` 已落地 |

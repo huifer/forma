@@ -169,6 +169,10 @@ target configuration selects the concrete output stack.
 - [P2 track A closure / track B cancelled](docs/architecture/roadmap/p2-plan.zh-CN.md)
 - [P3: governance & release readiness](docs/architecture/roadmap/p3-plan.zh-CN.md)
 
+The current tree also includes the local Studio V3 history/replay closure and visualization V0.4–V0.6
+(AntV/G2Plot, dashboard interactions, GIS, industrial threshold lines, candlestick). The next step is
+documentation/RFC reconciliation for the 49 local commits ahead of `origin/main`.
+
 ## Generated targets
 
 | Target | Current output |

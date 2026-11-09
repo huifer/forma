@@ -117,17 +117,17 @@ Build + Verify → Report
 | Tool | 功能 | 优先级 | 当前状态 |
 |---|---|---|---|
 | `forma_inspect` | 项目概览、规格摘要 | P0 | ✅ `forma_graph` / `mcp` |
-| `forma_search` | 搜索实体 / 字段 / API / 规则 | P0 | 🔨 规划 |
+| `forma_search` | 搜索实体 / 字段 / API / 规则 | P0 | ✅ `src/agent.rs` + MCP `forma_search` |
 | `forma_graph` | 获取语义依赖图 | P0 | ✅ `forma_graph` |
-| `forma_get_context` | 获取指定任务所需上下文 | P0 | 🔨 规划 |
+| `forma_get_context` | 获取指定任务所需上下文 | P0 | ✅ `src/agent.rs` + MCP `forma_get_context` |
 | `forma_validate` | 语法 + 语义检查 | P0 | ✅ `forma_check` / `forma_validate` |
 | `forma_propose_patch` | 提交规格变更提案 | P0 | ✅ `forma_patch` |
 | `forma_diff` | 规格差异分析 | P0 | ✅ `forma_diff` |
 | `forma_impact` | 变更影响分析 | P0 | ✅ `forma_impact`（graph 闭包） |
-| `forma_plan` | 生成执行计划 | P0 | 🔨 规划 |
+| `forma_plan` | 生成执行计划 | P0 | ✅ `src/agent.rs` + MCP `forma_plan` |
 | `forma_build` | 编译产物 | P0 | ✅ `forma_build` |
 | `forma_verify` | 验证编译与行为 | P0 | ✅ `forma_migrate verify` / 产物编译 |
-| `forma_report` | 输出完整审查报告 | P0 | 🔨 规划 |
+| `forma_report` | 输出完整审查报告 | P0 | ✅ `src/agent.rs` + MCP `forma_report` |
 | `forma_explain` | 解释规格与产物的关系 | P1 | 🔨 规划 |
 | `forma_adopt` | 接管人工修改的产物 | P1 | 🔨 规划（`extension` 机制） |
 | `forma_migrate` | 迁移计划与风险分析 | P1 | ✅ `forma_migrate {status|history|verify|up|down|risk}` |

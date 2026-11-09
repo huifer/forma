@@ -27,6 +27,7 @@ M11 部署产物（K8s / Helm / Terraform）✅
 企业级扩栈（Spring/Go/.NET、原生移动、小程序、工作流、支付）→ 已撤销，不再排期
 
 P2 余项 Closure（轨道 A 8/8 完成，轨道 B 撤销）→ P3 治理收尾与发布就绪
+→ 发布前一致性收口（同步 Studio V3 / 可视化 V0.4–V0.6 / CLI E2E 到治理叙事）
 ```
 
 ## 2. 适配层完整矩阵
@@ -92,7 +93,11 @@ P2 余项 Closure（轨道 A 8/8 完成，轨道 B 撤销）→ P3 治理收尾�
 | ✅ 已完成 | Data Binding 完整化 + Metric/Table widget | V0.2 | cursor 源解包信封；`type metric`（KPI 卡）/`type table`（真实数据回退）；metric/table-only 工程不装 echarts（P1-#7） |
 | ✅ 已完成 | **Dashboard IR**（Grid 布局 + 筛选器 + 联动） | V0.3 | `page { dashboard { grid { <Chart> w N h N } filters [...] } }`；useMemo source 联动取数；Flutter/Vue/Expo 显式拒绝（P1-#8） |
 | ✅ 已完成 | Theme / Preview / 浏览器渲染验证门 | V0.5 | `theme dark|data-screen` token + Provider；`viz-preview.html` mock 自检渲染门（P1-#9） |
-| 👁 P2 | AntV 适配层（图分析/关系可视化）、GIS、金融/工业领域图表 | V0.6 | 同一 Chart IR 换 Adapter |
+| ✅ 已完成 | Dashboard 联动与下钻 | V0.4 | 图表点击 → dashboard 筛选器联动；`drilldown` → 列表页 URL query 初始筛选（`tests/visualization_v04.rs`） |
+| ✅ 已完成 | AntV / G2Plot 适配层 | V0.6 | `targets.visualization.adapter: antv`；共享 ChartSpec / transform；显式拒绝不支持类型；`examples/viz-antv` + CI `viz-antv` |
+| ✅ 已完成 | legend / tooltip / size / label 交互与通道 | V0.6 | 多系列 crosshair、数据驱动点大小、数据标签；`tests/visualization_v06.rs` |
+| ✅ 已完成 | GIS / 工业监控 / K 线 | V0.6 | ECharts map + GeoJSON 契约；三端 threshold；AntV Candlestick（echarts 显式拒绝） |
+| 👁 P2 | AntV 图分析/关系可视化 | V0.6+ | 网络图、关系图等仍需新语义/Adapter |
 | 👁 P2 | 移动端图表投影 | V0.6+ | Flutter 自绘/内嵌图 |
 
 设计全文：[architecture/rfc/RFC-0010-visualization.zh-CN.md](architecture/rfc/RFC-0010-visualization.zh-CN.md)。

@@ -87,6 +87,7 @@ docs/architecture/
 │   ├── accepted/ADR-0002-canonical-ir-program-over-federation-graph.zh-CN.md
 │   ├── accepted/ADR-0003-artifact-ownership-and-no-silent-overwrite.zh-CN.md
 │   ├── accepted/ADR-0004-server-authoritative-authorization.zh-CN.md
+│   ├── accepted/ADR-0005-list-authorization-boundary.zh-CN.md
 │   ├── proposed/  rejected/  deprecated/
 │   └── TEMPLATE.md
 │
@@ -371,11 +372,13 @@ RFC-0004 的可扩容机制**已落地为代码**，不是纸面设计：
 | 9 | Specification System（RFC-0002） | 规格领域与标准互通契约 | ✅ 文档已交付 |
 | 10 | Security & Governance（RFC-0008） | 权限、密钥、审计、验证门槛 | ✅ 文档已交付 |
 | 11 | Developer Experience（RFC-0009） | CLI 契约、Studio | ✅ 文档已交付 |
-| 12 | Conformance Suite | 兼容性测试 | ✅ 已建（[conformance/](conformance/README.md)：语义/适配器/运行时/兼容性四层矩阵，承诺 → 证明测试映射；73 套件 / 441 测试全绿） |
+| 12 | Conformance Suite | 兼容性测试 | ✅ 已建（[conformance/](conformance/README.md)：语义/适配器/运行时/兼容性四层矩阵，承诺 → 证明测试映射；当前 76 套件 / 494 测试全绿） |
 | 13 | Reference Application | 用真实应用验证架构 | ✅ 已满足：`examples/school`（多版本迁移链 + 种子 + 三端产物）+ `examples/access-depth` / `cursor-pagination` + [case-protocol](../case-protocol.zh-CN.md) V1–V16 矩阵 + CI `e2e`（真 MySQL 8）/ `flutter` / `web` / `generated-backend` |
 
-> 基础 RFC（0001–0009）状态已于 2026-11-08 逐份核实：0001/0010 为 `Accepted`，
-> 0002–0009 为 `Implemented`（0002 的 S4、0004 的 Deprecation 等未覆盖项在各 RFC §16 保留 `[ ]`）。
+> 基础 RFC（0001–0009）状态已于 2026-11-08 逐份核实：0001 为 `Accepted`，
+> 0002–0009 为 `Implemented`；RFC-0010 的 V0.1–V0.6 实现已分期落地，状态保持 `Accepted`
+> 并以其 §13 分期与 §16 未决项作为版本化实现记录（不把单份 RFC 的 `Implemented`
+> 误当成所有后续版本都已冻结）。0002 的 S4、0004 的 Deprecation 等未覆盖项在各 RFC §16 保留 `[ ]`。
 > **文档齐备 ≠ 架构可扩容**——Phase 1 的三条完成标准靠实现与 Conformance 测试证明：
 > 2026-11-08 已把 10 份 RFC 的 §16 验收项逐条对照回归：35 项未勾项中 **28 项补上证据并勾选**
 > （RFC-0007 7/7、RFC-0004 §16-2、RFC-0002 §16-1、RFC-0001 §16-2、RFC-0005 §16-8 等），
@@ -387,6 +390,12 @@ RFC-0004 的可扩容机制**已落地为代码**，不是纸面设计：
 > ~20 项关闭（附实现证据）、3 项本阶段落地（**策略即测试**：权限向量跨端同源执行；
 > 多租户默认值决议；docs 命令 ↔ REVIEW-CHECKLIST 映射）、~8 项显式保留（含 G-4
 > Secret Provider、RFC-0007 产物签名、RFC-0003 表达式级依赖）。
+
+**发布前一致性收口（2026-11-09）**：最近 49 个本地提交已完成 Studio V3 本地历史回放、
+可视化 V0.4–V0.6（Dashboard 联动/下钻、AntV/G2Plot、legend/tooltip、size/label、GIS、
+工业监控阈值线、K 线）与 CLI 端到端回归；README / roadmap / RFC / Capability Registry /
+Conformance 叙事已同步到该状态。当前实测 `cargo test` 494 项 / 76 套件，
+本地领先 `origin/main` 49 个提交。
 
 **Phase 1 完成标准不是文档数量，而是**：
 
