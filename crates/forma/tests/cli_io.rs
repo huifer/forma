@@ -166,3 +166,167 @@ fn cli_migrate_export_rejects_bad_format() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("unknown migration format"), "{stderr}");
 }
+
+// ── CLI: patch --dry-run / artifacts verify / conflicts / capability check ──
+
+fn write_project(dir: &std::path::Path, fm: &str) {
+    fs::create_dir_all(dir.join("forma")).unwrap();
+    fs::write(
+        dir.join("forma.yaml"),
+        "project:\n  name: cliops\n  version: 0.1.0\nsource: [\"forma/**/*.fm\"]\ntargets:\n  db:\n    engine: mysql\n    out: generated/db\n  backend:\n    language: rust\n    framework: axum\n    out: generated/backend\n",
+    )
+    .unwrap();
+    fs::write(dir.join("forma/app.fm"), fm).unwrap();
+}
+
+#[test]
+fn cli_patch_dry_run_leaves_source_untouched() {
+    let dir = tmp("patch-dry");
+    let fm = "app cliops { version = \"0.1.0\" }\nentity Order {\n  id     Uuid @id @default(uuid)\n  status String(20) @required\n}\napi Orders { entity Order operations [list get create update delete] }\npage Orders {\n  route \"/orders\"\n  title { en \"Orders\" }\n  table { query Orders.list columns [status] actions { row [delete → Orders.delete confirm] } }\n}\n";
+    write_project(&dir, fm);
+    let fm_path = dir.join("forma/app.fm");
+    let before = fs::read_to_string(&fm_path).unwrap();
+
+    let patch = dir.join("patch.json");
+    fs::write(
+        &patch,
+        r#"{"patchId":"dry-1","operations":[{"op":"add-entity-field","entity":"Order","field":{"name":"note","type":"Text"},"required":false}]}"#,
+    )
+    .unwrap();
+    let out = dir.join("draft.json");
+    let status = forma()
+        .args([
+            "patch",
+            dir.to_str().unwrap(),
+            patch.to_str().unwrap(),
+            "--dry-run",
+            "--out",
+        ])
+        .arg(&out)
+        .status()
+        .unwrap();
+    assert!(status.success(), "patch --dry-run failed");
+    // 源工程零写入
+    assert_eq!(
+        fs::read_to_string(&fm_path).unwrap(),
+        before,
+        "source must be untouched"
+    );
+    // 报告落盘且标记 applied（副本上）
+    let draft = fs::read_to_string(&out).unwrap();
+    assert!(draft.contains("dry-1"), "{draft}");
+    assert!(
+        draft.contains("\"status\": \"applied\"") || draft.contains("\"status\":\"applied\""),
+        "{draft}"
+    );
+}
+
+#[test]
+fn cli_patch_without_dry_run_writes_back() {
+    let dir = tmp("patch-apply");
+    let fm = "app cliops { version = \"0.1.0\" }\nentity Order {\n  id     Uuid @id @default(uuid)\n  status String(20) @required\n}\napi Orders { entity Order operations [list get create update delete] }\npage Orders {\n  route \"/orders\"\n  title { en \"Orders\" }\n  table { query Orders.list columns [status] actions { row [delete → Orders.delete confirm] } }\n}\n";
+    write_project(&dir, fm);
+    let patch = dir.join("patch.json");
+    fs::write(
+        &patch,
+        r#"{"operations":[{"op":"add-entity-field","entity":"Order","field":{"name":"note","type":"Text"},"required":false}]}"#,
+    )
+    .unwrap();
+    let status = forma()
+        .args(["patch", dir.to_str().unwrap(), patch.to_str().unwrap()])
+        .status()
+        .unwrap();
+    assert!(status.success(), "patch apply failed");
+    let after = fs::read_to_string(dir.join("forma/app.fm")).unwrap();
+    assert!(after.contains("note Text"), "{after}");
+}
+
+#[test]
+fn cli_artifacts_verify_and_conflicts() {
+    let dir = tmp("artifacts");
+    let fm = "app cliops { version = \"0.1.0\" }\nentity Order {\n  id     Uuid @id @default(uuid)\n  status String(20) @required\n}\napi Orders { entity Order operations [list get create update delete] }\npage Orders {\n  route \"/orders\"\n  title { en \"Orders\" }\n  table { query Orders.list columns [status] actions { row [delete → Orders.delete confirm] } }\n}\n";
+    write_project(&dir, fm);
+    // 先 build 生成 manifest
+    let status = forma().args(["build"]).arg(&dir).status().unwrap();
+    assert!(status.success(), "build failed");
+
+    // verify：干净 → 0
+    let output = forma()
+        .args(["artifacts", "verify"])
+        .arg(&dir)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "verify failed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("all"), "{stdout}");
+
+    // conflicts：干净 → 0
+    let output = forma()
+        .args(["artifacts", "conflicts"])
+        .arg(&dir)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "conflicts failed");
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("0 conflict"),
+        "{:?}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+
+    // 篡改一个产物 → verify 非 0，conflicts 非 0
+    let target = dir.join("generated/backend/src/main.rs");
+    fs::write(&target, "// tampered\n").unwrap();
+    let output = forma()
+        .args(["artifacts", "verify"])
+        .arg(&dir)
+        .output()
+        .unwrap();
+    assert!(!output.status.success(), "verify should fail after tamper");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("modified"), "{stderr}");
+
+    let output = forma()
+        .args(["artifacts", "conflicts"])
+        .arg(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "conflicts should fail after tamper"
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("modified"), "{stdout}");
+}
+
+#[test]
+fn cli_capability_list_check_show() {
+    let dir = tmp("cap");
+    write_project(&dir, "app cliops { version = \"0.1.0\" }\nentity Order { id Uuid @id @default(uuid) status String(20) @required }\napi Orders { entity Order operations [list get] }\n");
+
+    let output = forma()
+        .args(["capability", "list"])
+        .arg(&dir)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("registered"), "{stdout}");
+
+    let output = forma()
+        .args(["capability", "check"])
+        .arg(&dir)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "check failed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("capability check"), "{stdout}");
+
+    let output = forma()
+        .args(["capability", "show", "visualization.echarts"])
+        .arg(&dir)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "show failed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("visualization.echarts"), "{stdout}");
+}
