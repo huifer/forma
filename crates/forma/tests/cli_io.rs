@@ -330,3 +330,149 @@ fn cli_capability_list_check_show() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("visualization.echarts"), "{stdout}");
 }
+
+// ── CLI: validate / doctor / graph / docs / migrate status/verify ──
+
+fn write_project_io(dir: &std::path::Path, fm: &str) {
+    fs::create_dir_all(dir.join("forma")).unwrap();
+    fs::write(
+        dir.join("forma.yaml"),
+        "project:\n  name: cliops\n  version: 0.1.0\nsource: [\"forma/**/*.fm\"]\ntargets:\n  db:\n    engine: mysql\n    out: generated/db\n  backend:\n    language: rust\n    framework: axum\n    out: generated/backend\n",
+    )
+    .unwrap();
+    fs::write(dir.join("forma/app.fm"), fm).unwrap();
+}
+
+const IO_FM: &str = "app cliops { version = \"0.1.0\" }\nentity Order {\n  id     Uuid @id @default(uuid)\n  status String(20) @required\n}\napi Orders { entity Order operations [list get create update delete] }\npage Orders {\n  route \"/orders\"\n  title { en \"Orders\" }\n  table { query Orders.list columns [status] actions { row [delete → Orders.delete confirm] } }\n}\n";
+
+#[test]
+fn cli_validate_and_doctor_agree_on_clean_project() {
+    let dir = tmp("validate");
+    write_project_io(&dir, IO_FM);
+
+    let output = forma().args(["validate"]).arg(&dir).output().unwrap();
+    assert!(output.status.success(), "validate failed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("errors"), "{stdout}");
+
+    let output = forma().args(["doctor"]).arg(&dir).output().unwrap();
+    assert!(output.status.success(), "doctor failed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.to_lowercase().contains("diagnostic")
+            || stdout.contains("errors")
+            || stdout.contains("✓"),
+        "{stdout}"
+    );
+}
+
+#[test]
+fn cli_validate_nonzero_exit_on_semantic_error() {
+    let dir = tmp("validate-bad");
+    write_project_io(&dir, "app cliops { version = \"0.1.0\" }\nentity Order { id Uuid @id @default(uuid) status Nope }\n");
+    let output = forma().args(["validate"]).arg(&dir).output().unwrap();
+    assert!(!output.status.success(), "validate should fail");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("[ERROR]") || stderr.contains("error"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn cli_graph_outputs_nodes_and_edges() {
+    let dir = tmp("graph");
+    write_project_io(&dir, IO_FM);
+    // graph 无 --json：文本模型（包含实体名）
+    let output = forma().args(["graph"]).arg(&dir).output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Order"), "{stdout}");
+
+    // graph --json：机读图（需要显式目录）
+    let output = forma()
+        .args(["graph", "--json"])
+        .arg(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("nodes") || stdout.contains("\"nodes\""),
+        "{stdout}"
+    );
+}
+
+#[test]
+fn cli_docs_validate_lint_graph() {
+    // docs 命令在仓库根运行（docs/architecture 存在）
+    // docs 命令需要显式目录（治理文档根 = 仓库根，内含 docs/architecture）
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .unwrap();
+    assert!(
+        root.join("docs/architecture").is_dir(),
+        "root must contain docs/architecture: {}",
+        root.display()
+    );
+    let output = forma()
+        .args(["docs", "validate"])
+        .arg(&root)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "docs validate failed: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("governed doc"), "{stdout}");
+
+    let output = forma().args(["docs", "lint"]).arg(&root).output().unwrap();
+    assert!(output.status.success(), "docs lint failed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("governed doc"), "{stdout}");
+
+    let output = forma().args(["docs", "graph"]).arg(&root).output().unwrap();
+    assert!(output.status.success(), "docs graph failed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.to_lowercase().contains("edge") || stdout.contains("node"),
+        "{stdout}"
+    );
+}
+
+#[test]
+fn cli_migrate_status_and_verify() {
+    let dir = tmp("migrate");
+    write_project_io(&dir, IO_FM);
+    // 先 build 生成迁移链
+    let status = forma().args(["build"]).arg(&dir).status().unwrap();
+    assert!(status.success(), "build failed");
+
+    let output = forma()
+        .args(["migrate", "status"])
+        .arg(&dir)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "migrate status failed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("migration(s)"), "{stdout}");
+
+    let output = forma()
+        .args(["migrate", "verify"])
+        .arg(&dir)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "migrate verify failed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("迁移链") || stdout.contains("一致"),
+        "{stdout}"
+    );
+}
