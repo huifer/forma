@@ -20,6 +20,71 @@ const RUNTIME_TSX: &str = include_str!("templates/viz/runtime.tsx");
 /// AntV（G2Plot）Adapter 运行时（RFC-0010 V0.6 / 2026-11-08）
 const ANTV_OPTION_TS: &str = include_str!("templates/viz/antv_option.ts");
 const ANTV_RUNTIME_TSX: &str = include_str!("templates/viz/antv_runtime.tsx");
+
+/// G6 关系图组件（仅当工程存在 graph 图表时注入运行时）。
+const GRAPH_COMPONENT_TSX: &str = r##"function GraphView({
+  spec,
+  source,
+  height,
+  ariaLabel,
+}: {
+  spec: ChartSpec;
+  source: VizSource;
+  height?: number | string;
+  ariaLabel?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    let graph: any = null;
+    source
+      .fetch()
+      .then((rows) => {
+        if (!alive || !ref.current) return;
+        const data = shapeGraph(spec, applyTransform(rows ?? [], spec.transform ?? [])) as any;
+        const edges = (data.links ?? []).map((l: any, i: number) => ({
+          id: `e${i}`,
+          source: l.source,
+          target: l.target,
+        }));
+        graph = new G6.Graph({
+          container: ref.current,
+          width: ref.current.clientWidth,
+          height: ref.current.clientHeight,
+          layout: { type: "force", preventOverlap: true },
+          data: { nodes: data.nodes ?? [], edges },
+          node: { style: { labelText: (d: any) => d.name ?? d.id } },
+          edge: { style: { stroke: "#94a3b8" } },
+          behaviors: ["zoom-canvas", "drag-canvas"],
+        });
+        graph.render();
+      })
+      .catch((e) => alive && setFailed(String(e)));
+    return () => {
+      alive = false;
+      try {
+        graph?.destroy();
+      } catch {
+        // ignore
+      }
+    };
+  }, [spec, source]);
+
+  return (
+    <div
+      ref={ref}
+      className="forma-viz__canvas"
+      style={{ width: "100%", minHeight: height ?? 320 }}
+      role="img"
+      aria-label={ariaLabel ?? spec.title}
+    >
+      {failed && <div style={{ padding: 12, color: "#b91c1c" }}>加载失败：{failed}</div>}
+    </div>
+  );
+}
+"##;
 const VIZ_CSS: &str = include_str!("templates/viz/viz.css");
 const THEME_TSX: &str = include_str!("templates/viz/theme.tsx");
 
@@ -60,6 +125,7 @@ pub fn emit_visualization_with_adapter(
         "radar",
         "pie",
         "candlestick",
+        "graph",
     ];
     if adapter == "antv" {
         for c in &program.charts {
@@ -91,6 +157,23 @@ pub fn emit_visualization_with_adapter(
     } else {
         echarts_runtime(project_dir, &charts)
     };
+    // AntV 运行时：关系图（G6）按需注入（无 graph 图表 → 零引用、零依赖）
+    let runtime_tsx: String = if adapter == "antv" {
+        let has_graph = charts
+            .iter()
+            .any(|c| c.chart_type == crate::visualization::ChartType::Graph);
+        let g6_import = if has_graph {
+            "import G6 from \"@antv/g6\";\n"
+        } else {
+            ""
+        };
+        let graph_component = if has_graph { GRAPH_COMPONENT_TSX } else { "" };
+        ANTV_RUNTIME_TSX
+            .replace("__G6_IMPORT__", g6_import)
+            .replace("__GRAPH_COMPONENT__", graph_component)
+    } else {
+        RUNTIME_TSX.to_string()
+    };
     let mut files: Vec<GeneratedFile> = vec![
         file(out_dir, "src/viz/spec.ts", SPEC_TS),
         file(out_dir, "src/viz/transform.ts", TRANSFORM_TS),
@@ -103,15 +186,7 @@ pub fn emit_visualization_with_adapter(
                 &echarts_code
             },
         ),
-        file(
-            out_dir,
-            "src/viz/runtime.tsx",
-            if adapter == "antv" {
-                ANTV_RUNTIME_TSX
-            } else {
-                RUNTIME_TSX
-            },
-        ),
+        file(out_dir, "src/viz/runtime.tsx", &runtime_tsx),
         file(out_dir, "src/viz/theme.tsx", THEME_TSX),
         file(out_dir, "src/viz/viz.css", VIZ_CSS),
         // V0.5 预览与浏览器渲染验证门：全部图表 + mock 数据 + 主题切换 + 自检标记
@@ -214,6 +289,8 @@ fn echarts_runtime(project_dir: &Path, charts: &[ChartSpec]) -> String {
             crate::visualization::ChartType::Map | crate::visualization::ChartType::ScatterMap => {
                 continue
             }
+            // 关系图：ECharts GraphChart 构造器（series type: graph）
+            crate::visualization::ChartType::Graph => "GraphChart",
         };
         if !chart_ctors.contains(&ctor) {
             chart_ctors.push(ctor);

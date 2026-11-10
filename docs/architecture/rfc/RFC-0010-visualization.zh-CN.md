@@ -877,14 +877,17 @@ V0.6（AntV / G2Plot、legend/tooltip、size/label、GIS、工业监控阈值线
 3. [x] ~~**多语言图表标题与图例项**~~
    **已决议**：`title` 已是 i18n `Message`；枚举变体显示名由 `@label` 承载（ListRow 的 `{rel}_name` 同源）。
 4. [x] ~~**图表是否进入 Flutter 适配层**~~
-   **评估完成并落地最小集（2026-11-08）**：移动端图表需求弱（屏幕小、以列表/表单为主），
-   但 bar/line 两类高频图表值得支持。落地形态：
-   - **支持**：`bar` / `line` / `pie` + 无 transform + x/y 为实体直接字段 → 生成 `fl_chart` 图表页
-     （x 为 nominal 时用索引，y 取字段值；line 支持 V0.6 threshold 阈值线）；
-   - **占位**：其余类型 / 带 transform / 字段缺失 → 保持占位页（路由与导航结构完整）；
-   - 依赖：仅当存在可支持图表时 `pubspec.yaml` 引入 `fl_chart`（零变化原则）；
-   - 验证：`flutter analyze` 零 issue（school 的 CourseCapacity bar 页）。
-   **未支持**：gauge/radar 等复杂类型与 transform 聚合——留待真实需求。
+   **评估完成并落地（2026-11-08 最小集；2026-11-09 扩展为全矩阵）**：移动端图表需求弱
+   （屏幕小、以列表/表单为主），但 bar/line 两类高频图表值得支持。落地形态：
+   - **支持（V0.6+ 全矩阵）**：`bar` / `line` / `area` / `pie` / `scatter` / `gauge` / `radar`
+     + **变换计划**（`filter` / `bucket` / `aggregate` / `sort` / `limit`，语义与 Web runtime
+     `transform.ts` 一致；emit 期静态展开为 Dart）→ 生成 `fl_chart` 图表页；
+     line 支持 threshold 阈值线（`extraLinesData` + `HorizontalLine`）；
+   - **占位**：`heatmap` / `treemap` / `funnel`（fl_chart 无对应图型）→ 保持占位页
+     （路由与导航结构完整）；
+   - 依赖：仅当存在可渲染图型时 `pubspec.yaml` 引入 `fl_chart`（零变化原则）；
+   - 验证：`flutter analyze` 零 issue（school bar + line/分桶/聚合；全矩阵临时工程
+     bar/line/area/pie/scatter/gauge/radar + 全部变换）。
 
 5. ~~**Drill-down（下钻明细）评估**~~ **已落地（2026-11-08）**：dashboard 条目
    `drilldown "/route"` → 点击图表元素跳转该路由，携带 x 维度值作为 URL query；
@@ -902,6 +905,12 @@ V0.6（AntV / G2Plot、legend/tooltip、size/label、GIS、工业监控阈值线
      `viz-candlestick-missing-ohlc` / `viz-candlestick-missing-x` /
      `viz-candlestick-unknown-field` / `viz-candlestick-non-numeric`；
      回归 `tests/visualization_v06.rs`（7 项）。
+   - **关系图（网络/关系可视化）**：**已落地（2026-11-09）**：`type graph` + `link { source <field> target <field> }`
+     —— 边来自 source 实体的行；节点由 source/target 值去重派生，标签优先取 `{rel}_name`
+     （ListRow 契约）。ECharts：`series type=graph` + force 布局（Runtime 绑定 nodes/links）；
+     AntV：**G6** 渲染器按需注入（`@antv/g6` 条件依赖 + GraphView 组件，无 graph 图表零引用）；
+     检查层 `viz-graph-missing-link` / `viz-graph-missing-field` / `viz-unknown-field`；
+     回归 `tests/visualization_graph.rs`（4 项）+ 生成工程 `tsc --noEmit`（echarts / antv+G6）。
    - **工业监控（时序告警）**：**已落地（2026-11-08）**：`threshold <数值> { label "..." }`
      通道（仅笛卡尔形状）——echarts 走 markLine、AntV 走 annotations、Flutter 走
      HorizontalLine；检查层 `viz-threshold-unsupported`（非笛卡尔拒绝）；

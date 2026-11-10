@@ -83,11 +83,25 @@ pub fn chart_option(spec: &ChartSpec) -> Value {
         ShapeFamily::Radial => radial(spec, &mut option),
         ShapeFamily::Gauge => gauge(spec, &mut option),
         ShapeFamily::Heatmap => heatmap(spec, &mut option),
+        ShapeFamily::Graph => graph(spec, &mut option),
         // V0.2：metric/table 由 React 组件直接渲染，不经过 ECharts
         ShapeFamily::Metric | ShapeFamily::Table => {}
     }
 
     option
+}
+
+/// 关系图（V0.6+）：力导向布局；数据（nodes/links）由 Runtime 绑定。
+fn graph(_spec: &ChartSpec, option: &mut Value) {
+    option["series"] = json!([{
+        "type": "graph",
+        "layout": "force",
+        "roam": true,
+        "data": [],
+        "links": [],
+        "categories": [],
+        "force": { "repulsion": 120, "edgeLength": 60 },
+    }]);
 }
 
 fn axis_name(spec: &ChartSpec, is_x: bool) -> Option<String> {

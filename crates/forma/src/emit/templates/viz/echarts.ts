@@ -57,6 +57,11 @@ export function bindData(
       opt.series = [{ ...template, data: [{ value: data.value }] }];
       break;
     }
+    case "graph": {
+      const template = opt.series[0] ?? { type: "graph" };
+      opt.series = [{ ...template, data: data.nodes, links: data.links }];
+      break;
+    }
     case "radial": {
       const max = data.values.length ? Math.max(...data.values) : 100;
       if (opt.radar?.[0]) {

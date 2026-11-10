@@ -1045,3 +1045,110 @@ page OrderList {
         "{opt2}"
     );
 }
+
+#[test]
+fn mobile_chart_matrix_and_transforms_are_generated() {
+    // RFC-0010 §16-4（V0.6+）：移动端图表全矩阵 + 变换计划（与 Web runtime 语义一致）。
+    let dir = tmp("mobile-matrix");
+    fs::write(
+        dir.join("forma.yaml"),
+        "project:\n  name: vizmobile\n  version: 0.1.0\nsource: [\"forma/**/*.fm\"]\ntargets:\n  mobile:\n    out: app_mobile\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app vizmobile { version = "0.1.0" }
+entity Product {
+  id Uuid @id @default(uuid)
+  name String(100) @required
+  category String(50)
+  price Decimal(12,2)
+  score Int
+  soldAt Timestamp
+}
+api Products { entity Product operations [list get create update delete] }
+chart LineChart {
+  type line
+  title { en "Line" }
+  source Products.list
+  encoding { x { field soldAt type temporal } y { field price type quantitative } }
+  transform { bucket { field soldAt by day } aggregate { op sum field price groupBy [soldAt] } sort { by soldAt asc } limit 30 }
+}
+chart AreaChart {
+  type area
+  title { en "Area" }
+  source Products.list
+  encoding { x { field soldAt type temporal } y { field price type quantitative } }
+}
+chart PieChart {
+  type pie
+  title { en "Pie" }
+  source Products.list
+  encoding { x { field category type nominal } y { field price type quantitative } }
+  transform { aggregate { op sum field price groupBy [category] } sort { by value desc } }
+}
+chart ScatterChart {
+  type scatter
+  title { en "Scatter" }
+  source Products.list
+  encoding { x { field price type quantitative } y { field score type quantitative } }
+  transform { filter { field price gte "10" } }
+}
+chart GaugeChart {
+  type gauge
+  title { en "Gauge" }
+  source Products.list
+  encoding { y { field score type quantitative } }
+  transform { aggregate { op avg field score } }
+}
+chart RadarChart {
+  type radar
+  title { en "Radar" }
+  source Products.list
+  encoding { x { field category type nominal } y { field score type quantitative } }
+}
+page LinePage { route "/line" title { en "Line" } chart LineChart }
+page AreaPage { route "/area" title { en "Area" } chart AreaChart }
+page PiePage { route "/pie" title { en "Pie" } chart PieChart }
+page ScatterPage { route "/scatter" title { en "Scatter" } chart ScatterChart }
+page GaugePage { route "/gauge" title { en "Gauge" } chart GaugeChart }
+page RadarPage { route "/radar" title { en "Radar" } chart RadarChart }
+"#,
+    )
+    .unwrap();
+    forma::build::run_build(&dir).unwrap();
+    let read = |name: &str| fs::read_to_string(dir.join(format!("app_mobile/lib/pages/{name}"))).unwrap();
+
+    let line = read("line_page.dart");
+    assert!(line.contains("LineChart"), "{line}");
+    assert!(line.contains("_applyTransform"), "{line}");
+    assert!(line.contains("_bucketValue"), "{line}");
+    assert!(line.contains("groups"), "{line}"); // aggregate Dart
+    assert!(line.contains("take(30)"), "{line}"); // limit
+
+    let area = read("area_page.dart");
+    assert!(area.contains("LineChart"), "{area}");
+    assert!(area.contains("BarAreaData(show: true)"), "{area}");
+
+    let pie = read("pie_page.dart");
+    assert!(pie.contains("PieChart"), "{pie}");
+    assert!(pie.contains("_labels"), "{pie}");
+
+    let scatter = read("scatter_page.dart");
+    assert!(scatter.contains("ScatterChart"), "{scatter}");
+    assert!(scatter.contains("_cmp("), "{scatter}"); // filter helper
+    assert!(!scatter.contains("get _labels"), "{scatter}"); // 不消费 labels → 不生成
+
+    let gauge = read("gauge_page.dart");
+    assert!(gauge.contains("PieChart"), "{gauge}");
+    assert!(gauge.contains("_gaugeValue"), "{gauge}");
+
+    let radar = read("radar_page.dart");
+    assert!(radar.contains("RadarChart"), "{radar}");
+    assert!(radar.contains("RadarChartTitle("), "{radar}");
+
+    // fl_chart 依赖按图型存在时引入
+    let pubspec = fs::read_to_string(dir.join("app_mobile/pubspec.yaml")).unwrap();
+    assert!(pubspec.contains("fl_chart"), "{pubspec}");
+}

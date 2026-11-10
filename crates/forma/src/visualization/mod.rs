@@ -52,10 +52,12 @@ pub enum ChartType {
     Map,
     /// 地图散点（V0.6 续 / ECharts）：GeoJSON 底图 + 经纬度散点（x=lng, y=lat）
     ScatterMap,
+    /// 关系图（V0.6+ / ECharts + AntV G6）：节点 + 边（force 布局）
+    Graph,
 }
 
 impl ChartType {
-    pub const ALL: [ChartType; 15] = [
+    pub const ALL: [ChartType; 16] = [
         ChartType::Line,
         ChartType::Bar,
         ChartType::Area,
@@ -71,6 +73,7 @@ impl ChartType {
         ChartType::Candlestick,
         ChartType::Map,
         ChartType::ScatterMap,
+        ChartType::Graph,
     ];
 
     pub fn parse(s: &str) -> Option<Self> {
@@ -90,6 +93,7 @@ impl ChartType {
             "candlestick" => Some(ChartType::Candlestick),
             "map" => Some(ChartType::Map),
             "scattermap" => Some(ChartType::ScatterMap),
+            "graph" => Some(ChartType::Graph),
             _ => None,
         }
     }
@@ -111,6 +115,7 @@ impl ChartType {
             ChartType::Candlestick => "candlestick",
             ChartType::Map => "map",
             ChartType::ScatterMap => "scattermap",
+            ChartType::Graph => "graph",
         }
     }
 
@@ -131,6 +136,8 @@ impl ChartType {
             ChartType::Map => ShapeFamily::PartToWhole,
             // 地图散点：经纬度（x=lng/y=lat 都是数值 → 二维点形状）
             ChartType::ScatterMap => ShapeFamily::Xy,
+            // 关系图：节点 + 边（独立形状家族）
+            ChartType::Graph => ShapeFamily::Graph,
         }
     }
 }
@@ -152,6 +159,8 @@ pub enum ShapeFamily {
     Heatmap,
     /// 指标卡：单个聚合值（V0.2）
     Metric,
+    /// 关系图：节点 + 边（V0.6+）
+    Graph,
     /// 数据表：原始行渲染（V0.2）
     Table,
 }
@@ -167,6 +176,7 @@ impl ShapeFamily {
             ShapeFamily::Heatmap => "heatmap",
             ShapeFamily::Metric => "metric",
             ShapeFamily::Table => "table",
+            ShapeFamily::Graph => "graph",
         }
     }
 }
@@ -480,6 +490,20 @@ pub struct ChartSpec {
     pub map_region: Option<String>,
     /// V0.6 数据标签：显示字段 + 格式
     pub label: Option<ChartLabelSpec>,
+    /// V0.6+ 关系图：节点/边绑定（运行时取数后整形为 {nodes, links}）
+    pub graph: Option<GraphSpec>,
+}
+
+/// 关系图绑定（V0.6+）：边来自 source 实体的行；节点由 source/target 值去重派生。
+#[derive(Debug, Clone)]
+pub struct GraphSpec {
+    /// 源字段数据键（如 `student_id`）
+    pub source_key: String,
+    /// 目标字段数据键（如 `course_id`）
+    pub target_key: String,
+    /// 节点标签数据键（`{rel}_name`，ListRow 契约；缺省用 id）
+    pub source_label_key: Option<String>,
+    pub target_label_key: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -532,6 +556,18 @@ pub fn spec_json(spec: &ChartSpec) -> serde_json::Value {
     m.insert("theme".into(), json!(spec.theme));
     if let Some(region) = &spec.map_region {
         m.insert("mapRegion".into(), json!(region));
+    }
+    if let Some(g) = &spec.graph {
+        let mut gm = Map::new();
+        gm.insert("sourceKey".into(), json!(g.source_key));
+        gm.insert("targetKey".into(), json!(g.target_key));
+        if let Some(k) = &g.source_label_key {
+            gm.insert("sourceLabelKey".into(), json!(k));
+        }
+        if let Some(k) = &g.target_label_key {
+            gm.insert("targetLabelKey".into(), json!(k));
+        }
+        m.insert("graph".into(), Value::Object(gm));
     }
     if let Some(label) = &spec.label {
         m.insert(
@@ -979,6 +1015,51 @@ pub fn lower_chart(
         ),
     };
 
+    // V0.6+ 关系图：`link { source <field> target <field> }`（边来自 source 实体的行；
+    // 节点由 source/target 值去重派生，标签优先取 `{rel}_name`（ListRow 契约））
+    if chart_type == ChartType::Graph {
+        let Some(link) = &decl.link else {
+            return Err(vec![diag(
+                "viz-graph-missing-link",
+                format!(
+                    "chart '{}' (graph) requires `link {{ source <field> target <field> }}`",
+                    decl.name
+                ),
+                decl.line,
+            )]);
+        };
+        if !program.entities.iter().any(|e| e.name == entity) {
+            return Err(vec![diag(
+                "viz-unknown-entity",
+                format!("unknown entity '{entity}'"),
+                decl.line,
+            )]);
+        }
+        for field in [&link.source_field, &link.target_field] {
+            if field.is_empty() {
+                errors.push(diag(
+                    "viz-graph-missing-field",
+                    format!(
+                        "chart '{}' link requires both source and target fields",
+                        decl.name
+                    ),
+                    link.line,
+                ));
+                continue;
+            }
+            if resolve_field(program, &entity, field).is_none() {
+                errors.push(diag(
+                    "viz-unknown-field",
+                    format!(
+                        "chart '{}' link references unknown field '{entity}.{}'",
+                        decl.name, field
+                    ),
+                    link.line,
+                ));
+            }
+        }
+    }
+
     let mut spec = ChartSpec {
         id: decl.name.clone(),
         chart_type,
@@ -1021,7 +1102,39 @@ pub fn lower_chart(
             field: l.field.clone(),
             format: l.format.clone(),
         }),
+        graph: None,
     };
+
+    // 关系图绑定：数据键 + 标签键（`{rel}_name` 约定）
+    if chart_type == ChartType::Graph {
+        if let Some(link) = &decl.link {
+            let entity_name = spec.data.entity.clone();
+            // 关系字段：边键 = `{rel}_id`（ListRow 契约），标签键 = `{rel}_name`
+            let key_of = |f: &str| -> (String, Option<String>) {
+                let snake = crate::identity::to_snake_case(f);
+                let is_rel = program
+                    .entities
+                    .iter()
+                    .find(|e| e.name == entity_name)
+                    .and_then(|e| e.fields.iter().find(|x| x.name == f))
+                    .map(|x| crate::dsl::is_relation(program, &x.type_name))
+                    .unwrap_or(false);
+                if is_rel {
+                    (format!("{snake}_id"), Some(format!("{snake}_name")))
+                } else {
+                    (snake, None)
+                }
+            };
+            let (source_key, source_label_key) = key_of(&link.source_field);
+            let (target_key, target_label_key) = key_of(&link.target_field);
+            spec.graph = Some(GraphSpec {
+                source_key,
+                target_key,
+                source_label_key,
+                target_label_key,
+            });
+        }
+    }
 
     // 形状级校验（必需通道 / 类型匹配）
     validate::validate_chart(&mut spec, &mut errors);
@@ -1220,6 +1333,8 @@ fn lower_transform(
     errors: &mut Vec<Diagnostic>,
 ) -> TransformPlan {
     let mut ops = Vec::new();
+    // 聚合输出键（如 "value"）可被后续 sort 引用（sort-by-aggregate 是常见需求）
+    let mut value_keys: Vec<String> = Vec::new();
     for op in &decl.transform {
         match op {
             crate::dsl::TransformDecl::Filter { field, cmp, value } => {
@@ -1384,22 +1499,31 @@ fn lower_transform(
                     group_keys,
                     as_name: "value".into(),
                 });
+                value_keys.push("value".into());
             }
             crate::dsl::TransformDecl::Sort { by, desc } => {
-                let Some(res) = resolve_field(program, entity, by) else {
-                    errors.push(diag(
-                        "viz-unknown-field",
-                        format!(
-                            "chart '{}' sort references unknown field '{}.{}'",
-                            decl.name, entity, by
-                        ),
-                        decl.line,
-                    ));
-                    continue;
+                // 允许实体字段 或 前置聚合的输出键（"value"）
+                let data_key = match resolve_field(program, entity, by) {
+                    Some(res) => res.data_key,
+                    None => {
+                        if value_keys.iter().any(|k| k == by) {
+                            by.clone()
+                        } else {
+                            errors.push(diag(
+                                "viz-unknown-field",
+                                format!(
+                                    "chart '{}' sort references unknown field '{}.{}'",
+                                    decl.name, entity, by
+                                ),
+                                decl.line,
+                            ));
+                            continue;
+                        }
+                    }
                 };
                 ops.push(TransformOp::Sort {
                     by: by.clone(),
-                    data_key: res.data_key,
+                    data_key,
                     desc: *desc,
                 });
             }

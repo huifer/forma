@@ -2,9 +2,10 @@
 // AntV（G2Plot）Runtime：取数 → 变换（复用 transform.ts，adapter 无关）→ G2Plot 渲染。
 import React, { useEffect, useRef, useState } from "react";
 import { Funnel, Pie, Plot, Radar, Stock } from "@antv/g2plot";
+__G6_IMPORT__
 
 import type { ChartSpec, Row, VizEventPayload } from "./spec";
-import { applyTransform } from "./transform";
+import { applyTransform, shapeGraph } from "./transform";
 import { antvOption, geometryOf } from "./echarts"; // 槽位文件：src/viz/echarts.ts（adapter 共享）
 
 export interface VizSource {
@@ -22,6 +23,8 @@ export interface FormaChartProps {
   className?: string;
 }
 
+__GRAPH_COMPONENT__
+
 export function FormaChart({
   spec,
   option,
@@ -34,6 +37,11 @@ export function FormaChart({
   const ref = useRef<HTMLDivElement>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [failed, setFailed] = useState<string | null>(null);
+
+  // V0.6+ 关系图：G6 渲染（与 G2Plot 不同的渲染器，独立分支）
+  if (spec.chartType === "graph" && GraphView) {
+    return <GraphView spec={spec} source={source} height={height} ariaLabel={ariaLabel} />;
+  }
 
   useEffect(() => {
     let alive = true;

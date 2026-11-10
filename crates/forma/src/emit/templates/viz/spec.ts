@@ -20,7 +20,8 @@ export type ShapeFamily =
   | "gauge"
   | "heatmap"
   | "metric"
-  | "table";
+  | "table"
+  | "graph";
 
 export interface Channel {
   field: string;
@@ -83,6 +84,16 @@ export interface ChartSpec {
   label?: { field: string; format: string };
   /** V0.6 GIS：地图区域名（geo/<region>.json） */
   mapRegion?: string;
+  /** V0.6+ 关系图：节点/边绑定 */
+  graph?: GraphBinding;
+}
+
+/** 关系图绑定（V0.6+）：边来自 source 实体的行；节点由 source/target 值去重派生。 */
+export interface GraphBinding {
+  sourceKey: string;
+  targetKey: string;
+  sourceLabelKey?: string;
+  targetLabelKey?: string;
 }
 
 export type VizThemeToken = "default" | "dark" | "data-screen";
@@ -104,7 +115,8 @@ export type ChartData =
       xLabels: string[];
       yLabels: string[];
       cells: Array<[number, number, number]>;
-    };
+    }
+  | { kind: "graph"; nodes: Array<{ id: string; name: string }>; links: Array<{ source: string; target: string }> };
 
 /** 统一事件模型（不绑定任何图表库事件名，RFC-0001 §8.4）。 */
 export type VizEventPayload =

@@ -33,6 +33,7 @@ pub fn emit_web_react(
             uses_rhf,
             uses_zustand,
             viz_adapter,
+            program.charts.iter().any(|c| c.chart_type == "graph"),
         ),
         "gen-web",
     ));
@@ -184,6 +185,7 @@ fn package_json(
     uses_rhf: bool,
     uses_zustand: bool,
     viz_adapter: &str,
+    has_graph: bool,
 ) -> String {
     let mut s = String::from("{\n");
     s.push_str(&format!("  \"name\": \"{}-web\",\n", app.to_lowercase()));
@@ -207,6 +209,9 @@ fn package_json(
     if has_charts {
         if viz_adapter == "antv" {
             s.push_str(",\n    \"@antv/g2plot\": \"^2.4.31\"");
+            if has_graph {
+                s.push_str(",\n    \"@antv/g6\": \"^5.0.0\"");
+            }
         } else {
             s.push_str(",\n    \"echarts\": \"^5.5.1\"");
         }

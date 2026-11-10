@@ -156,6 +156,8 @@ export function shapeData(spec: ChartSpec, rows: Row[]): ChartData {
       return shapeRadial(spec, rows);
     case "heatmap":
       return shapeHeatmap(spec, rows);
+    case "graph":
+      return shapeGraph(spec, rows);
     default:
       // V0.2：metric/table 由 React 组件直接消费行数据，不经 shapeData；
       // 类型层面保持全覆盖（ChartData 的合法空值）。
@@ -267,6 +269,28 @@ function shapeRadial(spec: ChartSpec, rows: Row[]): ChartData {
     values.push(num(row[yKey]) ?? 0);
   }
   return { kind: "radial", indicators, values };
+}
+
+/** 关系图整形（V0.6+）：边 → {source,target}；节点去重（标签优先 `{rel}_name`）。 */
+export function shapeGraph(spec: ChartSpec, rows: Row[]): ChartData {
+  const g = spec.graph;
+  if (!g) return { kind: "graph", nodes: [], links: [] };
+  const nodeOf = (r: Row, idKey: string, labelKey?: string) => {
+    const id = String(r[idKey] ?? "");
+    const label = labelKey ? String(r[labelKey] ?? id) : id;
+    return { id, name: label };
+  };
+  const nodes = new Map<string, { id: string; name: string }>();
+  const links: Array<{ source: string; target: string }> = [];
+  for (const r of rows) {
+    const s = String(r[g.sourceKey] ?? "");
+    const t = String(r[g.targetKey] ?? "");
+    if (!s || !t) continue;
+    if (!nodes.has(s)) nodes.set(s, nodeOf(r, g.sourceKey, g.sourceLabelKey));
+    if (!nodes.has(t)) nodes.set(t, nodeOf(r, g.targetKey, g.targetLabelKey));
+    links.push({ source: s, target: t });
+  }
+  return { kind: "graph", nodes: Array.from(nodes.values()), links };
 }
 
 function shapeHeatmap(spec: ChartSpec, rows: Row[]): ChartData {

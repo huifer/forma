@@ -104,6 +104,7 @@ pub fn validate_chart(spec: &mut ChartSpec, errors: &mut Vec<Diagnostic>) {
     };
 
     match shape {
+        ShapeFamily::Graph => {}
         ShapeFamily::Cartesian => {
             require(
                 errors,
@@ -298,7 +299,7 @@ pub fn catalog() -> serde_json::Value {
         "aggregateOps": ["sum", "avg", "count", "min", "max"],
         "bucketUnits": ["hour", "day", "week", "month", "year"],
         "compareOps": ["eq", "ne", "gt", "gte", "lt", "lte", "in"],
-        "shapes": ["cartesian", "xy", "part-to-whole", "radial", "gauge", "heatmap", "metric", "table"],
+        "shapes": ["cartesian", "xy", "part-to-whole", "radial", "gauge", "heatmap", "metric", "table", "graph"],
         "adapters": ["echarts"],
     })
 }
@@ -313,6 +314,7 @@ pub fn describe(chart_type: &str) -> Option<serde_json::Value> {
         ShapeFamily::Radial => (vec!["x", "y"], vec![]),
         ShapeFamily::Gauge => (vec!["y"], vec![]),
         ShapeFamily::Heatmap => (vec!["x", "y", "color"], vec![]),
+        ShapeFamily::Graph => (vec![], vec![]),
         ShapeFamily::Metric => (vec![], vec![]),
         ShapeFamily::Table => (vec![], vec![]),
     };
@@ -324,7 +326,9 @@ pub fn describe(chart_type: &str) -> Option<serde_json::Value> {
         "defaultFormat": match t.shape() {
             ShapeFamily::Cartesian | ShapeFamily::Xy | ShapeFamily::PartToWhole
             | ShapeFamily::Radial | ShapeFamily::Gauge | ShapeFamily::Heatmap
-            | ShapeFamily::Metric | ShapeFamily::Table => DataFormat::None.as_str(),
+            | ShapeFamily::Metric | ShapeFamily::Table | ShapeFamily::Graph => {
+                DataFormat::None.as_str()
+            }
         },
     }))
 }

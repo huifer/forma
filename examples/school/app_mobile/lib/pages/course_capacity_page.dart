@@ -4,13 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../api/api.dart';
 
-class _Point {
-  final double x;
-  final double y;
-  const _Point(this.x, this.y);
-}
-
-/// 图表页（RFC-0010 §16-4：移动端最小图表集——bar）。
+/// 图表页（RFC-0010 §16-4：移动端图表集——bar；变换语义与 Web runtime 一致）。
 class CourseCapacityPage extends StatefulWidget {
   const CourseCapacityPage({super.key});
 
@@ -20,7 +14,7 @@ class CourseCapacityPage extends StatefulWidget {
 
 class _CourseCapacityPageState extends State<CourseCapacityPage> {
   final Api _api = Api();
-  List<_Point> _points = [];
+  List<Map<String, dynamic>> _data = [];
   bool _loading = true;
   String? _error;
 
@@ -34,14 +28,7 @@ class _CourseCapacityPageState extends State<CourseCapacityPage> {
     try {
       final rows = await CourseApi(_api).list(CourseListParams(pageSize: 200));
       setState(() {
-        _points = rows
-            .asMap()
-            .entries
-            .map((e) => _Point(
-                  e.key.toDouble(),
-                  (e.value.capacity as num?)?.toDouble() ?? 0,
-                ))
-            .toList();
+        _data = _applyTransform(rows.map((r) => r.toJson()).toList());
         _loading = false;
       });
     } catch (e) {
@@ -51,6 +38,23 @@ class _CourseCapacityPageState extends State<CourseCapacityPage> {
       });
     }
   }
+
+  /// 变换计划（emit 期静态展开）：filter / bucket / aggregate / sort / limit。
+  List<Map<String, dynamic>> _applyTransform(List<Map<String, dynamic>> rows) {
+    var data = rows;
+    return data;
+  }
+
+
+  double _num(dynamic v) {
+    if (v is num) return v.toDouble();
+    return num.tryParse('$v')?.toDouble() ?? 0.0;
+  }
+
+
+  List<String> get _labels => [for (final r in _data) '${r['title']}'];
+
+  List<double> get _values => [for (final r in _data) _num(r['capacity'])];
 
   @override
   Widget build(BuildContext context) {
@@ -62,7 +66,10 @@ class _CourseCapacityPageState extends State<CourseCapacityPage> {
               ? Center(child: Text('加载失败：$_error'))
               : Padding(
                   padding: const EdgeInsets.all(16),
-                  child: BarChart(BarChartData(barGroups: _points.asMap().entries.map((e) => BarChartGroupData(x: e.key, barRods: [BarChartRodData(toY: e.value.y)])).toList())),
+                  child: SizedBox(height: 320, child: BarChart(BarChartData(
+          barGroups: _values.asMap().entries.map((e) => BarChartGroupData(x: e.key, barRods: [BarChartRodData(toY: e.value)])).toList(),
+          titlesData: FlTitlesData(bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 28, getTitlesWidget: (v, meta) => Text(v.toInt() >= 0 && v.toInt() < _labels.length ? _labels[v.toInt()] : '', style: const TextStyle(fontSize: 10))))) ,
+        ))),
                 ),
     );
   }

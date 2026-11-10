@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **关系图（V0.6+）**：`type graph` + `link { source <field> target <field> }`——边来自 source
+  实体的行，节点由 source/target 值去重派生（标签优先 `{rel}_name`）。ECharts force 图
+  （Runtime 绑定 nodes/links）+ AntV **G6** 渲染器（`@antv/g6` 条件依赖 + GraphView 组件）；
+  检查层 `viz-graph-missing-link` / `viz-graph-missing-field`；回归 `tests/visualization_graph.rs`。
+- **移动端图表全矩阵（V0.6+）**：Flutter 从 bar/line/pie 最小集扩展为
+  bar/line/area/pie/scatter/gauge/radar + **变换计划**（filter/bucket/aggregate/sort/limit，
+  语义与 Web runtime `transform.ts` 一致，emit 期静态展开为 Dart）；`flutter analyze` 零 issue。
+- **聚合输出排序（V0.6+）**：`sort { by value }` 现在允许引用前置聚合的输出键（`value`）。
+
+### Added
 - **外部能力全部真实驱动（2026-11-09）**——「零新增依赖」从占位改为**条件依赖**（仅当对应声明存在时引入）：
   - **xlsx 导出**：`rust_xlsxwriter` 真实生成（表头 + 数值/字符串/布尔单元格 + `.xlsx` media type）；
     OpenAPI 同步为 200 + SpreadsheetML media type；CSV 与 XLSX 共用类型解码（同值）。

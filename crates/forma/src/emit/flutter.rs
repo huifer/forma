@@ -54,10 +54,12 @@ pub fn emit_flutter(
         .map(|a| a.version.clone())
         .unwrap_or_else(|| "0.0.0".into());
 
+    // RFC-0010 §16-4（V0.6+ 全矩阵）：移动端可渲染的图型 + 有数据源 → 引入 fl_chart。
     let with_charts = program.charts.iter().any(|c| {
-        matches!(c.chart_type.as_str(), "bar" | "line" | "pie")
-            && c.transform.is_empty()
-            && c.source.is_some()
+        matches!(
+            c.chart_type.as_str(),
+            "bar" | "line" | "area" | "pie" | "scatter" | "gauge" | "radar"
+        ) && c.source.is_some()
     });
     let mut files = vec![file(
         out_dir,
@@ -1613,51 +1615,137 @@ fn chart_page_dart(program: &Program, page: &PageDecl, cfg: &ChartPageCfg) -> St
     let chart_name = cfg.chart.clone();
     let page_name = page.name.clone();
 
-    // RFC-0010 §16-4 评估落地（2026-11-08）：移动端图表最小集
-    // 支持：bar / line + 无 transform + x/y 为实体直接字段；其余保持占位。
     let Some(chart) = program.charts.iter().find(|c| c.name == chart_name) else {
         return chart_placeholder(&page_name, &title, &chart_name);
     };
-    if !chart.transform.is_empty() {
-        return chart_placeholder(&page_name, &title, &chart_name);
-    }
     let Some((api_name, _)) = &chart.source else {
         return chart_placeholder(&page_name, &title, &chart_name);
     };
     let Some(api) = program.apis.iter().find(|a| &a.name == api_name) else {
         return chart_placeholder(&page_name, &title, &chart_name);
     };
-    let x_field = chart.encoding.x.as_ref().map(|c| c.field.clone());
-    let y_field = chart.encoding.y.as_ref().map(|c| c.field.clone());
-    let (Some(x_field), Some(y_field)) = (x_field, y_field) else {
-        return chart_placeholder(&page_name, &title, &chart_name);
-    };
-    // 字段必须存在于实体（避免渲染期崩溃）
-    let Some(entity) = program.entities.iter().find(|e| e.name == api.entity) else {
-        return chart_placeholder(&page_name, &title, &chart_name);
-    };
-    if !entity.fields.iter().any(|f| f.name == x_field)
-        || !entity.fields.iter().any(|f| f.name == y_field)
-    {
+    if !program.entities.iter().any(|e| e.name == api.entity) {
         return chart_placeholder(&page_name, &title, &chart_name);
     }
-    if !matches!(chart.chart_type.as_str(), "bar" | "line" | "pie") {
+    // RFC-0010 §16-4（V0.6+ 全矩阵）：bar/line/area/pie/scatter/gauge/radar + 变换计划
+    // （filter/bucket/aggregate/sort/limit，语义与 Web runtime transform.ts 一致）；
+    // heatmap/treemap/funnel 仍为占位（fl_chart 无对应图型）。
+    let supported = matches!(
+        chart.chart_type.as_str(),
+        "bar" | "line" | "area" | "pie" | "scatter" | "gauge" | "radar"
+    );
+    if !supported {
         return chart_placeholder(&page_name, &title, &chart_name);
     }
+    let Ok(spec) = crate::visualization::lower_chart(program, chart) else {
+        return chart_placeholder(&page_name, &title, &chart_name);
+    };
+    let x_key = spec.encoding.x.as_ref().map(|c| c.data_key.clone());
+    let Some(y_key) = spec.encoding.y.as_ref().map(|c| c.data_key.clone()) else {
+        return chart_placeholder(&page_name, &title, &chart_name);
+    };
+    let needs_x = chart.chart_type != "gauge";
+    if needs_x && x_key.is_none() {
+        return chart_placeholder(&page_name, &title, &chart_name);
+    }
+    let x_key = x_key.unwrap_or_default();
 
-    // 客户端类名 = 实体名 + Api（如 api Courses { entity Course } → CourseApi）
-    // 客户端实例 + 参数类型 + 行字段（camelCase）
     let client = format!("{}Api", api.entity);
     let params_type = format!("{}ListParams", api.entity);
-    let y_dart = to_camel(&y_field);
-    let x_json = crate::identity::to_snake_case(&x_field);
-    let y_json = crate::identity::to_snake_case(&y_field);
-    let is_bar = chart.chart_type == "bar";
-    // V0.6 工业监控：阈值线（fl_chart HorizontalLine，仅 line 支持）
-    let threshold_line = if chart.chart_type == "line" {
+
+    // ── 变换计划 → 具体 Dart（emit 期静态展开；dataKey 与 encoding 对齐）──
+    let mut transform = String::new();
+    for op in &spec.transform.ops {
+        match op {
+            crate::visualization::TransformOp::Filter { data_key, cmp, value, .. } => {
+                transform.push_str(&format!(
+                    "    data = data.where((r) => _cmp(r['{data_key}'], '{}', '{}')).toList();\n",
+                    cmp.as_str(),
+                    escape_dart(value)
+                ));
+            }
+            crate::visualization::TransformOp::Bucket { data_key, by, .. } => {
+                transform.push_str(&format!(
+                    "    data = data.map((r) => {{...r, '{data_key}': _bucketValue(r['{data_key}'], '{}')}}).toList();\n",
+                    by.as_str()
+                ));
+            }
+            crate::visualization::TransformOp::Aggregate { agg, data_key, group_keys, .. } => {
+                let keys = group_keys
+                    .iter()
+                    .map(|k| format!("'{k}'"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let needs_values = !matches!(agg, crate::visualization::AggOp::Count);
+                let agg_expr = match agg {
+                    crate::visualization::AggOp::Count => "bucket.length.toDouble()".to_string(),
+                    crate::visualization::AggOp::Sum => {
+                        "values.fold(0.0, (a, b) => a + b)".to_string()
+                    }
+                    crate::visualization::AggOp::Avg => {
+                        "values.isEmpty ? 0.0 : values.fold(0.0, (a, b) => a + b) / values.length"
+                            .to_string()
+                    }
+                    crate::visualization::AggOp::Min => {
+                        "values.isEmpty ? 0.0 : values.reduce((a, b) => a < b ? a : b)".to_string()
+                    }
+                    crate::visualization::AggOp::Max => {
+                        "values.isEmpty ? 0.0 : values.reduce((a, b) => a > b ? a : b)".to_string()
+                    }
+                };
+                let values_line = if needs_values {
+                    format!("        final values = bucket.map((r) => _num(r['{y_key}'])).toList();\n")
+                } else {
+                    String::new()
+                };
+                transform.push_str(&format!(
+                    r#"    {{
+      final groups = <String, List<Map<String, dynamic>>>{{}};
+      for (final r in data) {{
+        final key = [{keys}].map((k) => '${{r[k]}}').join('|');
+        groups.putIfAbsent(key, () => []).add(r);
+      }}
+      data = groups.values.map((bucket) {{
+{values_line}        final value = {agg_expr};
+        final out = <String, dynamic>{{'{y_key}': value}};
+        for (final k in [{keys}]) {{
+          out[k] = bucket.isEmpty ? null : bucket.first[k];
+        }}
+        return out;
+      }}).toList();
+    }}
+"#
+                ));
+                let _ = data_key;
+            }
+            crate::visualization::TransformOp::Sort { data_key, desc, .. } => {
+                let ret_expr = if *desc { "-c" } else { "c" };
+                transform.push_str(&format!(
+                    r#"    data.sort((a, b) {{
+      final av = a['{data_key}'];
+      final bv = b['{data_key}'];
+      int c;
+      if (av is num && bv is num) {{
+        c = av.compareTo(bv);
+      }} else {{
+        c = '$av'.compareTo('$bv');
+      }}
+      return {ret_expr};
+    }});
+"#
+                ));
+            }
+            crate::visualization::TransformOp::Limit { n } => {
+                transform.push_str(&format!("    data = data.take({n}).toList();\n"));
+            }
+        }
+    }
+
+    // ── 图型分支（labels/values getter 由各图型按需消费）──
+    let threshold_line = if chart.chart_type == "line" || chart.chart_type == "area" {
         match &chart.threshold {
             Some(t) => format!(
-                "extraLinesData: ExtraLinesData(horizontalLines: [HorizontalLine(y: {}, label: HorizontalLineLabel(show: true, label: '{}'))])",
+                "          extraLinesData: ExtraLinesData(horizontalLines: [HorizontalLine(y: {}, label: HorizontalLineLabel(show: true, label: '{}'))]),\n",
                 t.value, t.label
             ),
             None => String::new(),
@@ -1665,27 +1753,125 @@ fn chart_page_dart(program: &Program, page: &PageDecl, cfg: &ChartPageCfg) -> St
     } else {
         String::new()
     };
-    let chart_widget = if chart.chart_type == "pie" {
-        // V0.6 移动端图表扩展：pie（fl_chart PieChart；标题用索引，值用 y）
-        "PieChart(PieChartData(sections: _points.asMap().entries.map((e) => PieChartSectionData(value: e.value.y, title: '${e.key}', radius: 80)).toList()))".to_string()
-    } else if is_bar {
-        "BarChart(BarChartData(barGroups: _points.asMap().entries.map((e) => BarChartGroupData(x: e.key, barRods: [BarChartRodData(toY: e.value.y)])).toList()))".to_string()
-    } else {
-        format!("LineChart(LineChartData(lineBarsData: [LineChartBarData(spots: _points.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value.y)).toList())], {threshold_line}))")
+    let chart_widget = match chart.chart_type.as_str() {
+        "bar" => r#"BarChart(BarChartData(
+          barGroups: _values.asMap().entries.map((e) => BarChartGroupData(x: e.key, barRods: [BarChartRodData(toY: e.value)])).toList(),
+          titlesData: FlTitlesData(bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 28, getTitlesWidget: (v, meta) => Text(v.toInt() >= 0 && v.toInt() < _labels.length ? _labels[v.toInt()] : '', style: const TextStyle(fontSize: 10))))) ,
+        ))"#
+            .to_string(),
+        "line" => r#"LineChart(LineChartData(
+__THRESHOLD__          lineBarsData: [LineChartBarData(spots: [for (final e in _values.asMap().entries) FlSpot(e.key.toDouble(), e.value)], isCurved: false)],
+          titlesData: FlTitlesData(bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 28, getTitlesWidget: (v, meta) => Text(v.toInt() >= 0 && v.toInt() < _labels.length ? _labels[v.toInt()] : '', style: const TextStyle(fontSize: 10))))),
+        ))"#
+            .replace("__THRESHOLD__", &threshold_line),
+        "area" => r#"LineChart(LineChartData(
+__THRESHOLD__          lineBarsData: [LineChartBarData(spots: [for (final e in _values.asMap().entries) FlSpot(e.key.toDouble(), e.value)], isCurved: true, belowBarData: BarAreaData(show: true))],
+          titlesData: FlTitlesData(bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 28, getTitlesWidget: (v, meta) => Text(v.toInt() >= 0 && v.toInt() < _labels.length ? _labels[v.toInt()] : '', style: const TextStyle(fontSize: 10))))),
+        ))"#
+            .replace("__THRESHOLD__", &threshold_line),
+        "pie" => r#"PieChart(PieChartData(sections: [for (final e in _labels.asMap().entries) PieChartSectionData(value: _values[e.key], title: e.value, radius: 80)]))"#
+            .to_string(),
+        "scatter" => r#"ScatterChart(ScatterChartData(scatterSpots: [for (final e in _values.asMap().entries) ScatterSpot(e.key.toDouble(), e.value)]))"#
+            .to_string(),
+        "gauge" => r#"Stack(alignment: Alignment.center, children: [
+          PieChart(PieChartData(sections: [
+            PieChartSectionData(value: _gaugeValue, color: Colors.blue, showTitle: false, radius: 60),
+            PieChartSectionData(value: (_gaugeValue <= 100 ? 100 - _gaugeValue : 0), color: Colors.grey.shade300, showTitle: false, radius: 60),
+          ], startDegreeOffset: 180, centerSpaceRadius: 0)),
+          Text(_values.isEmpty ? '0' : '${_num(_values.first)}'),
+        ])"#
+            .to_string(),
+        "radar" => r#"RadarChart(RadarChartData(
+          dataSets: [RadarDataSet(dataEntries: [for (final v in _values) RadarEntry(value: v)], fillColor: Colors.blue.withValues(alpha: 0.3))],
+          getTitle: (index, angle) => RadarChartTitle(text: index >= 0 && index < _labels.length ? _labels[index] : ''),
+        ))"#
+            .to_string(),
+        _ => String::new(),
     };
+    // gauge 的值域（0-100，与 ECharts 默认 max 一致；>100 时满格显示）
+    let gauge_tail = if chart.chart_type == "gauge" {
+        "\n\n  double get _gaugeValue => _values.isEmpty ? 0.0 : _num(_values.first);"
+    } else {
+        ""
+    };
+
+    let has_filter = spec
+        .transform
+        .ops
+        .iter()
+        .any(|op| matches!(op, crate::visualization::TransformOp::Filter { .. }));
+    let has_bucket = spec
+        .transform
+        .ops
+        .iter()
+        .any(|op| matches!(op, crate::visualization::TransformOp::Bucket { .. }));
+    let cmp_helper = if has_filter {
+        r#"  bool _cmp(dynamic actual, String cmp, String expected) {
+    switch (cmp) {
+      case 'eq':
+        return '$actual' == expected;
+      case 'ne':
+        return '$actual' != expected;
+      case 'gt':
+        return (_num(actual)) > (_num(expected));
+      case 'gte':
+        return (_num(actual)) >= (_num(expected));
+      case 'lt':
+        return (_num(actual)) < (_num(expected));
+      case 'lte':
+        return (_num(actual)) <= (_num(expected));
+      case 'in':
+        return expected.split('|').contains('$actual');
+      default:
+        return true;
+    }
+  }
+"#
+        .to_string()
+    } else {
+        String::new()
+    };
+    let bucket_helper = if has_bucket {
+        r#"  /// 时间分桶（day/hour/week/month/year；语义与 Web runtime bucketValue 一致）。
+  String _bucketValue(dynamic raw, String unit) {
+    final d = DateTime.tryParse('$raw');
+    if (d == null) return '$raw';
+    String two(int n) => n.toString().padLeft(2, '0');
+    switch (unit) {
+      case 'hour':
+        return '${d.year}-${two(d.month)}-${two(d.day)} ${two(d.hour)}';
+      case 'month':
+        return '${d.year}-${two(d.month)}';
+      case 'year':
+        return '${d.year}';
+      case 'day':
+      default:
+        return '${d.year}-${two(d.month)}-${two(d.day)}';
+    }
+  }
+"#
+        .to_string()
+    } else {
+        String::new()
+    };
+
+    // 仅消费 labels 的图型生成 _labels（scatter/gauge 只用 values，避免 unused_element）
+    let labels_getter = if matches!(
+        chart.chart_type.as_str(),
+        "bar" | "line" | "area" | "pie" | "radar"
+    ) {
+        format!("  List<String> get _labels => [for (final r in _data) '${{r['{x_key}']}}'];\n")
+    } else {
+        String::new()
+    };
+
     let template = r#"// @generated by Forma (gen-flutter) — do not edit manually.
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import '../api/api.dart';
 
-class _Point {
-  final double x;
-  final double y;
-  const _Point(this.x, this.y);
-}
-
-/// 图表页（RFC-0010 §16-4：移动端最小图表集——%%TYPE%%）。
+/// 图表页（RFC-0010 §16-4：移动端图表集——%%TYPE%%；变换语义与 Web runtime 一致）。
 class %%PAGE%% extends StatefulWidget {
   const %%PAGE%%({super.key});
 
@@ -1695,7 +1881,7 @@ class %%PAGE%% extends StatefulWidget {
 
 class _%%PAGE%%State extends State<%%PAGE%%> {
   final Api _api = Api();
-  List<_Point> _points = [];
+  List<Map<String, dynamic>> _data = [];
   bool _loading = true;
   String? _error;
 
@@ -1709,14 +1895,7 @@ class _%%PAGE%%State extends State<%%PAGE%%> {
     try {
       final rows = await %%CLIENT%%(_api).list(%%PARAMS%%(pageSize: 200));
       setState(() {
-        _points = rows
-            .asMap()
-            .entries
-            .map((e) => _Point(
-                  e.key.toDouble(),
-                  (e.value.%%YD%% as num?)?.toDouble() ?? 0,
-                ))
-            .toList();
+        _data = _applyTransform(rows.map((r) => r.toJson()).toList());
         _loading = false;
       });
     } catch (e) {
@@ -1726,6 +1905,22 @@ class _%%PAGE%%State extends State<%%PAGE%%> {
       });
     }
   }
+
+  /// 变换计划（emit 期静态展开）：filter / bucket / aggregate / sort / limit。
+  List<Map<String, dynamic>> _applyTransform(List<Map<String, dynamic>> rows) {
+    var data = rows;
+%%TRANSFORM%%    return data;
+  }
+
+__CMP_HELPER__
+  double _num(dynamic v) {
+    if (v is num) return v.toDouble();
+    return num.tryParse('$v')?.toDouble() ?? 0.0;
+  }
+
+__BUCKET_HELPER__
+__LABELS_GETTER__
+  List<double> get _values => [for (final r in _data) _num(r['%%YKEY%%'])];%%GAUGE_TAIL%%
 
   @override
   Widget build(BuildContext context) {
@@ -1737,7 +1932,7 @@ class _%%PAGE%%State extends State<%%PAGE%%> {
               ? Center(child: Text('加载失败：$_error'))
               : Padding(
                   padding: const EdgeInsets.all(16),
-                  child: %%CHART%%,
+                  child: SizedBox(height: 320, child: %%CHART%%),
                 ),
     );
   }
@@ -1749,9 +1944,13 @@ class _%%PAGE%%State extends State<%%PAGE%%> {
         .replace("%%TYPE%%", &chart.chart_type)
         .replace("%%CLIENT%%", &client)
         .replace("%%PARAMS%%", &params_type)
-        .replace("%%YD%%", &y_dart)
-        .replace("%%X%%", &x_json)
-        .replace("%%Y%%", &y_json)
+        .replace("%%XKEY%%", &x_key)
+        .replace("%%YKEY%%", &y_key)
+        .replace("%%TRANSFORM%%", &transform)
+        .replace("__LABELS_GETTER__", &labels_getter)
+        .replace("__CMP_HELPER__", &cmp_helper)
+        .replace("__BUCKET_HELPER__", &bucket_helper)
+        .replace("%%GAUGE_TAIL%%", gauge_tail)
         .replace("%%CHART%%", &chart_widget)
 }
 

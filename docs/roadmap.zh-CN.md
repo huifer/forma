@@ -97,8 +97,8 @@ P2 余项 Closure（轨道 A 8/8 完成，轨道 B 撤销）→ P3 治理收尾�
 | ✅ 已完成 | AntV / G2Plot 适配层 | V0.6 | `targets.visualization.adapter: antv`；共享 ChartSpec / transform；显式拒绝不支持类型；`examples/viz-antv` + CI `viz-antv` |
 | ✅ 已完成 | legend / tooltip / size / label 交互与通道 | V0.6 | 多系列 crosshair、数据驱动点大小、数据标签；`tests/visualization_v06.rs` |
 | ✅ 已完成 | GIS / 工业监控 / K 线 | V0.6 | ECharts map + GeoJSON 契约；三端 threshold；AntV Candlestick（echarts 显式拒绝） |
-| 👁 P2 | AntV 图分析/关系可视化 | V0.6+ | 网络图、关系图等仍需新语义/Adapter |
-| ✅ 已完成（最小集） | 移动端图表投影 | V0.6+ | Flutter fl_chart：bar/line/pie + 无 transform + x/y 为实体直接字段；其余类型/带 transform 仍为占位页（路由完整）。复杂图表（gauge/radar 等）留待真实需求 |
+| ✅ 已完成 | AntV 图分析/关系可视化 | V0.6+ | 关系图（`type graph` + `link { source target }`）：ECharts force 图 + AntV **G6** 渲染器（按需注入 `@antv/g6`）；节点由边值去重派生、标签取 `{rel}_name` |
+| ✅ 已完成（全矩阵） | 移动端图表投影 | V0.6+ | Flutter fl_chart：bar/line/area/pie/scatter/gauge/radar + 变换计划（filter/bucket/aggregate/sort/limit，语义与 Web runtime 一致）；heatmap/treemap/funnel 为占位（fl_chart 无对应图型） |
 
 设计全文：[architecture/rfc/RFC-0010-visualization.zh-CN.md](architecture/rfc/RFC-0010-visualization.zh-CN.md)。
 

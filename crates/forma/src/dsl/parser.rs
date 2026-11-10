@@ -221,6 +221,9 @@ pub struct ChartDecl {
     pub threshold: Option<ThresholdDecl>,
     /// V0.6 GIS：地图区域名（对应工程内 `geo/<region>.json` GeoJSON 数据源）
     pub map_region: Option<String>,
+    /// 关系图（V0.6+）：`link { source <field> target <field> }` —— 边来自 source 实体的行；
+    /// 节点由 source/target 字段值去重派生，标签优先取 `{rel}_name`（ListRow 契约）。
+    pub link: Option<ChartLinkDecl>,
     /// V0.6 数据标签：显示字段 + 格式
     pub label: Option<ChartLabel>,
     pub line: usize,
@@ -297,6 +300,14 @@ pub enum TransformDecl {
     Limit {
         n: usize,
     },
+}
+
+/// 关系图的边绑定（V0.6+）：`link { source <field> target <field> }`。
+#[derive(Debug, Clone)]
+pub struct ChartLinkDecl {
+    pub source_field: String,
+    pub target_field: String,
+    pub line: usize,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -2063,6 +2074,7 @@ impl<'a> Parser<'a> {
             theme: None,
             threshold: None,
             map_region: None,
+            link: None,
             label: None,
             line: name_tok.line,
             file: None,
@@ -2097,6 +2109,10 @@ impl<'a> Parser<'a> {
                 "encoding" => {
                     self.next();
                     decl.encoding = self.parse_encoding();
+                }
+                "link" => {
+                    self.next();
+                    decl.link = self.parse_chart_link();
                 }
                 "transform" => {
                     self.next();
@@ -2398,6 +2414,39 @@ impl<'a> Parser<'a> {
         }
         self.expect_punct("}");
         ch
+    }
+
+    /// `link { source <field> target <field> }`（关系图边绑定）。
+    fn parse_chart_link(&mut self) -> Option<ChartLinkDecl> {
+        let line = self.peek().line;
+        if !self.expect_punct("{") {
+            return None;
+        }
+        let mut source_field = String::new();
+        let mut target_field = String::new();
+        while !self.is_punct("}") && self.peek().kind != TokKind::Eof {
+            let tok = self.peek().clone();
+            match tok.value.as_str() {
+                "source" => {
+                    self.next();
+                    source_field = self.expect_ident().unwrap_or_default();
+                }
+                "target" => {
+                    self.next();
+                    target_field = self.expect_ident().unwrap_or_default();
+                }
+                other => {
+                    self.error_at(&tok, format!("unknown link entry '{other}'"));
+                    self.next();
+                }
+            }
+        }
+        self.expect_punct("}");
+        Some(ChartLinkDecl {
+            source_field,
+            target_field,
+            line,
+        })
     }
 
     fn parse_transform(&mut self) -> Vec<TransformDecl> {
