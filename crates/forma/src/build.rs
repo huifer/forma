@@ -381,8 +381,15 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
                 "api-graphql",
                 crate::emit::graphql::emit_graphql(&dir, &program, &graphql_out, &app_name),
             )?;
+        } else if api_framework == "grpc" {
+            push(
+                "api-grpc",
+                crate::emit::grpc::emit_grpc(&dir, &program, &graphql_out),
+            )?;
         } else {
-            anyhow::bail!("unsupported api target style: {api_framework}; supported: graphql");
+            anyhow::bail!(
+                "unsupported api target style: {api_framework}; supported: graphql | grpc"
+            );
         }
     }
     if let Some(mobile) = targets.mobile.as_ref() {

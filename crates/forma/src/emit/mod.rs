@@ -9,6 +9,7 @@ pub mod expo;
 pub mod fastapi;
 pub mod flutter;
 pub mod graphql;
+pub mod grpc;
 pub mod hono;
 pub mod migrate;
 pub mod migration_export;
@@ -35,6 +36,7 @@ pub use engineering::{emit_backend_engineering, emit_web_engineering};
 pub use expo::emit_expo;
 pub use fastapi::emit_fastapi;
 pub use flutter::emit_flutter;
+pub use grpc::emit_grpc;
 pub use graphql::emit_graphql;
 pub use hono::emit_hono;
 pub use migrate::{
