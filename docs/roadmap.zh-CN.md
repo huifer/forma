@@ -127,7 +127,7 @@ P2 余项 Closure（轨道 A 8/8 完成，轨道 B 撤销）→ P3 治理收尾�
 | ✅ 已完成 | **实时推送（live → SSE）** | M10 | DSL `live <name> { api <Api>.list; events [create update delete] }`；检查层 `dsl-live-unknown-api` / `dsl-live-unknown-event`（仅 create/update/delete）；Rust 后端 `src/live.rs`：SSE 通道（`GET /api/live/{name}`，axum SSE + tokio broadcast）+ `publish(table, event)`；CRUD handler 成功后自动广播；**Web 订阅**（EventSource → react-query invalidate）+ **Flutter 订阅**（`LiveSubscriber` + dart:io HttpClient 流式 SSE）；无 live → 零产物 |
 | ✅ 已完成 | **多租户（@tenant 行级隔离 + 管理）** | M10 | DSL `@tenant` 字段（检查层 dsl-tenant-multiple/optional/type/no-auth）；MySQL users 表带 tenant + disabled 列；Rust 后端：JWT claim → CurrentUser.tenant → **list/get/update/delete 查询按租户过滤**（`WHERE tenant = ?`，None → NULL 恒不命中→空集）+ **create 绑定当前租户**（覆盖输入体）；租户管理端点 `POST /api/admin/tenants/:tenant/revoke|transfer`（TENANT_ADMIN_TOKEN env 授权，未设置时 403 关闭）；吊销 = 停用租户全部用户（disabled=1 + login 拒绝）；迁移 = 业务行改绑新租户（可回滚）；无 @tenant → 全部产物零变化 |
 | ✅ 已完成 | **工作流定义导出** | 轨道 B（重排期） | `targets.workflow: json` → `workflow-spec` 步骤：DSL 状态枚举 → states、命令（pre/effect/audit）→ transitions，`workflow/workflow.json`（`forma-workflow/v1`）+ README；无命令 → 零产物；回归 `tests/workflow.rs`（2 项） |
-| 👁 后续 | 支付 | 后续 | 需真实 provider 沙箱（Stripe/微信/支付宝）；集成点已定义（Decimal 全链路 + 命令端点） |
+| ✅ 已完成 | **支付（Stripe）** | 轨道 B（重排期） | `targets.backend.payments: stripe` → `backend-payments` 步骤：`src/payments.rs`（Stripe PaymentIntent REST + webhook 端点 + `STRIPE_SECRET_KEY` fail-closed）；Decimal 全链路 → 分；仅当工程有 Decimal 字段时 opt-in；回归 `tests/payments.rs`（3 项） |
 
 ### 2.7 工程化
 

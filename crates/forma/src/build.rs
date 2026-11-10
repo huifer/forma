@@ -224,6 +224,17 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
     } else {
         push("db-mysql", crate::emit::emit_mysql(&dir, &program, &db_out))?;
     }
+    // 支付集成（opt-in：targets.backend.payments: stripe）——reqwest 条件依赖 + webhook 端点
+    let payments_enabled = targets
+        .backend
+        .as_ref()
+        .map(|b| b.payments.as_deref() == Some("stripe"))
+        .unwrap_or(false);
+    if payments_enabled
+        && !program.entities.iter().any(|e| e.fields.iter().any(|f| f.type_name == "Decimal"))
+    {
+        bail!("payments requires at least one entity with a Decimal field (Decimal 全链路)");
+    }
     // Backend target before web/API emitters (preserve deterministic step order).
     let backend_is_rust = targets
         .backend
@@ -281,6 +292,12 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
                     "backend-rust",
                     crate::emit::emit_rust_backend(&dir, &program, &backend_out, &app_name),
                 )?;
+                if payments_enabled {
+                    push(
+                        "backend-payments",
+                        crate::emit::payments::emit_payments(&dir, &program, &backend_out),
+                    )?;
+                }
             }
             (language, framework) => anyhow::bail!(
                 "unsupported backend target: language={language}, framework={framework}; supported: rust/axum, java/spring, go/gin, php/laravel, csharp/dotnet, typescript/nestjs, typescript/hono, python/fastapi"

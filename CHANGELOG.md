@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Stripe 支付集成（轨道 B 重新排期）**：`targets.backend.payments: stripe` →
+  `backend-payments` 步骤生成 `src/payments.rs`（PaymentIntent REST + webhook 端点，
+  `STRIPE_SECRET_KEY` fail-closed，Decimal → 分全链路）；条件依赖 reqwest；
+  无 Decimal 字段 → 构建期显式拒绝。回归 `tests/payments.rs`（3 项）。
+
+### Added
 - **工作流定义导出（轨道 B 重新排期）**：`targets.workflow: json` → `workflow-spec` 步骤生成
   `workflow/workflow.json`（`forma-workflow/v1`：状态枚举 → states、命令 → transitions
   含 pre/effect/audit）+ README；无命令 → 零产物；opt-in，默认零变化。
