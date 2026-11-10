@@ -32,11 +32,12 @@ P2 余项 Closure（轨道 A 8/8 完成，轨道 B 撤销）→ P3 治理收尾�
 
 ## 2. 适配层完整矩阵
 
-> **范围决议（2026-11-08）**：矩阵中标 `👁 P2` 的目标扩栈行（SQL Server / Oracle / MongoDB /
-> Spring Boot / Gin / Laravel / .NET / gRPC / tRPC / SvelteKit / Angular / Tauri / Electron /
-> SwiftUI / Compose / 小程序 / uni-app / 工作流运行时 / 支付 / Playwright e2e / Token Benchmark）
-> 已按用户决策**撤销，不再排期**。本表保留为历史评估记录。P2 阶段实际完成的是
-> [P2 轨道 A 余项 Closure](architecture/roadmap/p2-plan.zh-CN.md)（8/8，详见 gap-backlog「轨道 A 收尾」）。
+> **范围决议更新（2026-11-09）**：矩阵中标 `👁 P2` 的目标扩栈行已于 2026-11-08 撤销、
+> **并于 2026-11-09 重新排期**（用户决策更新）：SQL Server / Oracle / MongoDB / Spring Boot /
+> Go / PHP / .NET / gRPC / tRPC / SvelteKit / Angular / Tauri / Electron / SwiftUI / Compose /
+> 小程序 / uni-app / 工作流运行时 / 支付 / Playwright e2e / Token Benchmark
+> **已全部实现**（见下方矩阵各行；条件依赖 / opt-in / 显式拒绝，默认产物零变化）。
+> [P2 轨道 A 余项 Closure](architecture/roadmap/p2-plan.zh-CN.md)（8/8）继续有效。
 
 每个目标 = 一个 emitter crate（`forma-gen-*`），实现统一接口契约（见 §6.1）。
 
