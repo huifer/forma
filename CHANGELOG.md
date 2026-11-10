@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **tRPC 网关（轨道 B 重新排期）**：`targets.api.framework: trpc` → `api-trpc` 步骤生成
+  typed router（zod 输入从 DSL 字段派生、按 operations 裁剪、经 `REST_BASE` 委托 REST 后端）
+  + 自包含 TS 工程（package.json / tsconfig / context / router / server）；
+  生成工程 `tsc --noEmit` 通过；回归 `tests/trpc.rs`（2 项）。
+
+### Added
 - **轨道 B 重新排期（第二批）**：
   - **Oracle DDL**：`engine: oracle` → PL/SQL 幂等建表（`EXECUTE IMMEDIATE` + `SQLCODE != -955` 守卫），
     VARCHAR2/NUMBER/CLOB/TIMESTAMP 映射，`db-oracle` + `oracle-migrate` 步骤；`tests/oracle.rs`（3 项）。

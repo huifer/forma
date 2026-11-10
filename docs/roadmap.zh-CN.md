@@ -72,7 +72,7 @@ P2 余项 Closure（轨道 A 8/8 完成，轨道 B 撤销）→ P3 治理收尾�
 | ✅ 已完成 | **OpenAPI 导入** | M7 | `forma import openapi <spec> [--out]` → 从 components.schemas/paths 逆向生成 `.fm`（实体/api/类型映射/@id 主键保证），生成物通过 check_program（P1-#1） |
 | ✅ 已完成 | **GraphQL（schema + resolver 网关）** | M10 | `targets.api.framework: graphql` → `api-graphql` 构建步骤（无 `targets.api` 零产物）；DSL → `schema.graphql`（枚举/实体/正向对象关系/Create·Update Input/Query/Mutation，按各 api operations 裁剪；Decimal→String 同后端序列化契约）+ `src/schema.ts`（typeDefs 同源）+ `src/rest.ts`（服务端 REST 客户端，`REST_BASE` 可指向任意后端 target）+ `src/resolvers.ts`（委托 REST + 关系 resolver）+ `src/server.ts`（graphql-yoga 可运行）；安全语义由 REST 后端权威执行、网关透传 token；逆向关系留 v2（过滤器依赖与 N+1） |
 | ✅ 已完成 | **gRPC（Protobuf 导出）** | 轨道 B（重排期） | `targets.api.framework: grpc` → `api-grpc` 步骤生成 proto3（枚举首值=0、实体 message、列表/CRUD 请求响应、service 按 operations 裁剪、关系→string 外键）；回归 `tests/grpc.rs`（3 项） |
-| 👁 P2 | tRPC | 后续 | |
+| ✅ 已完成 | **tRPC** | 轨道 B（重排期） | `targets.api.framework: trpc` → `api-trpc` 步骤：typed router（zod 输入从 DSL 字段派生、operations 裁剪、REST 委托网关）+ 自包含 TS 工程；生成工程 `tsc --noEmit` 通过；回归 `tests/trpc.rs`（2 项） |
 
 ### 2.4 前端 Web
 

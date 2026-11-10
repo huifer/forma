@@ -28,6 +28,7 @@ pub mod rust_backend;
 pub mod seed;
 pub mod mssql;
 pub mod sqlite;
+pub mod trpc;
 pub mod visualization;
 pub mod vue;
 pub mod web_react;
@@ -62,6 +63,7 @@ pub use replay::{replay_sql, schema_diff, schema_from_plans, SimSchema, SimTable
 pub use rust_backend::emit_rust_backend;
 pub use seed::{emit_seed, render_seed_bundle, verify_seed, SeedBundle, SeedVerifyReport};
 pub use mongodb::emit_mongodb;
+pub use trpc::emit_trpc;
 pub use mssql::{emit_mssql, emit_mssql_migration, mssql_type};
 pub use sqlite::{emit_sqlite, emit_sqlite_migration, sqlite_type};
 pub use visualization::{emit_visualization, emit_visualization_with_adapter};

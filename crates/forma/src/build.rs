@@ -414,9 +414,14 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
                 "api-grpc",
                 crate::emit::grpc::emit_grpc(&dir, &program, &graphql_out),
             )?;
+        } else if api_framework == "trpc" {
+            push(
+                "api-trpc",
+                crate::emit::trpc::emit_trpc(&dir, &program, &graphql_out),
+            )?;
         } else {
             anyhow::bail!(
-                "unsupported api target style: {api_framework}; supported: graphql | grpc"
+                "unsupported api target style: {api_framework}; supported: graphql | grpc | trpc"
             );
         }
     }
