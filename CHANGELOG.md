@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Playwright e2e 生成（轨道 B 重新排期）**：`targets.frontend.e2e: playwright` → `web-e2e` 步骤
+  生成自包含 `e2e/` 套件（config + crud.spec.ts + tsconfig + package.json + README）；
+  用例由 DSL 表格页与 operations 静态展开；默认零产物，未知框架显式拒绝。
+  生成工程 `tsc --noEmit` 通过；回归 `tests/playwright.rs`（3 项）。
+
+### Added
 - **gRPC / Protobuf 导出（轨道 B 重新排期）**：`targets.api.framework: grpc` → `api-grpc` 步骤
   生成 proto3 契约（枚举首值=0、实体 message、分页/CRUD 请求响应、service 按 operations 裁剪、
   关系字段 → `string {rel}_id`）；graphql 目标零变化，未知框架显式拒绝。

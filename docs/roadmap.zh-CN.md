@@ -140,7 +140,8 @@ P2 余项 Closure（轨道 A 8/8 完成，轨道 B 撤销）→ P3 治理收尾�
 | ✅ 已完成 | Makefile + GitHub Actions CI 模板 | M9 | 后端 Makefile（build/check/test/run/migrate/seed/docker）、后端 CI（cargo check/test/build）、Web CI（npm install + tsc + vitest + build）|
 | ✅ 已完成 | 结构化日志基础（RUST_LOG + LOG_FORMAT=json） | M10 | `tracing-subscriber`（env-filter + json features）统一初始化——默认 human-readable，`LOG_FORMAT=json` 输出 JSON Lines；错误/审计/请求 id 统一走 `tracing::` 宏；**OTLP exporter 已接入（2026-11-09，opt-in feature）**：`cargo run --features otlp` 启用 gRPC 导出（`OTEL_EXPORTER_OTLP_ENDPOINT` / `OTEL_SERVICE_NAME`），默认构建零依赖 |
 
-| 👁 P2 | Playwright e2e 生成 / Token Benchmark | M11 |
+| ✅ 已完成 | **Playwright e2e 生成** | 轨道 B（重排期） | `targets.frontend.e2e: playwright` → `web-e2e` 步骤：自包含 `e2e/` 套件（playwright.config.ts / crud.spec.ts / tsconfig / package.json / README），用例从表格页 + operations 静态展开；生成工程 `tsc --noEmit` 通过；回归 `tests/playwright.rs`（3 项） |
+| ✅ 已完成 | Token Benchmark | F-008 | `forma bench`：10×10 任务矩阵 + `estimatedInputTokens`（4 chars/token proxy） |
 
 ## 3. 可视化路线（Forma Studio）
 

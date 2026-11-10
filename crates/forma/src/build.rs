@@ -291,6 +291,20 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
             ),
         )?;
     }
+    // Playwright e2e（opt-in：targets.frontend.e2e: playwright）——自包含 e2e/ 套件
+    let e2e_framework = targets
+        .frontend
+        .as_ref()
+        .and_then(|t| t.e2e.as_deref())
+        .unwrap_or("");
+    if e2e_framework == "playwright" {
+        push(
+            "web-e2e",
+            crate::emit::playwright::emit_playwright(&dir, &program, &web_out),
+        )?;
+    } else if !e2e_framework.is_empty() {
+        anyhow::bail!("unsupported e2e framework '{e2e_framework}'; supported: playwright");
+    }
     // viz runtime 面向 web-react；Next.js 暂不接图表（后续增强）
     if frontend_framework != "nextjs" && frontend_framework != "next" {
         // RFC-0010 V0.6：Adapter 选择（echarts 默认，零变化；antv → G2Plot）

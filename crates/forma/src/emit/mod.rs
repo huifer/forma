@@ -17,6 +17,7 @@ pub mod mysql;
 pub mod nest;
 pub mod nextjs;
 pub mod openapi;
+pub mod playwright;
 pub mod postgres;
 pub mod redis;
 pub mod replay;
@@ -48,6 +49,7 @@ pub use migrate::{
 pub use mysql::emit_mysql;
 pub use nest::emit_nestjs;
 pub use nextjs::emit_nextjs;
+pub use playwright::emit_playwright;
 pub use openapi::emit_openapi;
 pub use postgres::{emit_postgres, postgres_type};
 pub use redis::emit_redis;

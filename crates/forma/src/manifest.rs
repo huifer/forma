@@ -76,6 +76,8 @@ pub struct TargetConfig {
     pub uses_zustand: bool,
     /// 适配层选择（visualization target：echarts | antv；缺省 echarts = 零变化）
     pub adapter: Option<String>,
+    /// 端到端测试生成器（frontend target：playwright；缺省零产物）
+    pub e2e: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -421,6 +423,10 @@ fn parse_target_config(cfg: &serde_yaml::Mapping) -> TargetConfig {
             .unwrap_or(false),
         adapter: cfg
             .get(serde_yaml::Value::String("adapter".into()))
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        e2e: cfg
+            .get(serde_yaml::Value::String("e2e".into()))
             .and_then(|v| v.as_str())
             .map(String::from),
     }
