@@ -94,5 +94,8 @@ fn no_desktop_target_has_zero_artifacts_and_unknown_rejected() {
     let bad = tmp_dir("bad");
     write_project(&bad, Some("flutter"));
     let err = forma::build::run_build(&bad).unwrap_err();
-    assert!(err.to_string().contains("supported: electron | tauri"), "{err}");
+    assert!(
+        err.to_string().contains("supported: electron | tauri"),
+        "{err}"
+    );
 }

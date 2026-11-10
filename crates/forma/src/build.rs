@@ -231,7 +231,10 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
         .map(|b| b.payments.as_deref() == Some("stripe"))
         .unwrap_or(false);
     if payments_enabled
-        && !program.entities.iter().any(|e| e.fields.iter().any(|f| f.type_name == "Decimal"))
+        && !program
+            .entities
+            .iter()
+            .any(|e| e.fields.iter().any(|f| f.type_name == "Decimal"))
     {
         bail!("payments requires at least one entity with a Decimal field (Decimal 全链路)");
     }
@@ -496,7 +499,10 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
     // 桌面包装（opt-in：targets.desktop.framework: electron|tauri）
     if let Some(desktop) = targets.desktop.as_ref() {
         let desktop_framework = desktop.framework.as_deref().unwrap_or("");
-        let desktop_out = desktop.out.clone().unwrap_or_else(|| "generated/desktop".into());
+        let desktop_out = desktop
+            .out
+            .clone()
+            .unwrap_or_else(|| "generated/desktop".into());
         if desktop_framework == "electron" || desktop_framework == "tauri" {
             push(
                 "desktop-wrapper",

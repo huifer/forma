@@ -59,7 +59,10 @@ fn searchable_entity_generates_engine_adapter() {
 
     let search = fs::read_to_string(dir.join("generated/backend/src/search.rs")).unwrap();
     assert!(search.contains("SEARCH_SPECS"), "{search}");
-    assert!(search.contains("SearchSpec { table: \"articles\" }"), "{search}");
+    assert!(
+        search.contains("SearchSpec { table: \"articles\" }"),
+        "{search}"
+    );
     assert!(search.contains("fn engine()"), "{search}");
     assert!(search.contains("search_ids"), "{search}");
     assert!(search.contains("index_document"), "{search}");
@@ -88,8 +91,14 @@ fn searchable_entity_generates_engine_adapter() {
 
     // 读路径分支
     let repo = fs::read_to_string(dir.join("generated/backend/src/repo.rs")).unwrap();
-    assert!(repo.contains("let use_engine = engine_ids.is_some();"), "{repo}");
-    assert!(repo.contains("crate::search::search_ids(\"articles\""), "{repo}");
+    assert!(
+        repo.contains("let use_engine = engine_ids.is_some();"),
+        "{repo}"
+    );
+    assert!(
+        repo.contains("crate::search::search_ids(\"articles\""),
+        "{repo}"
+    );
     assert!(repo.contains("s.id IN"), "{repo}");
 }
 

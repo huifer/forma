@@ -266,3 +266,29 @@ jobs:
           ENR=$(curl -s "$B/enrollments" -H "$AUTH" | python3 -c "import sys,json;print([e['id'] for e in json.load(sys.stdin) if e['status']=='completed'][0])")
           CODE=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "$B/enrollments/$ENR" -H "$AUTH")
           test "$CODE" = "409"
+
+  # 轨道 B / M10 扩栈目标此前只有结构断言，没有生成工程编译门。
+  # 该 job 用目标语言真实工具链验证 7 个可编译 target（Go/PHP/Python/proto/TS/JSON）；
+  # 脚本会显式列出无法在 CI 验证的范围，不静默跳过。
+  l3-smoke:
+    name: generated extension targets (L3 compile smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install protobuf compiler
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - name: Build compiler
+        run: cargo build --locked
+      - name: Compile generated opt-in targets
+        run: bash scripts/l3-smoke.sh
+      - name: Verify no benchmark fixtures leaked into the workspace
+        run: |
+          if [ -n "$(ls -d F008-* 2>/dev/null)" ]; then
+            echo "::error::forma bench left F008-* case projects in the repository root"
+            exit 1
+          fi

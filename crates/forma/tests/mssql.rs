@@ -87,7 +87,10 @@ fn mssql_build_uses_independent_steps_and_dialect() {
 
     let sql = fs::read_to_string(dir.join("generated/db/0001_init.sql")).unwrap();
     // T-SQL 幂等建表（OBJECT_ID 守卫）
-    assert!(sql.contains("IF OBJECT_ID(N'dbo.items', N'U') IS NULL"), "{sql}");
+    assert!(
+        sql.contains("IF OBJECT_ID(N'dbo.items', N'U') IS NULL"),
+        "{sql}"
+    );
     assert!(sql.contains("CREATE TABLE dbo.items"), "{sql}");
     // 方言映射
     assert!(sql.contains("[name] NVARCHAR(50) NOT NULL"), "{sql}");
@@ -96,7 +99,10 @@ fn mssql_build_uses_independent_steps_and_dialect() {
     assert!(sql.contains("[metadata] NVARCHAR(MAX)"), "{sql}");
     // 迁移链同构
     let up = fs::read_to_string(dir.join("generated/db/migrations/0001_upgrade.sql")).unwrap();
-    assert!(up.contains("IF OBJECT_ID(N'dbo.items', N'U') IS NULL"), "{up}");
+    assert!(
+        up.contains("IF OBJECT_ID(N'dbo.items', N'U') IS NULL"),
+        "{up}"
+    );
 }
 
 #[test]
@@ -122,11 +128,11 @@ api Enrollments { entity Enrollment operations [list get create update delete] }
     .unwrap();
     forma::build::run_build(&dir).unwrap();
     let sql = fs::read_to_string(dir.join("generated/db/0001_init.sql")).unwrap();
-    assert!(sql.contains("[student_id] UNIQUEIDENTIFIER NOT NULL"), "{sql}");
     assert!(
-        sql.contains("REFERENCES dbo.students ([id])"),
+        sql.contains("[student_id] UNIQUEIDENTIFIER NOT NULL"),
         "{sql}"
     );
+    assert!(sql.contains("REFERENCES dbo.students ([id])"), "{sql}");
 }
 
 #[test]

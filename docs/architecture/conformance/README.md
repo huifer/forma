@@ -22,7 +22,7 @@ breaking_change: false
 ## 运行方式
 
 ```bash
-cargo test          # 全量 76 套件 / 494 测试（CI 强制）
+cargo test          # 全量 93 套件 / 565 测试（CI 强制）
 cargo test --test <suite>   # 单套件
 ```
 

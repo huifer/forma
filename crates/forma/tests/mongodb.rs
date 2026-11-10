@@ -78,7 +78,10 @@ fn mongodb_emits_collection_design_and_shell_script() {
     let students = cols.iter().find(|c| c["name"] == "students").unwrap();
     let schema = &students["validator"]["$jsonSchema"];
     assert_eq!(schema["bsonType"], "object");
-    assert!(schema["required"].as_array().unwrap().contains(&serde_json::json!("name")));
+    assert!(schema["required"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("name")));
     // 关系字段 → `{rel}_id`，BSON string
     assert_eq!(schema["properties"]["school_id"]["bsonType"], "string");
     assert_eq!(schema["properties"]["age"]["bsonType"], "int");

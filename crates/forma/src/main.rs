@@ -8,16 +8,26 @@ const HELP: &str = "forma — Universal Specification Compiler
 
 Usage:
   forma init [dir]           Scaffold a new Forma project
+  forma check [dir]          DSL semantic check (file:line diagnostics)
   forma validate [dir]       Validate manifest + specifications
   forma doctor [dir]         Full cross-standard diagnostics
+  forma lint [dir]           DSL lint
   forma graph [dir]          Print semantic graph (--json | --export <file>)
-  forma build [dir]          Incremental build (--force)
-  forma seed [dir]           生成确定性案例数据（db/seed/*.sql + fixtures/*.json）
-  forma migrate [dir]        数据库迁移：status/history/verify/up/down/risk [--sql] [--apply] [--to v] [--steps N]
+  forma build [dir]          Incremental build (--force | --adopt | --overwrite | --strict)
+  forma diff <a> <b>         Semantic diff report (HTML/JSON)
+  forma diagrams [dir]       Generate Mermaid diagrams
+  forma seed [dir]           生成确定性案例数据（db/seed/*.sql + fixtures/*.json，--verify）
+  forma migrate [dir]        数据库迁移：status/history/verify/up/down/risk/export
+                              [--sql] [--apply] [--to v] [--steps N] [--format flyway|liquibase|golang-migrate]
+  forma import sql|prisma|openapi <file> [--out <path>] [--loss-report <path>]
   forma patch [dir] <file>   Apply a semantic patch (transactional)
+  forma artifacts [verify|conflicts] [dir]   产物清单 / 冲突验证（--strict）
   forma bench [dir]          F-008：100-case 确定性业务变更矩阵（--json / --skip-backend）
-  forma docs validate [dir]   Governance docs: validate | lint | graph | check-compatibility [--base <git-ref>] | check-dependencies | check-links
-  forma capability <action>   Capability registry: list | check | show <id> [dir]
+                             未给 dir 时使用系统临时目录并在结束后清理（不污染 CWD）
+  forma docs <action> [dir]  Governance docs: validate | lint | graph
+                             | check-compatibility [--base <git-ref>] | check-dependencies | check-links
+  forma capability <action>  Capability registry: list | check | show <id> [dir]
+  forma studio [dir]         Local Studio web server (--port N)
   forma mcp [dir]            Start MCP stdio server (for Codex / Claude Code / Pi)
   forma --help | --version
 ";
@@ -347,7 +357,7 @@ fn run(argv: &[String]) -> Result<i32> {
             );
             Ok(0)
         }
-        "bench" => Ok(cmd_bench(&project_dir(0), &flags)),
+        "bench" => Ok(cmd_bench(&positional, &flags)),
         "migrate" => {
             // forma migrate [status|history|verify|up|down] [dir] [--sql] [--apply] [--to v] [--steps N]
             // 子命令与项目目录顺序无关：已知子命令取一个，其余第一个当作项目目录
@@ -505,7 +515,11 @@ fn cmd_studio(dir: &Path, flags: &std::collections::HashMap<String, String>) -> 
     };
     let actual = listener.local_addr().map(|a| a.port()).unwrap_or(port);
     println!("Forma Studio → http://127.0.0.1:{actual}  (Ctrl-C to stop)");
-    forma::studio::serve(listener, std::sync::Arc::from(dir), forma::studio::StudioBus::new());
+    forma::studio::serve(
+        listener,
+        std::sync::Arc::from(dir),
+        forma::studio::StudioBus::new(),
+    );
     0
 }
 
@@ -575,13 +589,21 @@ fn cmd_import_with(
     }
 }
 
-/// `forma bench [dir] [--json] [--cases N] [--skip-backend]`
+/// `forma bench [dir] [--json] [--skip-backend]`
 ///
 /// 运行 F-008 的确定性业务变更矩阵（默认 10 场景 × 10 变体 = 100 cases）：
 /// DSL 检查 → 产物生成 → 代表性 backend `cargo check`（每场景变体 0）→ JSON / 文本报告。
-fn cmd_bench(dir: &Path, flags: &std::collections::HashMap<String, String>) -> i32 {
+///
+/// 未显式给 `dir` 时使用系统临时目录下的 scratch root，并在结束后删除——
+/// benchmark 不再把 100 个 `F008-*` 案例工程写进当前工作目录（仓库污染事故的根因）。
+fn cmd_bench(positional: &[String], flags: &std::collections::HashMap<String, String>) -> i32 {
+    let scratch = positional
+        .first()
+        .map(PathBuf::from)
+        .unwrap_or_else(forma::bench::scratch_root);
+    let cleanup = positional.is_empty();
     let skip_backend = flags.contains_key("skip-backend");
-    let out = forma::bench::run_with(dir, skip_backend).unwrap_or_else(|e| {
+    let out = forma::bench::run_with(&scratch, skip_backend).unwrap_or_else(|e| {
         eprintln!("benchmark aborted: {e:#}");
         std::process::exit(1);
     });
@@ -627,6 +649,9 @@ fn cmd_bench(dir: &Path, flags: &std::collections::HashMap<String, String>) -> i
     let ok = out.builds_passed == out.cases_total
         && (out.backend_compile_cases == 0
             || out.backend_compiles_passed == out.backend_compile_cases);
+    if cleanup {
+        let _ = std::fs::remove_dir_all(&scratch);
+    }
     if ok {
         0
     } else {
@@ -788,17 +813,24 @@ fn copy_dir_recursive(src: &Path, dst: &Path) {
     }
 }
 
-/// `forma artifacts verify [dir] [--strict]`：产物来源证明验证（RFC-0007 §18-2）
+/// `forma artifacts [verify|conflicts] [dir] [--strict]`：产物来源证明验证（RFC-0007 §18-2）
+///
+/// 兼容两种写法：`forma artifacts <dir>`（默认 verify）与 `forma artifacts verify <dir>`。
 fn cmd_artifacts(positional: &[String], flags: &std::collections::HashMap<String, String>) -> i32 {
-    let sub = positional.first().map(String::as_str).unwrap_or("verify");
-    if sub == "conflicts" {
-        return cmd_artifacts_conflicts(
+    let known = ["verify", "conflicts", "list"];
+    let (sub, dir): (&str, &str) = match positional.first() {
+        Some(first) if known.contains(&first.as_str()) => (
+            first.as_str(),
             positional.get(1).map(String::as_str).unwrap_or("."),
-            flags,
-        );
+        ),
+        Some(dir) => ("verify", dir.as_str()),
+        None => ("verify", "."),
+    };
+    if sub == "conflicts" {
+        return cmd_artifacts_conflicts(dir, flags);
     }
-    // forma artifacts verify [dir]：positional[0] = "verify"，目录取 positional[1]
-    let dir = PathBuf::from(positional.get(1).map(String::as_str).unwrap_or("."));
+    // forma artifacts verify [dir]：目录也可直接作为第一个位置参数
+    let dir = PathBuf::from(dir);
     if !dir.join(".forma/artifacts.json").is_file() {
         eprintln!(
             "✗ no .forma/artifacts.json in {} — run `forma build` first",

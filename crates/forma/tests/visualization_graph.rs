@@ -70,13 +70,17 @@ fn graph_chart_generates_spec_and_echarts_series() {
     write_project(&dir, None);
     forma::build::run_build(&dir).unwrap();
 
-    let chart = fs::read_to_string(dir.join("generated/web/src/viz/charts/EnrollmentGraph.ts")).unwrap();
+    let chart =
+        fs::read_to_string(dir.join("generated/web/src/viz/charts/EnrollmentGraph.ts")).unwrap();
     assert!(chart.contains("\"chartType\": \"graph\""), "{chart}");
     assert!(chart.contains("\"shape\": \"graph\""), "{chart}");
     // 关系字段 → 边键 `{rel}_id` + 标签键 `{rel}_name`
     assert!(chart.contains("\"sourceKey\": \"student_id\""), "{chart}");
     assert!(chart.contains("\"targetKey\": \"course_id\""), "{chart}");
-    assert!(chart.contains("\"sourceLabelKey\": \"student_name\""), "{chart}");
+    assert!(
+        chart.contains("\"sourceLabelKey\": \"student_name\""),
+        "{chart}"
+    );
     // ECharts option：graph series（force 布局，数据留空）
     assert!(chart.contains("\"type\": \"graph\""), "{chart}");
     assert!(chart.contains("\"layout\": \"force\""), "{chart}");
@@ -101,7 +105,10 @@ fn graph_chart_antv_adapter_injects_g6() {
     write_project(&dir, Some("antv"));
     forma::build::run_build(&dir).unwrap();
     let runtime = fs::read_to_string(dir.join("generated/web/src/viz/runtime.tsx")).unwrap();
-    assert!(runtime.contains("import G6 from \"@antv/g6\";"), "{runtime}");
+    assert!(
+        runtime.contains("import G6 from \"@antv/g6\";"),
+        "{runtime}"
+    );
     assert!(runtime.contains("function GraphView("), "{runtime}");
     assert!(runtime.contains("shapeGraph"), "{runtime}");
     let pkg = fs::read_to_string(dir.join("generated/web/package.json")).unwrap();

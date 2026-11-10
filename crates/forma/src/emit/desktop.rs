@@ -146,9 +146,15 @@ pub fn emit_desktop(
     let files = match framework {
         "electron" => electron_files(&app),
         "tauri" => tauri_files(&app, &version),
-        other => anyhow::bail!("unsupported desktop framework '{other}'; supported: electron | tauri"),
+        other => {
+            anyhow::bail!("unsupported desktop framework '{other}'; supported: electron | tauri")
+        }
     };
-    let sub = if framework == "electron" { "electron" } else { "src-tauri" };
+    let sub = if framework == "electron" {
+        "electron"
+    } else {
+        "src-tauri"
+    };
     let mut out = Vec::new();
     for (name, content) in files {
         out.push(GeneratedFile {

@@ -137,12 +137,14 @@ fn web_form_edit_maps_relation_id_to_bare_input_name() {
         .find(|f| f.path.ends_with("EnrollmentEdit.tsx"))
         .unwrap();
     assert!(
-        edit.content.contains("mapped[\"student\"] = v[\"student_id\"]"),
+        edit.content
+            .contains("mapped[\"student\"] = v[\"student_id\"]"),
         "{}",
         edit.content
     );
     assert!(
-        edit.content.contains("mapped[\"course\"] = v[\"course_id\"]"),
+        edit.content
+            .contains("mapped[\"course\"] = v[\"course_id\"]"),
         "{}",
         edit.content
     );

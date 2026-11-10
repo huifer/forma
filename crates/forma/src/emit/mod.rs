@@ -16,28 +16,28 @@ pub mod grpc;
 pub mod hono;
 pub mod migrate;
 pub mod migration_export;
-pub mod mongodb;
 pub mod mobile_native;
+pub mod mongodb;
+pub mod mssql;
 pub mod mysql;
 pub mod nest;
 pub mod nextjs;
 pub mod openapi;
 pub mod oracle;
-pub mod playwright;
 pub mod payments;
+pub mod playwright;
 pub mod postgres;
 pub mod redis;
 pub mod replay;
 pub mod rust_backend;
 pub mod seed;
-pub mod mssql;
 pub mod spring;
 pub mod sqlite;
 pub mod trpc;
 pub mod visualization;
-pub mod workflow;
 pub mod vue;
 pub mod web_react;
+pub mod workflow;
 
 pub use backend_alt::{emit_dotnet, emit_gin, emit_laravel};
 pub use deploy::emit_deploy;
@@ -47,11 +47,11 @@ pub use diff::{diff_programs, emit_diff, DiffReport};
 pub use docker::emit_docker;
 pub use engineering::{emit_backend_engineering, emit_web_engineering};
 pub use expo::emit_expo;
-pub use frontend_alt::{emit_angular, emit_sveltekit};
 pub use fastapi::emit_fastapi;
 pub use flutter::emit_flutter;
-pub use grpc::emit_grpc;
+pub use frontend_alt::{emit_angular, emit_sveltekit};
 pub use graphql::emit_graphql;
+pub use grpc::emit_grpc;
 pub use hono::emit_hono;
 pub use migrate::{
     classify_op, diff_down_sql, diff_ops, emit_migration, ledger_from_committed_chain,
@@ -59,28 +59,28 @@ pub use migrate::{
     pending_migration_ops, read_ledger_lenient_public, MigrationEntry, MigrationLedger,
     MigrationOp, MigrationRisk, MigrationRiskReport,
 };
+pub use mobile_native::{emit_compose, emit_miniprogram, emit_swiftui, emit_uniapp};
+pub use mongodb::emit_mongodb;
+pub use mssql::{emit_mssql, emit_mssql_migration, mssql_type};
 pub use mysql::emit_mysql;
 pub use nest::emit_nestjs;
 pub use nextjs::emit_nextjs;
-pub use payments::emit_payments;
-pub use playwright::emit_playwright;
 pub use openapi::emit_openapi;
 pub use oracle::{emit_oracle, emit_oracle_migration, oracle_type};
+pub use payments::emit_payments;
+pub use playwright::emit_playwright;
 pub use postgres::{emit_postgres, postgres_type};
 pub use redis::emit_redis;
 pub use replay::{replay_sql, schema_diff, schema_from_plans, SimSchema, SimTable};
 pub use rust_backend::emit_rust_backend;
 pub use seed::{emit_seed, render_seed_bundle, verify_seed, SeedBundle, SeedVerifyReport};
-pub use mongodb::emit_mongodb;
-pub use trpc::emit_trpc;
-pub use mobile_native::{emit_compose, emit_miniprogram, emit_swiftui, emit_uniapp};
-pub use mssql::{emit_mssql, emit_mssql_migration, mssql_type};
 pub use spring::emit_spring;
 pub use sqlite::{emit_sqlite, emit_sqlite_migration, sqlite_type};
+pub use trpc::emit_trpc;
 pub use visualization::{emit_visualization, emit_visualization_with_adapter};
-pub use workflow::emit_workflow;
 pub use vue::emit_vue;
 pub use web_react::emit_web_react;
+pub use workflow::emit_workflow;
 
 pub use super::identity::to_snake_case as snake;
 // 类型映射（各目标的类型实现）——供「内建类型单一权威清单」一致性测试断言

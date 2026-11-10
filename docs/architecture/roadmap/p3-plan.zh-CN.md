@@ -15,6 +15,11 @@ breaking_change: false
 
 # P3：治理收尾与发布就绪
 
+> **决策变更（2026-11-09）**：P3 立项时按「轨道 B 撤销」收窄范围（下文保留该历史记录）；
+> 用户随后重新排期并全部实现轨道 B 目标扩栈，见 [roadmap §2](../../roadmap.zh-CN.md)。
+> P3 的 C-1 ~ C-5 验收结论（RFC 升格 / 互通补齐 / CI 生成后端编译门 / Conformance 证据矩阵 / 叙事同步）
+> 继续有效；叙事同步一节以最新决策为准。
+
 > **执行结果（2026-11-08）**：C-1 ~ C-5 全部完成。RFC-0002 / RFC-0009 升为
 > `Implemented`（附证据勾选项，S4 如实保留未勾选）；补齐 S2 机读损失报告与 S3 往返测试、
 > 修复 OpenAPI `number → Decimal(p,s)` 缺陷；CI 新增 `generated-backend` 编译门与

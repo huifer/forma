@@ -15,8 +15,12 @@ fn list_pages(program: &Program) -> Vec<(String, String, String)> {
     // (route, title, api plural path)
     let mut out = Vec::new();
     for p in &program.pages {
-        let PageBody::Table(cfg) = &p.body else { continue };
-        let Some(api) = program.apis.iter().find(|a| a.name == cfg.query_api) else { continue };
+        let PageBody::Table(cfg) = &p.body else {
+            continue;
+        };
+        let Some(api) = program.apis.iter().find(|a| a.name == cfg.query_api) else {
+            continue;
+        };
         let plural = to_snake_case(&crate::dsl::pluralize(&api.entity));
         out.push((
             p.route.clone(),
@@ -142,7 +146,10 @@ export class {cls} implements OnInit {{
   }}
 }}
 "#,
-            dir = dir, cls = cls, title = title, plural = plural
+            dir = dir,
+            cls = cls,
+            title = title,
+            plural = plural
         );
         page_files.push((format!("src/app/pages/{dir}.component.ts"), comp));
     }
@@ -208,7 +215,12 @@ fn capitalize_words(s: &str) -> String {
         .collect()
 }
 
-fn write_all(project_dir: &Path, out_dir: &str, files: Vec<(String, String)>, gen: &'static str) -> anyhow::Result<Vec<GeneratedFile>> {
+fn write_all(
+    project_dir: &Path,
+    out_dir: &str,
+    files: Vec<(String, String)>,
+    gen: &'static str,
+) -> anyhow::Result<Vec<GeneratedFile>> {
     let mut out = Vec::new();
     for (rel, content) in files {
         out.push(GeneratedFile {
@@ -228,9 +240,20 @@ pub fn emit_sveltekit(
     program: &Program,
     out_dir: &str,
 ) -> anyhow::Result<Vec<GeneratedFile>> {
-    if program.pages.is_empty() { return Ok(vec![]); }
-    let app = program.app.as_ref().map(|a| to_snake_case(&a.name)).unwrap_or_else(|| "app".into());
-    write_all(project_dir, out_dir, sveltekit_files(program, &app), "gen-sveltekit")
+    if program.pages.is_empty() {
+        return Ok(vec![]);
+    }
+    let app = program
+        .app
+        .as_ref()
+        .map(|a| to_snake_case(&a.name))
+        .unwrap_or_else(|| "app".into());
+    write_all(
+        project_dir,
+        out_dir,
+        sveltekit_files(program, &app),
+        "gen-sveltekit",
+    )
 }
 
 pub fn emit_angular(
@@ -238,7 +261,18 @@ pub fn emit_angular(
     program: &Program,
     out_dir: &str,
 ) -> anyhow::Result<Vec<GeneratedFile>> {
-    if program.pages.is_empty() { return Ok(vec![]); }
-    let app = program.app.as_ref().map(|a| to_snake_case(&a.name)).unwrap_or_else(|| "app".into());
-    write_all(project_dir, out_dir, angular_files(program, &app), "gen-angular")
+    if program.pages.is_empty() {
+        return Ok(vec![]);
+    }
+    let app = program
+        .app
+        .as_ref()
+        .map(|a| to_snake_case(&a.name))
+        .unwrap_or_else(|| "app".into());
+    write_all(
+        project_dir,
+        out_dir,
+        angular_files(program, &app),
+        "gen-angular",
+    )
 }

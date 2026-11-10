@@ -12,7 +12,10 @@ fn tmp_dir(tag: &str) -> PathBuf {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let dir = std::env::temp_dir().join(format!("forma-pay-{tag}-{}-{seq}-{nanos}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "forma-pay-{tag}-{}-{seq}-{nanos}",
+        std::process::id()
+    ));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(dir.join("forma")).unwrap();
     dir
@@ -27,14 +30,18 @@ fn write_project(dir: &Path, payments: Option<&str>) {
         dir.join("forma.yaml"),
         format!("project:\n  name: paydemo\n  version: 0.1.0\nsource: [\"forma/**/*.fm\"]\n\ntargets:\n  backend:\n    language: rust\n    framework: axum\n    database: sqlx\n    out: generated/backend{pay}"),
     ).unwrap();
-    fs::write(dir.join("forma/app.fm"), r#"
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
 app paydemo { version = "0.1.0" }
 entity Order {
   id     Uuid          @id @default(uuid)
   amount Decimal(12,2) @required
 }
 api Orders { entity Order operations [list get create update delete] }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 }
 
 #[test]
@@ -76,7 +83,8 @@ entity Note {
 }
 api Notes { entity Note operations [list get create update delete] }
 "#,
-    ).unwrap();
+    )
+    .unwrap();
     let err = forma::build::run_build(&dir).unwrap_err();
     assert!(err.to_string().contains("Decimal"), "{err}");
 }

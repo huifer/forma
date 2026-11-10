@@ -9,9 +9,9 @@
 use anyhow::{Context, Result};
 use serde::Serialize;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 const SCENARIOS: [&str; 10] = [
     "add-field",
@@ -65,6 +65,19 @@ pub struct BenchmarkReport {
     pub estimated_input_tokens: usize,
     pub elapsed_ms: u128,
     pub results: Vec<CaseResult>,
+}
+
+/// CLI 未显式指定输出目录时使用的临时根目录。
+///
+/// `run_with` 会在 root 下创建 100 个 `F008-*` 案例工程；默认 root 是系统临时目录，
+/// 调用方（`cmd_bench`）在结束后删除它，避免把案例工程写进当前工作目录造成仓库污染。
+/// 显式传 `[dir]` 时仍使用用户指定的目录并保留结果。
+pub fn scratch_root() -> PathBuf {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    std::env::temp_dir().join(format!("forma-bench-{}-{nanos}", std::process::id()))
 }
 
 /// 生成固定的 10×10 任务矩阵。

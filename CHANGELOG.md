@@ -11,6 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **bench 临时工程误入库（6f6d922 修正）**：F-008 benchmark 在 CWD 生成的 100 个 `F008-*`
   临时工程曾被 `git add -A` 误提交；现从 git 移除并加 `F008-*/` 忽略规则
   （`forma bench <dir>` 显式指定目录则不受影响）。
+- **`forma bench` 不再污染 CWD**：未显式给 `dir` 时使用 `bench::scratch_root()`（系统临时目录），
+  运行结束自动清理；HELP 说明该行为；回归 `tests/cli_contract.rs`（临时 CWD 跑 100 cases 后无
+  `F008-*` 残留）。
+- **CLI HELP 补全 19 个顶层命令**（原缺 check / lint / diagrams / diff / import / artifacts / studio），
+  并补齐 `migrate export`、`seed --verify`、build 归属旗标等用法。
+- **`forma artifacts <dir>` 参数顺序**：第一个位置参数现在可直接作为工程目录（默认 verify），
+  与 `forma artifacts verify <dir>` 等价；两种写法由 `tests/cli_contract.rs` 断言同形输出。
+- **全工程 `cargo fmt --all`**：修正 38 个文件 / 122 处格式差异（轨道 B emitter 与测试），
+  CI `lint` job 的 fmt 门恢复通过（clippy 原本已 0 警告）。
+
+### Added
+- **L3 扩栈目标编译门**：`scripts/l3-smoke.sh` + CI `l3-smoke` job——为 Go/Gin、PHP/Laravel、
+  FastAPI、gRPC/proto、tRPC、Playwright e2e、MongoDB 生成临时工程并用真实工具链编译/解析
+  （本地实测 7 passed / 0 failed / 0 skipped）；CI 同时检查根目录无 `F008-*` 残留。
+  未验证范围在脚本输出中显式列出，不静默跳过。
+- **CLI 契约回归**：`tests/cli_contract.rs`（4 项：HELP 完整性 / scratch_root / bench 不污染 CWD /
+  artifacts 两种参数形式）。
+
+### Changed
+- **叙事统一（2026-11-10 完成度审计收口）**：README 双语、roadmap §1/§6.6、p2/p3 规划、
+  gap-backlog、next-milestone 统一加「轨道 B 于 2026-11-09 决策变更、重新排期并全部实现」注记；
+  去掉「49 个本地提交领先 origin/main」过时描述；Conformance README 数字更新为 93 套件 / 565 测试；
+  README.zh-CN 的 Studio V3 协作描述与 CHANGELOG 对齐；Capability Registry 的 6 个后续候选
+  明确标注「当前范围外，非遗漏」并给出边界。
 
 ### Added
 - **Stripe 支付集成（轨道 B 重新排期）**：`targets.backend.payments: stripe` →

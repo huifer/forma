@@ -40,7 +40,16 @@
 
 > 说明：PostgreSQL / SQLite / Redis / AntV 等是 `targets.*` 路由的 emitter 能力，不要求每个工程在 `capabilities:` 中声明；上表只列需要显式注册的能力。
 
-## 规划中（尚未实现）
+## 后续候选（当前范围外，非遗漏）
+
+> 以下 6 项是**显式登记的后续候选**，不是当前路线图的遗漏项：它们需要新的 RFC / Capability
+> Manifest 契约先行（可视化适配层走 §8 演进规则，工作流执行器需先定义运行时边界），且不属于
+> 2026-11-09 轨道 B 的交付范围。注册表当前只登记已实现的 14 个内置能力；这 6 个 ID 未被
+> `builtin_manifests()` 注册，声明它们会在构建期给出「未知能力」错误（fail-closed，不静默接受）。
+> 实现前必须按 [REVIEW-CHECKLIST](../REVIEW-CHECKLIST.zh-CN.md) 立契约并补 Conformance。
+>
+> 已交付的相关能力：`visualization.echarts` / `visualization.antv`（图表）、DSL `job`（定时调度）、
+> `live`（事件推送）、命令 `pre/effect/audit` + `workflow-spec`（**工作流定义导出**，不是运行时执行器）。
 
 | ID | 类别 | 说明 |
 |---|---|---|

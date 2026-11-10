@@ -49,7 +49,11 @@ api Orders {
 "#;
 
 fn write_project(dir: &Path, api_framework: &str) {
-    let out = if api_framework == "grpc" { "generated/grpc" } else { "generated/graphql" };
+    let out = if api_framework == "grpc" {
+        "generated/grpc"
+    } else {
+        "generated/graphql"
+    };
     fs::create_dir_all(dir.join("forma")).unwrap();
     fs::write(
         dir.join("forma.yaml"),
@@ -88,7 +92,10 @@ fn grpc_target_generates_proto_contract() {
     // service（按 operations 裁剪）
     assert!(proto.contains("service OrdersService {"), "{proto}");
     assert!(proto.contains("rpc ListOrder"), "{proto}");
-    assert!(proto.contains("rpc CreateOrder (CreateOrderRequest) returns (Order);"), "{proto}");
+    assert!(
+        proto.contains("rpc CreateOrder (CreateOrderRequest) returns (Order);"),
+        "{proto}"
+    );
     assert!(proto.contains("message CreateOrderRequest {"), "{proto}");
     assert!(proto.contains("rpc DeleteOrder"), "{proto}");
 }

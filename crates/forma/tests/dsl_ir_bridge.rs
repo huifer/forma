@@ -293,7 +293,10 @@ fn structural_edges_are_acyclic_and_reference_cycles_terminate() {
     let (_p, graph) = lowered(&dir);
 
     // 结构边（defines / belongs-to / generates / binds）投影必须无环。
-    fn has_cycle_over(graph: &forma::graph::UnifiedSemanticGraph, kinds: &[forma::graph::EdgeKind]) -> bool {
+    fn has_cycle_over(
+        graph: &forma::graph::UnifiedSemanticGraph,
+        kinds: &[forma::graph::EdgeKind],
+    ) -> bool {
         use std::collections::HashMap;
         let mut adj: HashMap<String, Vec<String>> = HashMap::new();
         for n in graph.all_nodes() {

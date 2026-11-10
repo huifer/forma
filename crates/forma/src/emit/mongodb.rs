@@ -84,7 +84,12 @@ fn readme(program: &Program, spec: &Value) -> String {
     for c in &cols {
         let req = c["validator"]["$jsonSchema"]["required"]
             .as_array()
-            .map(|a| a.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(", "))
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            })
             .unwrap_or_default();
         let idx = c["indexes"].as_array().map(|a| a.len()).unwrap_or(0);
         out.push_str(&format!(

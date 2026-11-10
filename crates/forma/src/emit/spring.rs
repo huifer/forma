@@ -14,12 +14,22 @@ use std::path::Path;
 
 fn reject_unsupported(program: &Program) -> anyhow::Result<()> {
     let mut bad = Vec::new();
-    if program.auth.is_some() { bad.push("auth module"); }
-    if !program.commands.is_empty() { bad.push("command operations"); }
-    if program.rules.iter().any(|r| !r.access.is_empty() || !r.guards.is_empty() || !r.checks.is_empty()) {
+    if program.auth.is_some() {
+        bad.push("auth module");
+    }
+    if !program.commands.is_empty() {
+        bad.push("command operations");
+    }
+    if program
+        .rules
+        .iter()
+        .any(|r| !r.access.is_empty() || !r.guards.is_empty() || !r.checks.is_empty())
+    {
         bad.push("access/field rules");
     }
-    if crate::dsl::tenant_enabled(program) { bad.push("@tenant"); }
+    if crate::dsl::tenant_enabled(program) {
+        bad.push("@tenant");
+    }
     if bad.is_empty() {
         Ok(())
     } else {
@@ -46,7 +56,11 @@ fn java_type(program: &Program, f: &FieldDecl) -> &'static str {
 
 fn column_name(program: &Program, f: &FieldDecl) -> String {
     let n = to_snake_case(&f.name);
-    if is_relation(program, &f.type_name) { format!("{n}_id") } else { n }
+    if is_relation(program, &f.type_name) {
+        format!("{n}_id")
+    } else {
+        n
+    }
 }
 
 fn imports_for(program: &Program, entity: &crate::dsl::EntityDecl) -> String {
@@ -112,13 +126,17 @@ fn dto_source(program: &Program, entity: &crate::dsl::EntityDecl, pkg: &str) -> 
         cls = entity.name
     );
     for f in &entity.fields {
-        if has_attr(f, "id") || has_attr(f, "readonly") { continue; }
+        if has_attr(f, "id") || has_attr(f, "readonly") {
+            continue;
+        }
         let n = to_snake_case(&f.name);
         s.push_str(&format!("    private {} {};\n", java_type(program, f), n));
     }
     s.push('\n');
     for f in &entity.fields {
-        if has_attr(f, "id") || has_attr(f, "readonly") { continue; }
+        if has_attr(f, "id") || has_attr(f, "readonly") {
+            continue;
+        }
         let n = to_snake_case(&f.name);
         let t = java_type(program, f);
         s.push_str(&format!(
@@ -186,19 +204,26 @@ __UPDATE_BINDS__        return repo.save(row);
     public void delete(@PathVariable String id) {{ repo.deleteById(id); }}
 }}
 "#,
-        pkg = pkg, e = e, cls = cls, plural = plural,
+        pkg = pkg,
+        e = e,
+        cls = cls,
+        plural = plural,
     );
     let mut binds = String::new();
     let mut upd = String::new();
     for f in &entity.fields {
-        if has_attr(f, "id") || has_attr(f, "readonly") { continue; }
+        if has_attr(f, "id") || has_attr(f, "readonly") {
+            continue;
+        }
         let n = to_snake_case(&f.name);
         let cap = capitalize(&n);
         binds.push_str(&format!("        row.set{cap}(dto.get{cap}());\n"));
         upd.push_str(&format!("        row.set{cap}(dto.get{cap}());\n"));
         let _ = program;
     }
-    s = s.replace("__CREATE_BINDS__", &binds).replace("__UPDATE_BINDS__", &upd);
+    s = s
+        .replace("__CREATE_BINDS__", &binds)
+        .replace("__UPDATE_BINDS__", &upd);
     s
 }
 
@@ -260,16 +285,36 @@ pub fn emit_spring(
     let java_root = format!("{out_dir}/src/main/java/{}", pkg.replace('.', "/"));
     let mut files: Vec<GeneratedFile> = vec![
         file(out_dir, "pom.xml", pom_xml(&app)),
-        file(out_dir, "src/main/resources/application.properties", app_properties()),
+        file(
+            out_dir,
+            "src/main/resources/application.properties",
+            app_properties(),
+        ),
         file(out_dir, "README.md", readme_md()),
         file(&java_root, "Application.java", application_java(&pkg)),
     ];
     for entity in &program.entities {
         let e = to_snake_case(&entity.name);
-        files.push(file(&java_root, &format!("{e}/{}.java", entity.name), entity_source(program, entity, &pkg)));
-        files.push(file(&java_root, &format!("{e}/{}Dto.java", entity.name), dto_source(program, entity, &pkg)));
-        files.push(file(&java_root, &format!("{e}/{}Repository.java", entity.name), repository_source(entity, &pkg)));
-        files.push(file(&java_root, &format!("{e}/{}Controller.java", entity.name), controller_source(program, entity, &pkg)));
+        files.push(file(
+            &java_root,
+            &format!("{e}/{}.java", entity.name),
+            entity_source(program, entity, &pkg),
+        ));
+        files.push(file(
+            &java_root,
+            &format!("{e}/{}Dto.java", entity.name),
+            dto_source(program, entity, &pkg),
+        ));
+        files.push(file(
+            &java_root,
+            &format!("{e}/{}Repository.java", entity.name),
+            repository_source(entity, &pkg),
+        ));
+        files.push(file(
+            &java_root,
+            &format!("{e}/{}Controller.java", entity.name),
+            controller_source(program, entity, &pkg),
+        ));
     }
     for f in &files {
         crate::util::write_text(&project_dir.join(&f.path), &f.content)?;

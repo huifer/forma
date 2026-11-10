@@ -195,7 +195,10 @@ fn export_backend_and_web_generation() {
     let main = fs::read_to_string(dir.join("generated/backend/src/main.rs")).unwrap();
     assert!(main.contains("mod export;"));
     let error = fs::read_to_string(dir.join("generated/backend/src/error.rs")).unwrap();
-    assert!(!error.contains("ExportDriver"), "xlsx 已实现，501 变体应移除");
+    assert!(
+        !error.contains("ExportDriver"),
+        "xlsx 已实现，501 变体应移除"
+    );
 
     // OpenAPI 契约
     let openapi = fs::read_to_string(dir.join("generated/api-docs/openapi.json")).unwrap();

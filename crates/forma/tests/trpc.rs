@@ -63,7 +63,10 @@ fn trpc_target_generates_typed_router() {
 
     let router = fs::read_to_string(dir.join("generated/api/src/router.ts")).unwrap();
     assert!(router.contains("initTRPC.create()"), "{router}");
-    assert!(router.contains("const ordersRouter = t.router({"), "{router}");
+    assert!(
+        router.contains("const ordersRouter = t.router({"),
+        "{router}"
+    );
     assert!(router.contains("appRouter = t.router({"), "{router}");
     // procedures 按 operations 裁剪 + REST 委托
     assert!(router.contains("list: publicProcedure"), "{router}");

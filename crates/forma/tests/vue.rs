@@ -233,8 +233,14 @@ fn vue_form_page_submits_with_relation_select() {
         form.contains("form.school = row[\"school_id\"]"),
         "{form} — 编辑页关系初始值映射"
     );
-    assert!(form.contains("await StudentApi.create(form as any)"), "{form}");
-    assert!(form.contains("await StudentApi.update(id!, form as any)"), "{form}");
+    assert!(
+        form.contains("await StudentApi.create(form as any)"),
+        "{form}"
+    );
+    assert!(
+        form.contains("await StudentApi.update(id!, form as any)"),
+        "{form}"
+    );
     assert!(form.contains("validateCreateStudent"), "{form}");
     assert!(form.contains("validateUpdateStudent"), "{form}");
     assert!(form.contains("@click=\"submit\""), "{form}");

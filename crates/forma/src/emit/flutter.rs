@@ -1657,7 +1657,12 @@ fn chart_page_dart(program: &Program, page: &PageDecl, cfg: &ChartPageCfg) -> St
     let mut transform = String::new();
     for op in &spec.transform.ops {
         match op {
-            crate::visualization::TransformOp::Filter { data_key, cmp, value, .. } => {
+            crate::visualization::TransformOp::Filter {
+                data_key,
+                cmp,
+                value,
+                ..
+            } => {
                 transform.push_str(&format!(
                     "    data = data.where((r) => _cmp(r['{data_key}'], '{}', '{}')).toList();\n",
                     cmp.as_str(),
@@ -1670,7 +1675,12 @@ fn chart_page_dart(program: &Program, page: &PageDecl, cfg: &ChartPageCfg) -> St
                     by.as_str()
                 ));
             }
-            crate::visualization::TransformOp::Aggregate { agg, data_key, group_keys, .. } => {
+            crate::visualization::TransformOp::Aggregate {
+                agg,
+                data_key,
+                group_keys,
+                ..
+            } => {
                 let keys = group_keys
                     .iter()
                     .map(|k| format!("'{k}'"))
@@ -1694,7 +1704,9 @@ fn chart_page_dart(program: &Program, page: &PageDecl, cfg: &ChartPageCfg) -> St
                     }
                 };
                 let values_line = if needs_values {
-                    format!("        final values = bucket.map((r) => _num(r['{y_key}'])).toList();\n")
+                    format!(
+                        "        final values = bucket.map((r) => _num(r['{y_key}'])).toList();\n"
+                    )
                 } else {
                     String::new()
                 };

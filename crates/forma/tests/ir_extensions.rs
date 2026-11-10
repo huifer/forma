@@ -218,5 +218,8 @@ extensions {
     let (program, diags) = forma::dsl::load_program(&dir, &["forma/**/*.fm".into()]).unwrap();
     assert!(diags.is_empty(), "{diags:?}");
     assert_eq!(program.extensions.len(), 1);
-    assert_eq!(program.extensions[0].file.as_deref(), Some("forma/extra.fm"));
+    assert_eq!(
+        program.extensions[0].file.as_deref(),
+        Some("forma/extra.fm")
+    );
 }

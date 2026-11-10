@@ -22,12 +22,12 @@ Wave 3 — 工程化 + 横向扩栈
 M9 工程化产物 + 能力模块 + Studio 双向编辑
 M10 数据库/后端/前端多栈（PostgreSQL、Node、Python、Vue、Expo、GraphQL）
 
-Wave 4 — 部署与企业级（范围已收窄）
+Wave 4 — 部署与企业级
 M11 部署产物（K8s / Helm / Terraform）✅
-企业级扩栈（Spring/Go/.NET、原生移动、小程序、工作流、支付）→ 已撤销，不再排期
+企业级扩栈（Spring/Go/.NET、原生移动、小程序、工作流定义导出、支付）→ 2026-11-08 曾撤销，2026-11-09 重新排期并全部实现（见 §2 矩阵）
 
-P2 余项 Closure（轨道 A 8/8 完成，轨道 B 撤销）→ P3 治理收尾与发布就绪
-→ 发布前一致性收口（同步 Studio V3 / 可视化 V0.4–V0.6 / CLI E2E 到治理叙事）
+P2 余项 Closure（轨道 A 8/8 完成；轨道 B 于 2026-11-09 重排期并全部实现）→ P3 治理收尾与发布就绪
+→ 发布前一致性收口（Studio V3 / 可视化 V0.4–V0.6 / CLI E2E 已同步；当前与 `origin/main` 同步）
 ```
 
 ## 2. 适配层完整矩阵
@@ -35,7 +35,7 @@ P2 余项 Closure（轨道 A 8/8 完成，轨道 B 撤销）→ P3 治理收尾�
 > **范围决议更新（2026-11-09）**：矩阵中标 `👁 P2` 的目标扩栈行已于 2026-11-08 撤销、
 > **并于 2026-11-09 重新排期**（用户决策更新）：SQL Server / Oracle / MongoDB / Spring Boot /
 > Go / PHP / .NET / gRPC / tRPC / SvelteKit / Angular / Tauri / Electron / SwiftUI / Compose /
-> 小程序 / uni-app / 工作流运行时 / 支付 / Playwright e2e / Token Benchmark
+> 小程序 / uni-app / 工作流定义导出（非运行时执行器） / 支付 / Playwright e2e / Token Benchmark
 > **已全部实现**（见下方矩阵各行；条件依赖 / opt-in / 显式拒绝，默认产物零变化）。
 > [P2 轨道 A 余项 Closure](architecture/roadmap/p2-plan.zh-CN.md)（8/8）继续有效。
 
@@ -247,8 +247,10 @@ Agent 原生工作流（[docs/agent-workflow.zh-CN.md](agent-workflow.zh-CN.md)�
 
 ### 6.6 P2 轨道 A 收尾（2026-11-08）
 
-P2 任务按「余项 Closure（轨道 A）/ 目标扩栈（轨道 B）」分轨，用户决策只完成轨道 A、
-**轨道 B 撤销**。轨道 A 八项已全部关闭：多层关系遍历、GraphQL 逆向关系（DataLoader）、
+P2 任务按「余项 Closure（轨道 A）/ 目标扩栈（轨道 B）」分轨。2026-11-08 决策只完成轨道 A、
+**轨道 B 撤销**；**2026-11-09 用户改变决策，轨道 B 重新排期并全部实现**（见 §2 矩阵与
+`CHANGELOG.md` `[Unreleased]`）——本节的「撤销」是历史记录，不代表当前范围。
+轨道 A 八项已全部关闭：多层关系遍历、GraphQL 逆向关系（DataLoader）、
 多租户管理 UI、artifacts 来源规格与 Extension 锚点、补丁图表/看板操作、SQL/Prisma 逆向导入
 与迁移链导出（Flyway/Liquibase/golang-migrate），以及两项「已实现、文档滞后」的核实
 （字段级前端显隐 / requestId）。完整验收与回归见

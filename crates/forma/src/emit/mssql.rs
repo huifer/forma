@@ -22,7 +22,11 @@ pub fn mssql_type(program: &Program, field: &FieldDecl) -> String {
         "Uuid" => "UNIQUEIDENTIFIER".into(),
         "String" => {
             let n = type_args(field);
-            if n.is_empty() { "NVARCHAR(255)".into() } else { format!("NVARCHAR({n})") }
+            if n.is_empty() {
+                "NVARCHAR(255)".into()
+            } else {
+                format!("NVARCHAR({n})")
+            }
         }
         "Email" => "NVARCHAR(320)".into(),
         "Text" => "NVARCHAR(MAX)".into(),
@@ -30,7 +34,11 @@ pub fn mssql_type(program: &Program, field: &FieldDecl) -> String {
         "Float" => "FLOAT(53)".into(),
         "Decimal" => {
             let n = type_args(field);
-            if n.is_empty() { "DECIMAL(18,2)".into() } else { format!("DECIMAL({n})") }
+            if n.is_empty() {
+                "DECIMAL(18,2)".into()
+            } else {
+                format!("DECIMAL({n})")
+            }
         }
         "Bool" => "BIT".into(),
         "Timestamp" => "DATETIME2".into(),
@@ -82,7 +90,12 @@ fn render_table(program: &Program, entity: &crate::dsl::EntityDecl, table: &Tabl
         defs.push(format!("        PRIMARY KEY ({})", table.primary_key));
     }
     for unique in &table.uniques {
-        defs.push(format!("        CONSTRAINT [uq_{}_{}] UNIQUE ({})", table.table, unique.join("_"), unique.join(", ")));
+        defs.push(format!(
+            "        CONSTRAINT [uq_{}_{}] UNIQUE ({})",
+            table.table,
+            unique.join("_"),
+            unique.join(", ")
+        ));
     }
     for fk in &table.fks {
         defs.push(format!(
@@ -104,7 +117,13 @@ fn render_table(program: &Program, entity: &crate::dsl::EntityDecl, table: &Tabl
     out
 }
 
-fn render_all(project_dir: &Path, program: &Program, out_dir: &str, header: &str, rel: &str) -> GeneratedFile {
+fn render_all(
+    project_dir: &Path,
+    program: &Program,
+    out_dir: &str,
+    header: &str,
+    rel: &str,
+) -> GeneratedFile {
     let plans = plan_tables(program);
     let mut sql = String::from(header);
     for table in &plans {

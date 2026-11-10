@@ -12,7 +12,10 @@ fn tmp_dir(tag: &str) -> PathBuf {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let dir = std::env::temp_dir().join(format!("forma-fealt-{tag}-{}-{seq}-{nanos}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "forma-fealt-{tag}-{}-{seq}-{nanos}",
+        std::process::id()
+    ));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(dir.join("forma")).unwrap();
     dir
@@ -23,7 +26,9 @@ fn write_project(dir: &Path, framework: &str) {
         dir.join("forma.yaml"),
         format!("project:\n  name: fedemo\n  version: 0.1.0\nsource: [\"forma/**/*.fm\"]\n\ntargets:\n  web:\n    framework: {framework}\n    out: generated/web\n"),
     ).unwrap();
-    fs::write(dir.join("forma/app.fm"), r#"
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
 app fedemo { version = "0.1.0" }
 entity Order {
   id Uuid @id @default(uuid)
@@ -35,7 +40,9 @@ page OrderList {
   title { en "Orders" }
   table { query Orders.list columns [title] }
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 }
 
 #[test]
@@ -46,7 +53,8 @@ fn sveltekit_target_generates_routes_from_dsl_pages() {
     let names: Vec<&str> = report.steps.iter().map(|s| s.name).collect();
     assert!(names.contains(&"frontend-sveltekit"), "{names:?}");
     assert!(!names.contains(&"web-react"), "{names:?}");
-    let page = fs::read_to_string(dir.join("generated/web/src/routes/orders/+page.svelte")).unwrap();
+    let page =
+        fs::read_to_string(dir.join("generated/web/src/routes/orders/+page.svelte")).unwrap();
     assert!(page.contains("{#each rows as row}"), "{page}");
     assert!(page.contains("fetch("), "{page}");
     let pkg = fs::read_to_string(dir.join("generated/web/package.json")).unwrap();
@@ -61,7 +69,8 @@ fn angular_target_generates_standalone_components() {
     let report = forma::build::run_build(&dir).unwrap();
     let names: Vec<&str> = report.steps.iter().map(|s| s.name).collect();
     assert!(names.contains(&"frontend-angular"), "{names:?}");
-    let comp = fs::read_to_string(dir.join("generated/web/src/app/pages/orders.component.ts")).unwrap();
+    let comp =
+        fs::read_to_string(dir.join("generated/web/src/app/pages/orders.component.ts")).unwrap();
     assert!(comp.contains("@Component"), "{comp}");
     assert!(comp.contains("standalone: true"), "{comp}");
     assert!(comp.contains("{{row.id}}"), "{comp}");

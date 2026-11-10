@@ -125,7 +125,12 @@ pub fn emit_grpc(
                 if is_relation(program, &f.type_name) {
                     out.push_str(&format!("    string {}_id = {};\n", fname, i + 1));
                 } else {
-                    out.push_str(&format!("    {} {} = {};\n", proto_type(program, f), fname, i + 1));
+                    out.push_str(&format!(
+                        "    {} {} = {};\n",
+                        proto_type(program, f),
+                        fname,
+                        i + 1
+                    ));
                 }
                 let _ = prefix;
             }

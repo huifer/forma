@@ -12,7 +12,10 @@ fn tmp_dir(tag: &str) -> PathBuf {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let dir = std::env::temp_dir().join(format!("forma-mnative-{tag}-{}-{seq}-{nanos}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "forma-mnative-{tag}-{}-{seq}-{nanos}",
+        std::process::id()
+    ));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(dir.join("forma")).unwrap();
     dir
@@ -23,7 +26,9 @@ fn write_project(dir: &Path, framework: &str) {
         dir.join("forma.yaml"),
         format!("project:\n  name: mnativedemo\n  version: 0.1.0\nsource: [\"forma/**/*.fm\"]\n\ntargets:\n  mobile:\n    framework: {framework}\n    out: generated/mobile\n"),
     ).unwrap();
-    fs::write(dir.join("forma/app.fm"), r#"
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
 app mnativedemo { version = "0.1.0" }
 entity Order {
   id Uuid @id @default(uuid)
@@ -35,7 +40,9 @@ page OrderList {
   title { en "Orders" }
   table { query Orders.list columns [title] }
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 }
 
 #[test]
@@ -45,7 +52,10 @@ fn swiftui_target_generates_swift_views() {
     let report = forma::build::run_build(&dir).unwrap();
     let names: Vec<&str> = report.steps.iter().map(|s| s.name).collect();
     assert!(names.contains(&"mobile-swiftui"), "{names:?}");
-    let view = fs::read_to_string(dir.join("generated/mobile/Sources/mnativedemo/OrderListListView.swift")).unwrap();
+    let view = fs::read_to_string(
+        dir.join("generated/mobile/Sources/mnativedemo/OrderListListView.swift"),
+    )
+    .unwrap();
     assert!(view.contains("struct OrderListListView"), "{view}");
     assert!(view.contains("URLSession"), "{view}");
     assert!(dir.join("generated/mobile/Package.swift").exists());
@@ -73,7 +83,8 @@ fn miniprogram_target_generates_wxml_pages() {
     assert!(names.contains(&"mobile-miniprogram"), "{names:?}");
     let app = fs::read_to_string(dir.join("generated/mobile/app.json")).unwrap();
     assert!(app.contains("pages/order_list/index"), "{app}");
-    let wxml = fs::read_to_string(dir.join("generated/mobile/pages/order_list/index.wxml")).unwrap();
+    let wxml =
+        fs::read_to_string(dir.join("generated/mobile/pages/order_list/index.wxml")).unwrap();
     assert!(wxml.contains("{{item.id}}"), "{wxml}");
     let js = fs::read_to_string(dir.join("generated/mobile/pages/order_list/index.js")).unwrap();
     assert!(js.contains("wx.request"), "{js}");

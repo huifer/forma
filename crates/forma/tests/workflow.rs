@@ -12,7 +12,10 @@ fn tmp_dir(tag: &str) -> PathBuf {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let dir = std::env::temp_dir().join(format!("forma-wf-{tag}-{}-{seq}-{nanos}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "forma-wf-{tag}-{}-{seq}-{nanos}",
+        std::process::id()
+    ));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(dir.join("forma")).unwrap();
     dir
@@ -27,7 +30,9 @@ fn write_project(dir: &Path, workflow: Option<&str>) {
         dir.join("forma.yaml"),
         format!("project:\n  name: wfdemo\n  version: 0.1.0\nsource: [\"forma/**/*.fm\"]\ntargets:\n  backend:\n    language: rust\n    framework: axum\n    database: sqlx\n    out: generated/backend{wf}"),
     ).unwrap();
-    fs::write(dir.join("forma/app.fm"), r#"
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
 app wfdemo { version = "0.1.0" }
 enum OrderStatus {
   draft
@@ -45,7 +50,9 @@ api OrderPay {
   effect { set Order.status = "paid" }
   audit { action "order.pay" }
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 }
 
 #[test]
@@ -57,7 +64,8 @@ fn workflow_target_generates_state_machine_spec() {
     assert!(names.contains(&"workflow-spec"), "{names:?}");
     let spec: serde_json::Value = serde_json::from_str(
         &fs::read_to_string(dir.join("generated/workflow/workflow.json")).unwrap(),
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(spec["schema"], "forma-workflow/v1");
     // 状态：枚举 → 状态集
     let states = spec["states"].as_array().unwrap();

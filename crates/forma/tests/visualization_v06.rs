@@ -1118,7 +1118,8 @@ page RadarPage { route "/radar" title { en "Radar" } chart RadarChart }
     )
     .unwrap();
     forma::build::run_build(&dir).unwrap();
-    let read = |name: &str| fs::read_to_string(dir.join(format!("app_mobile/lib/pages/{name}"))).unwrap();
+    let read =
+        |name: &str| fs::read_to_string(dir.join(format!("app_mobile/lib/pages/{name}"))).unwrap();
 
     let line = read("line_page.dart");
     assert!(line.contains("LineChart"), "{line}");

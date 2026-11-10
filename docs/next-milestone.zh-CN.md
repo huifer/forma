@@ -8,7 +8,7 @@
 > 可视化 V0.4–V0.6（Dashboard 联动/下钻、AntV/G2Plot、legend/tooltip、size/label、GIS、
 > 工业监控阈值线、K 线）与 CLI 端到端回归已提交但尚未同步到治理叙事。
 > 本阶段只校准文档状态，不新增 target、不改 emitter 契约。
-> 当前实测：`cargo test` 561 项 / 92 套件；已同步到 `origin/main`（0 ahead / 0 behind）。
+> 当前实测：`cargo test` 565 项 / 93 套件（版本以 commit + CHANGELOG 追踪，不使用 tag）。
 
 > **全面收口（2026-11-09）**：治理层 5 项 RFC 未勾选项全部关闭（RFC-0003 §18 表达式级依赖、
 > RFC-0004 §16-3 未知 IR 扩展、RFC-0005 §16-4 Secret Provider、RFC-0008 §16-3 由
@@ -19,8 +19,9 @@
 > **P2 轨道 A 已全面收尾（2026-11-08）**：F-001…F-008 之后，P2 的 8 项余项
 > （多层关系遍历 / GraphQL 逆向关系 / 多租户管理 UI / 产物清单来源规格与锚点 /
 > 补丁图表看板操作 / SQL·Prisma 逆向导入与迁移链导出 / 字段级显隐与 requestId 核实）
-> 全部关闭；目标扩栈（轨道 B）按用户决策撤销。详见
-> [docs/architecture/roadmap/p2-plan.zh-CN.md](architecture/roadmap/p2-plan.zh-CN.md)。
+> 全部关闭；目标扩栈（轨道 B）在 2026-11-08 曾按当时决策撤销，**2026-11-09 用户改变决策，
+> 重新排期并全部实现**（见 [roadmap §2](roadmap.zh-CN.md) 与 `CHANGELOG.md` `[Unreleased]`）。
+> [P2 规划](architecture/roadmap/p2-plan.zh-CN.md) 保留历史记录并已加「决策变更」注记。
 
 > 完整路线图见 [roadmap.zh-CN.md](roadmap.zh-CN.md) · 验证体系见 [verification.zh-CN.md](verification.zh-CN.md)
 > · 迁移安全见 [migration-safety.zh-CN.md](migration-safety.zh-CN.md) · Agent 工作流见 [agent-workflow.zh-CN.md](agent-workflow.zh-CN.md)

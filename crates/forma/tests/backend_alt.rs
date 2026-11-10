@@ -94,7 +94,9 @@ fn php_laravel_target_generates_eloquent_models_and_controllers() {
     let model = fs::read_to_string(dir.join("generated/backend/app/Models/Order.php")).unwrap();
     assert!(model.contains("extends Model"), "{model}");
     assert!(model.contains("protected $table = 'orders'"), "{model}");
-    let ctrl = fs::read_to_string(dir.join("generated/backend/app/Http/Controllers/OrderController.php")).unwrap();
+    let ctrl =
+        fs::read_to_string(dir.join("generated/backend/app/Http/Controllers/OrderController.php"))
+            .unwrap();
     assert!(ctrl.contains("function index"), "{ctrl}");
     assert!(ctrl.contains("function store"), "{ctrl}");
     let composer = fs::read_to_string(dir.join("generated/backend/composer.json")).unwrap();

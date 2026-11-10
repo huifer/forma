@@ -92,7 +92,10 @@ const publicProcedure = t.procedure;
             let mut filters = String::new();
             if let Some(list) = &api.list {
                 for (f, _) in &list.filters {
-                    filters.push_str(&format!("    {}: z.string().nullish(),\n", to_snake_case(f)));
+                    filters.push_str(&format!(
+                        "    {}: z.string().nullish(),\n",
+                        to_snake_case(f)
+                    ));
                 }
             }
             let block = r#"  list: publicProcedure.input(z.object({
@@ -107,7 +110,8 @@ __FILTERS__  })).query(({ input }) => {
     return rest(`/api/__PLURAL__?${qs.toString()}`);
   }),
 "#
-            .replace("__FILTERS__", &filters).replace("__PLURAL__", &plural);
+            .replace("__FILTERS__", &filters)
+            .replace("__PLURAL__", &plural);
             out.push_str(&block);
         }
         if api.operations.iter().any(|o| o == "get") {
@@ -125,7 +129,12 @@ __FILTERS__  })).query(({ input }) => {
                 }) {
                     let key = to_snake_case(&f.name);
                     let optional = if f.optional { ".optional()" } else { "" };
-                    shape.push_str(&format!("    {}: {}{},\n", key, zod_type(&f.type_name), optional));
+                    shape.push_str(&format!(
+                        "    {}: {}{},\n",
+                        key,
+                        zod_type(&f.type_name),
+                        optional
+                    ));
                 }
                 let block = r#"  create: publicProcedure.input(z.object({
 __SHAPE__  })).mutation(({ input }) => rest(`/api/__PLURAL__`, { method: "POST", body: JSON.stringify(input) })),
@@ -152,7 +161,11 @@ __SHAPE__  })).mutation(({ input }) => rest(`/api/__PLURAL__`, { method: "POST",
     }
     out.push_str("export const appRouter = t.router({\n");
     for api in &program.apis {
-        out.push_str(&format!("  {}: {}Router,\n", api.name.to_lowercase(), api.name.to_lowercase()));
+        out.push_str(&format!(
+            "  {}: {}Router,\n",
+            api.name.to_lowercase(),
+            api.name.to_lowercase()
+        ));
     }
     out.push_str("});\n\nexport type AppRouter = typeof appRouter;\n");
     out

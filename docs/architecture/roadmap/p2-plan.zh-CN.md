@@ -15,6 +15,13 @@ breaking_change: false
 
 # P2 全面任务规划
 
+> **决策变更（2026-11-09，优先于本文件全部「撤销 / 不再考虑」表述）**：用户随后重新排期轨道 B
+> 并**全部实现**（SQL Server / Oracle / MongoDB / Spring / Go / PHP / .NET / gRPC / tRPC /
+> SvelteKit / Angular / Electron / Tauri / SwiftUI / Compose / 小程序 / uni-app / 工作流定义导出 /
+> Stripe / Playwright e2e），见 [roadmap §2](../../roadmap.zh-CN.md) 与 `CHANGELOG.md` `[Unreleased]`。
+> 本文件 §2、§8 及下文关于「撤销」的字样是 **2026-11-08 的历史记录**，不代表当前范围；
+> 轨道 A 八项的验收结论与 Conformance 证据继续有效。
+
 > **执行结果（2026-11-08）**：**轨道 A 八项已全部完成**（含 2 项「其实已实现、文档滞后」的核实）；
 > **轨道 B 目标扩栈已按用户决策撤销，后续不再考虑**（§2 仅作历史记录保留）。
 > 全量 `cargo test` 396 项 / 63 套件通过；新增 6 个回归测试文件；生成工程验证门：

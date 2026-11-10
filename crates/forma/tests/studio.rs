@@ -111,7 +111,11 @@ fn studio_serves_model_graph_and_ui() {
     let listener = forma::studio::run_studio(0).unwrap();
     let port = listener.local_addr().unwrap().port();
     std::thread::spawn(move || {
-        forma::studio::serve(listener, Arc::from(dir.as_path()), forma::studio::StudioBus::new());
+        forma::studio::serve(
+            listener,
+            Arc::from(dir.as_path()),
+            forma::studio::StudioBus::new(),
+        );
     });
     std::thread::sleep(Duration::from_millis(200));
 
@@ -205,7 +209,11 @@ fn studio_v2_bidirectional_patch() {
     let port = listener.local_addr().unwrap().port();
     let dir_thread = dir.clone();
     std::thread::spawn(move || {
-        forma::studio::serve(listener, Arc::from(dir_thread.as_path()), forma::studio::StudioBus::new());
+        forma::studio::serve(
+            listener,
+            Arc::from(dir_thread.as_path()),
+            forma::studio::StudioBus::new(),
+        );
     });
     std::thread::sleep(Duration::from_millis(200));
 
@@ -287,7 +295,11 @@ fn studio_patch_history_is_visible_and_replayable() {
     let port = listener.local_addr().unwrap().port();
     let dir_thread = dir.clone();
     std::thread::spawn(move || {
-        forma::studio::serve(listener, Arc::from(dir_thread.as_path()), forma::studio::StudioBus::new());
+        forma::studio::serve(
+            listener,
+            Arc::from(dir_thread.as_path()),
+            forma::studio::StudioBus::new(),
+        );
     });
     std::thread::sleep(Duration::from_millis(200));
 

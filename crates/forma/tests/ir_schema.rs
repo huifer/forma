@@ -270,7 +270,11 @@ extensions {
 "#,
     )
     .unwrap();
-    let load = || forma::dsl::load_program(&dir, &["forma/**/*.fm".into()]).unwrap().0;
+    let load = || {
+        forma::dsl::load_program(&dir, &["forma/**/*.fm".into()])
+            .unwrap()
+            .0
+    };
     let a = serde_json::to_string(&ir_view(&load())).unwrap();
     let b = serde_json::to_string(&ir_view(&load())).unwrap();
     assert_eq!(a, b, "IR view serialization must be byte-identical");
@@ -278,8 +282,17 @@ extensions {
     assert!(a.contains("acme.audit"), "{a}");
     assert!(a.contains("visualization.echarts"), "{a}");
     // 无非确定性字段（时间戳 / 随机数）
-    for banned in ["generated_at", "generatedAt", "timestamp", "created_at", "createdTime"] {
-        assert!(!a.contains(banned), "IR view must not contain {banned}: {a}");
+    for banned in [
+        "generated_at",
+        "generatedAt",
+        "timestamp",
+        "created_at",
+        "createdTime",
+    ] {
+        assert!(
+            !a.contains(banned),
+            "IR view must not contain {banned}: {a}"
+        );
     }
 }
 

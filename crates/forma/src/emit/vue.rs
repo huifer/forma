@@ -807,7 +807,9 @@ const row = computed(() => query.data.value);
 }
 
 fn escape_html(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 fn simple_vue(page: &crate::dsl::PageDecl, body: &str) -> String {

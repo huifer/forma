@@ -149,12 +149,22 @@ page StudentList {
     let new_page = fs::read_to_string(dir.join("generated/web/app/students/new/page.tsx")).unwrap();
     assert!(new_page.contains("SchoolOptionsQuery"), "{new_page}");
     assert!(new_page.contains("<select name=\"school\""), "{new_page}");
-    assert!(new_page.contains("formData.get(\"school\") || null"), "{new_page}");
-    assert!(new_page.contains("import { useQuery } from \"@tanstack/react-query\";"), "{new_page}");
+    assert!(
+        new_page.contains("formData.get(\"school\") || null"),
+        "{new_page}"
+    );
+    assert!(
+        new_page.contains("import { useQuery } from \"@tanstack/react-query\";"),
+        "{new_page}"
+    );
 
-    let edit_page = fs::read_to_string(dir.join("generated/web/app/students/[id]/page.tsx")).unwrap();
+    let edit_page =
+        fs::read_to_string(dir.join("generated/web/app/students/[id]/page.tsx")).unwrap();
     assert!(edit_page.contains("<select name=\"school\""), "{edit_page}");
-    assert!(edit_page.contains("defaultValue={row[\"school_id\"]"), "{edit_page}");
+    assert!(
+        edit_page.contains("defaultValue={row[\"school_id\"]"),
+        "{edit_page}"
+    );
     assert!(edit_page.contains("SchoolOptionsQuery"), "{edit_page}");
 }
 

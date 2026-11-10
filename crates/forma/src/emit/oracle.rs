@@ -21,7 +21,11 @@ pub fn oracle_type(program: &Program, field: &FieldDecl) -> String {
         "Uuid" => "VARCHAR2(36)".into(),
         "String" => {
             let n = type_args(field);
-            if n.is_empty() { "VARCHAR2(255)".into() } else { format!("VARCHAR2({n})") }
+            if n.is_empty() {
+                "VARCHAR2(255)".into()
+            } else {
+                format!("VARCHAR2({n})")
+            }
         }
         "Email" => "VARCHAR2(320)".into(),
         "Text" | "Json" => "CLOB".into(),
@@ -29,7 +33,11 @@ pub fn oracle_type(program: &Program, field: &FieldDecl) -> String {
         "Float" => "BINARY_DOUBLE".into(),
         "Decimal" => {
             let n = type_args(field);
-            if n.is_empty() { "NUMBER(18,2)".into() } else { format!("NUMBER({n})") }
+            if n.is_empty() {
+                "NUMBER(18,2)".into()
+            } else {
+                format!("NUMBER({n})")
+            }
         }
         "Bool" => "NUMBER(1)".into(),
         "Timestamp" => "TIMESTAMP".into(),
@@ -90,14 +98,22 @@ fn render_table(program: &Program, entity: &crate::dsl::EntityDecl, table: &Tabl
         ));
     }
     // 单引号转义（DDL 内嵌于 EXECUTE IMMEDIATE 字符串）
-    let ddl = format!("CREATE TABLE {} (\n    {}\n)", table.table, defs.join(",\n    "))
-        .replace('\'', "''");
+    let ddl = format!(
+        "CREATE TABLE {} (\n    {}\n)",
+        table.table,
+        defs.join(",\n    ")
+    )
+    .replace('\'', "''");
     let mut out = format!(
         "BEGIN\n    EXECUTE IMMEDIATE '{ddl}';\nEXCEPTION\n    WHEN OTHERS THEN\n        IF SQLCODE != -955 THEN RAISE; END IF;\nEND;\n/\n\n",
     );
     for idx in &table.indexes {
         let name = format!("idx_{}_{}", table.table, idx.join("_"));
-        let sql = format!("CREATE INDEX {name} ON {} ({})", table.table, idx.join(", "));
+        let sql = format!(
+            "CREATE INDEX {name} ON {} ({})",
+            table.table,
+            idx.join(", ")
+        );
         out.push_str(&format!(
             "BEGIN\n    EXECUTE IMMEDIATE '{sql}';\nEXCEPTION\n    WHEN OTHERS THEN\n        IF SQLCODE != -955 THEN RAISE; END IF;\nEND;\n/\n\n"
         ));

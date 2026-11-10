@@ -12,7 +12,7 @@ backend code, frontend code, APIs, validation, and diagrams.
 [![CI](https://github.com/huifer/forma/actions/workflows/ci.yml/badge.svg)](https://github.com/huifer/forma/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org/)
-[![Tests](https://img.shields.io/badge/tests-561%20passing-brightgreen.svg)](#development)
+[![Tests](https://img.shields.io/badge/tests-565%20passing-brightgreen.svg)](#development)
 [![MCP](https://img.shields.io/badge/MCP-compatible-purple.svg)](#ai-integration)
 
 [English](README.md) · [简体中文](README.zh-CN.md)
@@ -166,12 +166,18 @@ target configuration selects the concrete output stack.
 - [Agent workflow](docs/agent-workflow.zh-CN.md)
 - [Next milestone (F-001…F-008)](docs/next-milestone.zh-CN.md)
 - [Roadmap](docs/roadmap.zh-CN.md)
-- [P2 track A closure / track B cancelled](docs/architecture/roadmap/p2-plan.zh-CN.md)
+- [P2 track A closure (track B was later re-scoped and shipped)](docs/architecture/roadmap/p2-plan.zh-CN.md)
 - [P3: governance & release readiness](docs/architecture/roadmap/p3-plan.zh-CN.md)
 
-The current tree also includes the local Studio V3 history/replay closure and visualization V0.4–V0.6
-(AntV/G2Plot, dashboard interactions, GIS, industrial threshold lines, candlestick). The next step is
-documentation/RFC reconciliation for the 49 local commits ahead of `origin/main`.
+The current tree also includes the local Studio V3 history/replay + SSE collaboration closure and
+visualization V0.4–V0.6 (AntV/G2Plot, dashboard interactions, GIS, industrial threshold lines,
+candlestick). The P2 "track B" target expansion was cancelled on 2026-11-08 but **re-scoped and
+fully implemented on 2026-11-09** (see the adapter matrix in [roadmap](docs/roadmap.zh-CN.md) §2 and
+`CHANGELOG.md` `[Unreleased]`); new targets are opt-in, default output is unchanged, and unsupported
+security semantics are explicitly rejected. Version history is tracked by commit + CHANGELOG
+(no git tags / GitHub Releases); the working tree is clean and every CI gate is locally verifiable.
+The extra targets are verified by `l3-smoke` (Go/PHP/Python/proto/TS/JSON compile smoke) plus structural
+regressions; some are deliberately minimal skeletons without a full compile gate.
 
 ## Generated targets
 

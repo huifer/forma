@@ -17,7 +17,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org/)
-[![Tests](https://img.shields.io/badge/tests-561%20passing-brightgreen.svg)](#开发)
+[![Tests](https://img.shields.io/badge/tests-565%20passing-brightgreen.svg)](#开发)
 [![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet.svg)](#AI-接入mcp)
 [![Status](https://img.shields.io/badge/status-v0.3%20%2B%20%E5%85%A8%E9%87%8F%E7%9F%A9%E9%98%B5-blue.svg)](docs/roadmap.zh-CN.md)
 
@@ -149,20 +149,27 @@ v0.1.0（CRUD 基线）→ v0.2.0（竞选功能：3 新表 + 外键）→ v0.3.
 
 **v0.3（当前）**——DSL 中间层架构定案；`@generated` 产物、分层验证（L1–L5）、RFC 治理体系齐备。
 
-> **范围决议（2026-11-08）**：P2 只完成「余项 Closure」（8/8），**目标扩栈（Wave 4 的企业级技术栈）已撤销、不再排期**；
-> P3 治理收尾与发布就绪已完成。当前处于 **发布前一致性收口**：把最近 49 个本地提交（Studio V3 本地历史回放、
-> 可视化 V0.4–V0.6、CLI 端到端回归）同步回 README / RFC / roadmap / Conformance 叙事。
-> 详见 [P2 规划](docs/architecture/roadmap/p2-plan.zh-CN.md) / [P3 规划](docs/architecture/roadmap/p3-plan.zh-CN.md)。
+> **范围决议（2026-11-08）→ 决策变更（2026-11-09）**：P2 轨道 A「余项 Closure」8/8 完成；
+> 当时一度撤销的目标扩栈（轨道 B），**已于 2026-11-09 由用户重新排期并全部实现**
+> （SQL Server / Oracle / MongoDB / Spring / Go / PHP / .NET / gRPC / tRPC / SvelteKit / Angular /
+> Electron / Tauri / SwiftUI / Compose / 小程序 / uni-app / 工作流定义导出 / Stripe / Playwright e2e）——
+> 详见 [roadmap §2 适配层完整矩阵](docs/roadmap.zh-CN.md) 与 `CHANGELOG.md` `[Unreleased]`。
+> P3 治理收尾与发布就绪已完成，发布前一致性收口已完成；版本演进以 commit + CHANGELOG 追踪
+> （不使用 git tag / GitHub Release），工作树干净、全部 CI 门可本地复现。
+> 补充说明：轨道 B 目标为 opt-in、默认产物零变化、安全语义显式拒绝；部分为最小骨架，
+> 编译验证由 CI `l3-smoke` job 与结构断言回归共同承担。
+> 历史规划文档（[P2 规划](docs/architecture/roadmap/p2-plan.zh-CN.md) / [P3 规划](docs/architecture/roadmap/p3-plan.zh-CN.md)）
+> 保留 2026-11-08 的原始记录，已加「决策变更」注记，不再代表当前范围。
 
 波次与当前状态：
 
 - **Wave 1（M1–M4）** ✅ 端到端闭环：DSL 内核 → MySQL → Rust 后端 → React Web
 - **Wave 2（M5–M8）** ✅ Auth 模块 · **Studio v1 可视化** · **生态互通**（OpenAPI/SQL/Postman 双向）· AI 语义补丁闭环
 - **Wave 3（M9–M10）** ✅ 工程化（Docker/上传/导出/审计）+ Studio 双向编辑 · 扩栈：PostgreSQL/SQLite、Node/Python 后端、Vue/Next.js、Expo、GraphQL、多租户、实时
-- **Wave 4（M11）** ✅ 部署产物（K8s manifests / Helm / Terraform）；**企业级扩栈（Spring/Go/.NET、原生移动、小程序、工作流运行时、支付）已撤销**
+- **Wave 4（M11）** ✅ 部署产物（K8s manifests / Helm / Terraform）；企业级扩栈（Spring/Go/.NET、原生移动、小程序、工作流定义导出、支付）于 2026-11-09 重新排期并全部实现（见 §2 矩阵；深度分层：部分为最小骨架）
 - **可视化 V0.4–V0.6** ✅ Dashboard 联动/下钻、AntV（G2Plot）、legend/tooltip、size/label、GIS 地图、工业监控阈值线、K 线
-- **Studio V3 本地收尾** ✅ 变更历史面板 + patchId 幂等回放（多人实时协作仍明确排除）
-- **P2 / P3** ✅ P2 轨道 A 8/8 完成（轨道 B 撤销）；P3 治理收尾与发布就绪
+- **Studio V3** ✅ 变更历史面板 + patchId 幂等回放 + 本地 SSE 协作（presence / patch / patch-conflict，仅绑定 127.0.0.1；跨主机协作仍明确排除）
+- **P2 / P3** ✅ P2 轨道 A 8/8 完成（轨道 B 于 2026-11-09 重排期并全部实现）；P3 治理收尾与发布就绪
 
 仓库当前含一个可运行的**标准联邦原型**（v0.2，Rust：适配器 + doctor + 增量构建 + 事务式补丁 + MCP，17 个测试全绿）。其语义图、补丁与构建引擎被 DSL 编译器复用；标准适配器转为导出视图（M7）。演化史：[docs/history/](docs/history/README.md)。
 
@@ -173,7 +180,7 @@ v0.1.0（CRUD 基线）→ v0.2.0（竞选功能：3 新表 + 外键）→ v0.3.
 ## 开发（当前原型）
 
 ```bash
-cargo test            # 561 项 / 92 个集成测试套件
+cargo test            # 565 项 / 93 个集成测试套件
 cargo build --release
 cargo run -- migrate examples/school status      # 数据库版本链
 cargo run -- migrate examples/school verify      # 链完整性 + 重放校验

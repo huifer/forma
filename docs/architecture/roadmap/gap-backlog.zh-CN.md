@@ -124,6 +124,10 @@ breaking_change: false
 
 ### 轨道 A 收尾（2026-11-08，用户决策：仅完成轨道 A，轨道 B 撤销）
 
+> **决策变更（2026-11-09）**：轨道 B 已重新排期并全部实现，见 [roadmap §2](../../roadmap.zh-CN.md)
+> 与 `CHANGELOG.md` `[Unreleased]`。本节标题与「撤销」字样保留为历史记录，不代表当前范围；
+> 下表 A-1…A-8 的验收结论继续有效。
+
 | # | 缺口 | 关闭说明 |
 |---|---|---|
 | ~~A-1~~ | 字段级策略前端显隐（Web + Flutter） | **已核实已实现**（文档滞后）：Web `canSeeField` / Flutter `fieldRules + canSeeField`；spec:protocols §7 缺口 6 同步标注 |

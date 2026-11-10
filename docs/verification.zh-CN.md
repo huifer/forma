@@ -31,7 +31,7 @@ L5 变更安全   Change Safety   这次变更能不能安全交付？
 |---|---|---|---|
 | **L1** | Syntax / Parse | 语法正确性、格式、引用解析、文件结构 | `forma check` / `forma validate`：Lexer → Parser → AST（span 保留，诊断带行号 + did-you-mean） |
 | **L2** | Semantic | 类型检查、字段关系、约束检查、权限规则、依赖关系、路由冲突 | `forma check`：类型兼容、跨实体引用、规则表达式可编译性、路由冲突、权限完整性 |
-| **L3** | Artifact | 生成的 SQL / Rust / TS / Dart 是否符合目标规范 | 迁移重放模拟器（`emit/replay.rs`，无需真库）；生成 Rust 工程 `cargo check`；生成 Web `tsc`；生成 Flutter `flutter analyze` |
+| **L3** | Artifact | 生成的 SQL / Rust / TS / Dart 是否符合目标规范 | 迁移重放模拟器（`emit/replay.rs`，无需真库）；生成 Rust 工程 `cargo check`；生成 Web `tsc`；生成 Flutter `flutter analyze`；扩栈目标 `scripts/l3-smoke.sh`（Go / PHP / Python / proto / TS / JSON 编译门，CI `l3-smoke`） |
 | **L4** | Behavioral | 跨语言规则测试、API 契约测试、迁移测试、集成测试 | OpenAPI 契约导出；迁移链前向重放 == 当前 schema；school 案例真实 MySQL 8 端到端（CRUD/守卫/分页） |
 | **L5** | Change Safety | 兼容性分析、破坏性变更检测、迁移风险、影响范围、人工审批 | `forma migrate risk`（破坏性分级）；`forma graph` / `forma impact`（语义影响闭包）；`@generated` 与 `extension` 所有权边界 |
 
@@ -91,6 +91,12 @@ L5 变更安全   Change Safety   这次变更能不能安全交付？
   生成后端编译不过」后补上的机器防线。
 - **Web**：生成 React + TanStack 工程，`tsc` 零错误、`vite build` 通过。
 - **Flutter**：生成 Dart 工程，`flutter analyze` 零 issue（`flutter build web` 生产编译）。
+- **扩栈目标（轨道 B / M10 opt-in）**：`scripts/l3-smoke.sh` 为 Go/Gin、PHP/Laravel、FastAPI、
+  gRPC/proto、tRPC、Playwright e2e、MongoDB JSON 各生成一个临时工程并用目标工具链真实编译/解析；
+  CI `l3-smoke` job 强制 7/7 通过且不允许 SKIP。脚本显式列出无法在 CI 验证的范围
+  （Spring / .NET / SwiftUI / Compose / 小程序 / uni-app / SvelteKit / Angular / Electron / Tauri /
+  需要真库的 SQL Server / Oracle DDL），这些目标仍由 `tests/*.rs` 的结构断言覆盖——
+  **不把「未验证」写成「已验证」**。
 
 ### L4 — 行为验证与规则一致性
 
