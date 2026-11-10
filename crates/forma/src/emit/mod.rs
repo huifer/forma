@@ -1,5 +1,6 @@
 //! 适配层（Emitter）集合：消费 DSL Program，生成各目标产物。
 
+pub mod backend_alt;
 pub mod deploy;
 pub mod desktop;
 pub mod diagram;
@@ -27,12 +28,14 @@ pub mod replay;
 pub mod rust_backend;
 pub mod seed;
 pub mod mssql;
+pub mod spring;
 pub mod sqlite;
 pub mod trpc;
 pub mod visualization;
 pub mod vue;
 pub mod web_react;
 
+pub use backend_alt::{emit_dotnet, emit_gin, emit_laravel};
 pub use deploy::emit_deploy;
 pub use desktop::emit_desktop;
 pub use diagram::emit_diagrams;
@@ -65,6 +68,7 @@ pub use seed::{emit_seed, render_seed_bundle, verify_seed, SeedBundle, SeedVerif
 pub use mongodb::emit_mongodb;
 pub use trpc::emit_trpc;
 pub use mssql::{emit_mssql, emit_mssql_migration, mssql_type};
+pub use spring::emit_spring;
 pub use sqlite::{emit_sqlite, emit_sqlite_migration, sqlite_type};
 pub use visualization::{emit_visualization, emit_visualization_with_adapter};
 pub use vue::emit_vue;

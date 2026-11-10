@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **轨道 B 重新排期（第三批：后端全栈）**：
+  - **Spring Boot**：`java` + `framework: spring` → Maven 工程 + JPA Entity/DTO/Repository/Controller。
+  - **Go / Gin + GORM**：`go` + `framework: gin` → go.mod / main.go（Gin CRUD）/ models.go；
+    生成工程 `go build ./...` 通过。
+  - **PHP / Laravel**：`php` + `framework: laravel` → Eloquent Model + Controller + composer.json；
+    `php -l` 通过。
+  - **.NET 8 Minimal API**：`csharp` → csproj / Program.cs / Models.cs。
+  - 四者均显式拒绝 auth/access/tenant/commands（不静默降级安全语义），MySQL 默认零变化；
+    回归 `tests/spring.rs`（3 项）/ `tests/backend_alt.rs`（5 项）。
+
+### Added
 - **tRPC 网关（轨道 B 重新排期）**：`targets.api.framework: trpc` → `api-trpc` 步骤生成
   typed router（zod 输入从 DSL 字段派生、按 operations 裁剪、经 `REST_BASE` 委托 REST 后端）
   + 自包含 TS 工程（package.json / tsconfig / context / router / server）；

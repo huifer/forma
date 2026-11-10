@@ -60,8 +60,8 @@ P2 余项 Closure（轨道 A 8/8 完成，轨道 B 撤销）→ P3 治理收尾�
 | ✅ 已完成 | **Node：Hono** | M10 | Hono 4 + @hono/node-server + mysql2 + zod；轻量 CRUD（list/get/create/update/delete、offset 分页、字段 min/max/required）；auth/access/tenant/commands/cross-field rules 显式拒绝；`backend.language: typescript` + `framework: hono` 路由到 `backend-hono` 构建步骤 |
 | ✅ 已完成 | **Python：FastAPI** | M10 | FastAPI + SQLAlchemy 2.0 + Pydantic 2 + PyMySQL；`models.py`（Mapped/mapped_column）/`schemas.py`（Create/Read DTO + ge/le）/`routes.py`（CRUD router）；auth/access/tenant/commands/cross-field rules 显式拒绝；`backend.language: python` + `framework: fastapi` → `backend-fastapi` 构建步骤；`python -m compileall` 通过 |
 | ✅ 已完成 | **Vue 3 前端** | M10 | Vue 3 + Vite + TypeScript + Vue Router + Pinia + Element Plus；`frontend.framework: vue`（或 `vue3`）路由到 `frontend-vue` 构建步骤；复用 web_react 的 `types_ts`/`validators_ts`/`format_ts`/`access` 契约；auth（`AuthApi`）+ 命令操作（`XxxApi.execute`）+ 角色感知（`access.ts` 用 `@tanstack/vue-query` 的 Vue 原生 `useCurrentRole`/`useCan`）；列表页：搜索/过滤器（关系/枚举 select + options 查询）/分页/导出/命令按钮/删除；表单页：create/update 提交 + validators 同源校验 + 关系选择（`{rel}_id` → 裸名映射）；详情页：分节 descriptions；Pinia store（filters/search/分页）；`vue-tsc --noEmit && vite build` 通过；默认（无 framework 或 `react`）仍生成 React，产物零变化 |
-| 👁 P2 | Java：Spring Boot | M11 | JPA + Spring Security |
-| 👁 P2 | Go：Gin + GORM / PHP：Laravel / .NET | M11 | |
+| ✅ 已完成 | **Java：Spring Boot** | 轨道 B（重排期） | `backend.language: java` + `framework: spring` → `backend-spring`：Maven/Spring Boot 3 + JPA Entity/DTO/Repository/Controller（CRUD + offset 列表，`{rel}_id` / 文本 UUID 契约）；显式拒绝 auth/access/tenant/commands；回归 `tests/spring.rs`（3 项） |
+| ✅ 已完成 | **Go:Gin+GORM / PHP:Laravel / .NET 8** | 轨道 B（重排期） | `backend.language: go|php|csharp` → `backend-gin` / `backend-laravel` / `backend-dotnet`：实体模型 + CRUD 路由 + 工程文件；Go 生成工程 `go build` 通过、PHP `php -l` 通过；显式拒绝安全语义；回归 `tests/backend_alt.rs`（5 项） |
 
 ### 2.3 API 风格
 

@@ -234,6 +234,30 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
         let backend_language = backend.language.as_deref().unwrap_or("rust");
         let backend_framework = backend.framework.as_deref().unwrap_or("axum");
         match (backend_language, backend_framework) {
+            ("go" | "golang", "gin" | "gorm") => {
+                push(
+                    "backend-gin",
+                    crate::emit::backend_alt::emit_gin(&dir, &program, &backend_out, &app_name),
+                )?;
+            }
+            ("php", "laravel") => {
+                push(
+                    "backend-laravel",
+                    crate::emit::backend_alt::emit_laravel(&dir, &program, &backend_out, &app_name),
+                )?;
+            }
+            ("csharp" | "dotnet" | "c#", _) => {
+                push(
+                    "backend-dotnet",
+                    crate::emit::backend_alt::emit_dotnet(&dir, &program, &backend_out, &app_name),
+                )?;
+            }
+            ("java", "spring" | "springboot" | "spring-boot") => {
+                push(
+                    "backend-spring",
+                    crate::emit::spring::emit_spring(&dir, &program, &backend_out, &app_name),
+                )?;
+            }
             ("typescript" | "ts", "nestjs" | "nest") => {
                 push(
                     "backend-nestjs",
@@ -259,7 +283,7 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
                 )?;
             }
             (language, framework) => anyhow::bail!(
-                "unsupported backend target: language={language}, framework={framework}; supported: rust/axum, typescript/nestjs, typescript/hono, python/fastapi"
+                "unsupported backend target: language={language}, framework={framework}; supported: rust/axum, java/spring, go/gin, php/laravel, csharp/dotnet, typescript/nestjs, typescript/hono, python/fastapi"
             ),
         }
     }
