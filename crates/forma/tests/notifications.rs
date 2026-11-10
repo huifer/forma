@@ -96,3 +96,79 @@ fn notify_check_rejects_unknown_channel_and_event() {
     assert!(msg.contains("dsl-notify-missing-target"), "{msg}");
     assert!(msg.contains("dsl-notify-unknown-event"), "{msg}");
 }
+
+#[test]
+fn webhook_channel_generates_real_http_driver() {
+    let dir = tmp_dir("webhook");
+    setup(&dir);
+    fs::write(
+        dir.join("forma/app.fm"),
+        "app notify { version = \"0.1.0\" }\nentity Order {\n id Uuid @id @default(uuid)\n total Decimal(10,2)\n paid Bool\n hook String(10) @notify(webhook, \"https://hooks.example.test/orders\", OrderPaid)\n}\napi Orders { entity Order operations [list get create update delete] }\napi OrderPaid { POST \"/orders/{id}/pay\" label { en \"Pay\" } effect { set Order.paid = true } }\n",
+    )
+    .unwrap();
+    forma::build::run_build(&dir).unwrap();
+    let notify = fs::read_to_string(dir.join("generated/backend/src/notify.rs")).unwrap();
+    assert!(notify.contains("reqwest::Client"), "{notify}");
+    assert!(notify.contains("handle.spawn"), "{notify}");
+    assert!(notify.contains("webhook delivered"), "{notify}");
+    assert!(notify.contains("webhook delivery failed"), "{notify}");
+    let cargo = fs::read_to_string(dir.join("generated/backend/Cargo.toml")).unwrap();
+    assert!(cargo.contains("reqwest"), "{cargo}");
+}
+
+#[test]
+fn non_webhook_project_has_no_reqwest_dependency() {
+    let dir = tmp_dir("no-webhook");
+    setup(&dir);
+    forma::build::run_build(&dir).unwrap();
+    let cargo = fs::read_to_string(dir.join("generated/backend/Cargo.toml")).unwrap();
+    assert!(!cargo.contains("reqwest"), "{cargo}");
+}
+
+#[test]
+fn email_channel_generates_real_smtp_driver() {
+    let dir = tmp_dir("email");
+    setup(&dir);
+    forma::build::run_build(&dir).unwrap();
+    let notify = fs::read_to_string(dir.join("generated/backend/src/notify.rs")).unwrap();
+    assert!(notify.contains("SmtpTransport"), "{notify}");
+    assert!(notify.contains("spawn_blocking"), "{notify}");
+    assert!(notify.contains("SMTP_HOST"), "{notify}");
+    assert!(notify.contains("email delivered"), "{notify}");
+    let cargo = fs::read_to_string(dir.join("generated/backend/Cargo.toml")).unwrap();
+    assert!(cargo.contains("lettre"), "{cargo}");
+}
+
+#[test]
+fn non_email_project_has_no_lettre_dependency() {
+    let dir = tmp_dir("no-email");
+    setup(&dir);
+    fs::write(
+        dir.join("forma/app.fm"),
+        "app notify { version = \"0.1.0\" }\nentity Order {\n id Uuid @id @default(uuid)\n total Decimal(10,2)\n paid Bool\n note String(10) @notify(log, \"-\", OrderPaid)\n}\napi Orders { entity Order operations [list get create update delete] }\napi OrderPaid { POST \"/orders/{id}/pay\" label { en \"Pay\" } effect { set Order.paid = true } }\n",
+    )
+    .unwrap();
+    forma::build::run_build(&dir).unwrap();
+    let cargo = fs::read_to_string(dir.join("generated/backend/Cargo.toml")).unwrap();
+    assert!(!cargo.contains("lettre"), "{cargo}");
+    assert!(!cargo.contains("reqwest"), "{cargo}");
+}
+
+#[test]
+fn sms_channel_generates_http_gateway_driver() {
+    let dir = tmp_dir("sms");
+    setup(&dir);
+    fs::write(
+        dir.join("forma/app.fm"),
+        "app notify { version = \"0.1.0\" }\nentity Order {\n id Uuid @id @default(uuid)\n total Decimal(10,2)\n paid Bool\n phone String(20) @notify(sms, \"+8613800000000\", OrderPaid)\n}\napi Orders { entity Order operations [list get create update delete] }\napi OrderPaid { POST \"/orders/{id}/pay\" label { en \"Pay\" } effect { set Order.paid = true } }\n",
+    )
+    .unwrap();
+    forma::build::run_build(&dir).unwrap();
+    let notify = fs::read_to_string(dir.join("generated/backend/src/notify.rs")).unwrap();
+    assert!(notify.contains("SMS_GATEWAY_URL"), "{notify}");
+    assert!(notify.contains("SMS_GATEWAY_TOKEN"), "{notify}");
+    assert!(notify.contains("sms delivered"), "{notify}");
+    assert!(notify.contains("sms delivery failed"), "{notify}");
+    let cargo = fs::read_to_string(dir.join("generated/backend/Cargo.toml")).unwrap();
+    assert!(cargo.contains("reqwest"), "{cargo}");
+}

@@ -288,9 +288,16 @@ pub fn emit_openapi(
                     "get": {
                         "tags": [entity_name],
                         "summary": format!("Export {entity_name} as XLSX"),
-                        "responses": serde_json::json!({
-                            "501": { "description": "XLSX driver not configured (integration point)" }
-                        })
+                        "responses": with_error_responses(serde_json::json!({
+                            "200": {
+                                "description": "XLSX file",
+                                "content": {
+                                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                                        "schema": { "type": "string", "format": "binary" }
+                                    }
+                                }
+                            }
+                        }))
                     }
                 }),
             );

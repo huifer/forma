@@ -182,19 +182,24 @@ fn storage_backend_and_web_generation() {
     assert!(storage_rs.contains("pub static STORAGE_FIELDS"));
     assert!(storage_rs.contains(r#"entity: "Document", field: "file", provider: "local""#));
     assert!(storage_rs.contains(r#"provider: "s3", bucket: "forma-bucket""#));
-    assert!(storage_rs.contains("StorageDriver(provider.to_string())"));
+    // S3 真实驱动（aws-sdk-s3，条件依赖）
+    assert!(storage_rs.contains("aws_sdk_s3::Client"));
+    assert!(storage_rs.contains("put_object"));
+    // 无 oss 声明 → 不生成 oss 代码（条件依赖）
+    assert!(!storage_rs.contains("fn oss_sign"));
+    assert!(!storage_rs.contains("OSS_ACCESS_KEY_ID"));
 
-    // Cargo multipart feature + main mod + 路由挂载
+    // Cargo multipart feature + main mod + 路由挂载 + S3 依赖
     let cargo = fs::read_to_string(dir.join("generated/backend/Cargo.toml")).unwrap();
     assert!(cargo.contains("features = [\"multipart\"]"), "{cargo}");
+    assert!(cargo.contains("aws-sdk-s3"), "{cargo}");
+    assert!(cargo.contains("aws-config"), "{cargo}");
+
+    // main mod + 路由挂载
     let main = fs::read_to_string(dir.join("generated/backend/src/main.rs")).unwrap();
     assert!(main.contains("mod storage;"));
     let routes = fs::read_to_string(dir.join("generated/backend/src/routes.rs")).unwrap();
     assert!(routes.contains("crate::storage::router"));
-    // 错误契约：501 STORAGE_DRIVER
-    let error = fs::read_to_string(dir.join("generated/backend/src/error.rs")).unwrap();
-    assert!(error.contains("FORMA_STORAGE_DRIVER"));
-    assert!(error.contains("StorageDriver"));
 
     // OpenAPI 契约
     let openapi = fs::read_to_string(dir.join("generated/api-docs/openapi.json")).unwrap();
@@ -247,4 +252,34 @@ page Notes {
     assert!(!openapi.contains("/api/uploads"));
     let api_ts = fs::read_to_string(dir.join("generated/web/src/api.ts")).unwrap();
     assert!(!api_ts.contains("uploadFile"));
+}
+
+#[test]
+fn oss_storage_generates_signed_upload_driver() {
+    let dir = tmp_dir("oss");
+    write_project(
+        &dir,
+        r#"app ossdemo { version = "0.1.0" }
+entity File {
+  id Uuid @id @default(uuid)
+  name String(50) @required
+  blob Attachment? @storage(oss, "forma-oss-bucket")
+}
+api Files { entity File operations [list get create update delete] }
+"#,
+    );
+    forma::build::run_build(&dir).unwrap();
+    let storage_rs = fs::read_to_string(dir.join("generated/backend/src/storage.rs")).unwrap();
+    assert!(storage_rs.contains("fn oss_sign"), "{storage_rs}");
+    assert!(storage_rs.contains("OSS_ACCESS_KEY_ID"), "{storage_rs}");
+    assert!(storage_rs.contains("OSS_ENDPOINT"), "{storage_rs}");
+    assert!(storage_rs.contains("Hmac::<Sha1>"), "{storage_rs}");
+    // 无 s3 声明 → 不生成 s3 代码/依赖
+    assert!(!storage_rs.contains("aws_sdk_s3::Client"), "{storage_rs}");
+    let cargo = fs::read_to_string(dir.join("generated/backend/Cargo.toml")).unwrap();
+    assert!(cargo.contains("reqwest"), "{cargo}");
+    assert!(cargo.contains("hmac"), "{cargo}");
+    assert!(cargo.contains("sha1"), "{cargo}");
+    assert!(cargo.contains("base64"), "{cargo}");
+    assert!(!cargo.contains("aws-sdk-s3"), "{cargo}");
 }

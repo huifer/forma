@@ -2,9 +2,9 @@
 //!
 //! 验收：
 //! - 检查层 3 条 `dsl-export-*` 诊断（未知 api / 缺 list / 未知格式）+ 重复声明；
-//! - 生成层：src/export.rs（EXPORT_TARGETS 静态展开 + CSV 流式端点 + xlsx 501）、
-//!   routes 挂载、main mod、error 契约（FORMA_EXPORT_DRIVER）、OpenAPI 契约、
-//!   Web 列表页「导出 CSV」按钮；
+//! - 生成层：src/export.rs（EXPORT_TARGETS 静态展开 + CSV 流式端点 + xlsx 驱动
+//!   （rust_xlsxwriter））、routes 挂载、main mod、OpenAPI 契约、Web 列表页
+//!   「导出 CSV」按钮；xlsx 存在时 Cargo.toml 条件引入 rust_xlsxwriter；
 //! - 无 export 声明的工程全链路零产物。
 
 use std::fs;
@@ -182,15 +182,20 @@ fn export_backend_and_web_generation() {
         export_rs.contains(r#"(&"orders", &"orders", &["id", "customer", "total", "created_at"])"#)
     );
     assert!(export_rs.contains("export.csv"));
-    assert!(export_rs.contains("ExportDriver"));
+    // xlsx 驱动：真实生成（rust_xlsxwriter），不再是 501 占位
+    assert!(export_rs.contains("rust_xlsxwriter::Workbook"));
+    assert!(export_rs.contains("export.xlsx\""));
+    assert!(!export_rs.contains("ExportDriver"));
+    // xlsx 存在 → 条件依赖 rust_xlsxwriter
+    let cargo = fs::read_to_string(dir.join("generated/backend/Cargo.toml")).unwrap();
+    assert!(cargo.contains("rust_xlsxwriter"), "{cargo}");
     // routes 挂载 + main mod + error 契约
     let routes = fs::read_to_string(dir.join("generated/backend/src/routes.rs")).unwrap();
     assert!(routes.contains("crate::export::router"));
     let main = fs::read_to_string(dir.join("generated/backend/src/main.rs")).unwrap();
     assert!(main.contains("mod export;"));
     let error = fs::read_to_string(dir.join("generated/backend/src/error.rs")).unwrap();
-    assert!(error.contains("FORMA_EXPORT_DRIVER"));
-    assert!(error.contains("ExportDriver"));
+    assert!(!error.contains("ExportDriver"), "xlsx 已实现，501 变体应移除");
 
     // OpenAPI 契约
     let openapi = fs::read_to_string(dir.join("generated/api-docs/openapi.json")).unwrap();
@@ -246,4 +251,31 @@ page Notes {
         .find(|c| c.contains("导出"))
         .unwrap_or_default();
     assert!(!page.contains("export.csv"), "{page}");
+}
+
+#[test]
+fn csv_only_project_has_no_xlsx_dependency() {
+    // 零新增依赖原则：只有 xlsx 导出声明才引入 rust_xlsxwriter
+    let dir = tmp_dir("csv-only");
+    write_project(
+        &dir,
+        r#"app exportdemo { version = "0.1.0" }
+entity Order {
+  id Uuid @id @default(uuid)
+  total Decimal(12,2)
+}
+api Orders { entity Order operations [list get create update delete] }
+export Orders as csv
+page Orders {
+  route "/orders"
+  title { zh "订单" en "Orders" }
+  table { query Orders.list columns [total] }
+}
+"#,
+    );
+    forma::build::run_build(&dir).unwrap();
+    let cargo = fs::read_to_string(dir.join("generated/backend/Cargo.toml")).unwrap();
+    assert!(!cargo.contains("rust_xlsxwriter"), "{cargo}");
+    let export_rs = fs::read_to_string(dir.join("generated/backend/src/export.rs")).unwrap();
+    assert!(!export_rs.contains("rust_xlsxwriter"), "{export_rs}");
 }
