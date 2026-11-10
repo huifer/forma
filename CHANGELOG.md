@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **bench 临时工程误入库（6f6d922 修正）**：F-008 benchmark 在 CWD 生成的 100 个 `F008-*`
+  临时工程曾被 `git add -A` 误提交；现从 git 移除并加 `F008-*/` 忽略规则
+  （`forma bench <dir>` 显式指定目录则不受影响）。
+
 ### Added
 - **Stripe 支付集成（轨道 B 重新排期）**：`targets.backend.payments: stripe` →
   `backend-payments` 步骤生成 `src/payments.rs`（PaymentIntent REST + webhook 端点，

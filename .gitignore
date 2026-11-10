@@ -18,3 +18,5 @@ examples/school/v2/db/
 .pub-cache/
 # Flutter 构建产物
 build/
+# bench（F-008）在 CWD 生成的 100 个临时 benchmark 工程（`forma bench <dir>` 显式指定目录则不受影响）
+F008-*/
