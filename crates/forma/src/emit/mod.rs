@@ -1,6 +1,7 @@
 //! 适配层（Emitter）集合：消费 DSL Program，生成各目标产物。
 
 pub mod deploy;
+pub mod desktop;
 pub mod diagram;
 pub mod diff;
 pub mod docker;
@@ -13,10 +14,12 @@ pub mod grpc;
 pub mod hono;
 pub mod migrate;
 pub mod migration_export;
+pub mod mongodb;
 pub mod mysql;
 pub mod nest;
 pub mod nextjs;
 pub mod openapi;
+pub mod oracle;
 pub mod playwright;
 pub mod postgres;
 pub mod redis;
@@ -30,6 +33,7 @@ pub mod vue;
 pub mod web_react;
 
 pub use deploy::emit_deploy;
+pub use desktop::emit_desktop;
 pub use diagram::emit_diagrams;
 pub use diff::{diff_programs, emit_diff, DiffReport};
 pub use docker::emit_docker;
@@ -51,11 +55,13 @@ pub use nest::emit_nestjs;
 pub use nextjs::emit_nextjs;
 pub use playwright::emit_playwright;
 pub use openapi::emit_openapi;
+pub use oracle::{emit_oracle, emit_oracle_migration, oracle_type};
 pub use postgres::{emit_postgres, postgres_type};
 pub use redis::emit_redis;
 pub use replay::{replay_sql, schema_diff, schema_from_plans, SimSchema, SimTable};
 pub use rust_backend::emit_rust_backend;
 pub use seed::{emit_seed, render_seed_bundle, verify_seed, SeedBundle, SeedVerifyReport};
+pub use mongodb::emit_mongodb;
 pub use mssql::{emit_mssql, emit_mssql_migration, mssql_type};
 pub use sqlite::{emit_sqlite, emit_sqlite_migration, sqlite_type};
 pub use visualization::{emit_visualization, emit_visualization_with_adapter};

@@ -49,7 +49,7 @@ P2 余项 Closure（轨道 A 8/8 完成，轨道 B 撤销）→ P3 治理收尾�
 | ✅ 已完成 | **SQLite** | M10 | SQLite 3 DDL target：TEXT/NUMERIC/INTEGER 亲和性映射 + PRAGMA foreign_keys；独立 `db-sqlite` + `sqlite-migrate` 构建步骤；与 MySQL/PostgreSQL 共享表拓扑但独立方言渲染 |
 | ✅ 已完成 | **Redis**（键设计派生） | M9 | `targets.db.engine: redis` → 从 DSL 实体/索引/唯一/auth/jobs/live 派生键设计（`redis/key-design.md` + `.json`）；默认/关系型工程零产物（P1-#2） |
 | ✅ 已完成 | **SQL Server** | 轨道 B（重排期） | `targets.db.engine: mssql`（或 `sqlserver`）→ T-SQL DDL：UNIQUEIDENTIFIER / NVARCHAR(n) / DATETIME2 / BIT / DECIMAL(p,s)；幂等建表 `IF OBJECT_ID(...)` + 索引守卫；`db-mssql` + `mssql-migrate` 独立构建步骤；回归 `tests/mssql.rs`（4 项） |
-| 👁 P2 | Oracle / MongoDB | 后续 | 企业遗留 / 文档模型专项设计 |
+| ✅ 已完成 | **Oracle / MongoDB** | 轨道 B（重排期） | Oracle：`engine: oracle` → PL/SQL 幂等 DDL（VARCHAR2 / NUMBER / CLOB / TIMESTAMP，`SQLCODE != -955` 守卫，`db-oracle` + `oracle-migrate`）；MongoDB：`engine: mongodb` → 集合设计（`$jsonSchema` 校验器 + 索引 + mongo shell 初始化/升级脚本，`db-mongodb`）。回归 `tests/oracle.rs`（3 项）/ `tests/mongodb.rs`（2 项） |
 
 ### 2.2 后端
 
@@ -85,7 +85,7 @@ P2 余项 Closure（轨道 A 8/8 完成，轨道 B 撤销）→ P3 治理收尾�
 | ✅ 已完成 | **Vue 3 + Vue Router + Pinia + Element Plus** | M10 | `frontend.framework: vue` → 复用 React 契约；auth/命令/角色感知双端对齐 |
 | ✅ 已完成 | **Next.js（App Router / SSR 变体）** | M10 | `frontend.framework: nextjs`（或 `next`）→ `frontend-nextjs` 构建步骤；复用 web_react 的 `types_ts`/`validators_ts`/`api_ts`/`format_ts`；列表页 = Server Component（`src/api-server.ts` + `API_BASE` env + `force-dynamic`）；变更/命令 = Server Actions（`app/actions.ts` + `revalidatePath`）；表单 = client 组件复用 validators 同源校验 + **关系选择器**（options 查询 + `{rel}_id` → 裸名初始值）；根布局 `app/providers.tsx` 提供 QueryClientProvider（`@tanstack/react-query` 依赖）；new/[id] 页按 api operations 裁剪；`next.config.mjs` rewrites `/api/*`；自带 CI（tsc + next build，无 vitest）；`tsc --noEmit` + `next build` 通过；默认（react）零变化 |
 | 👁 P2 | SvelteKit / Angular | M11 | |
-| 👁 P2 | 桌面：Tauri / Electron | M11 | |
+| ✅ 已完成 | **桌面：Tauri / Electron** | 轨道 B（重排期） | `targets.desktop.framework: electron|tauri` → `desktop-wrapper` 步骤：Electron BrowserWindow 壳（FORMA_DIST/FORMA_URL + preload）/ Tauri 2 标准 `src-tauri` 脚手架（conf/Cargo/build.rs/main.rs）；回归 `tests/desktop.rs`（3 项） |
 
 ### 2.4a 可视化（RFC-0001）
 

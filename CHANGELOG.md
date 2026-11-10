@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **轨道 B 重新排期（第二批）**：
+  - **Oracle DDL**：`engine: oracle` → PL/SQL 幂等建表（`EXECUTE IMMEDIATE` + `SQLCODE != -955` 守卫），
+    VARCHAR2/NUMBER/CLOB/TIMESTAMP 映射，`db-oracle` + `oracle-migrate` 步骤；`tests/oracle.rs`（3 项）。
+  - **MongoDB 集合设计**：`engine: mongodb` → `$jsonSchema` 校验器 + 索引 + mongo shell 初始化/升级脚本，
+    `db-mongodb` 步骤；`tests/mongodb.rs`（2 项）。
+  - **桌面包装 Electron / Tauri**：`targets.desktop.framework: electron|tauri` → `desktop-wrapper` 步骤，
+    Electron BrowserWindow 壳 / Tauri 2 脚手架；`tests/desktop.rs`（3 项）。
+
+### Added
 - **Playwright e2e 生成（轨道 B 重新排期）**：`targets.frontend.e2e: playwright` → `web-e2e` 步骤
   生成自包含 `e2e/` 套件（config + crud.spec.ts + tsconfig + package.json + README）；
   用例由 DSL 表格页与 operations 静态展开；默认零产物，未知框架显式拒绝。

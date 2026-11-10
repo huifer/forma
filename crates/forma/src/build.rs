@@ -184,6 +184,15 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
             "postgres-migrate",
             crate::emit::postgres::emit_postgres_migration(&dir, &program, &db_out),
         )?;
+    } else if db_engine == "oracle" {
+        push(
+            "db-oracle",
+            crate::emit::oracle::emit_oracle(&dir, &program, &db_out),
+        )?;
+        push(
+            "oracle-migrate",
+            crate::emit::oracle::emit_oracle_migration(&dir, &program, &db_out),
+        )?;
     } else if db_engine == "mssql" || db_engine == "sqlserver" {
         push(
             "db-mssql",
@@ -201,6 +210,11 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
         push(
             "sqlite-migrate",
             crate::emit::sqlite::emit_sqlite_migration(&dir, &program, &db_out),
+        )?;
+    } else if db_engine == "mongodb" {
+        push(
+            "db-mongodb",
+            crate::emit::mongodb::emit_mongodb(&dir, &program, &db_out),
         )?;
     } else if db_engine == "redis" {
         push(
@@ -403,6 +417,21 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
         } else {
             anyhow::bail!(
                 "unsupported api target style: {api_framework}; supported: graphql | grpc"
+            );
+        }
+    }
+    // 桌面包装（opt-in：targets.desktop.framework: electron|tauri）
+    if let Some(desktop) = targets.desktop.as_ref() {
+        let desktop_framework = desktop.framework.as_deref().unwrap_or("");
+        let desktop_out = desktop.out.clone().unwrap_or_else(|| "generated/desktop".into());
+        if desktop_framework == "electron" || desktop_framework == "tauri" {
+            push(
+                "desktop-wrapper",
+                crate::emit::desktop::emit_desktop(&dir, &program, &desktop_out, desktop_framework),
+            )?;
+        } else {
+            anyhow::bail!(
+                "unsupported desktop framework '{desktop_framework}'; supported: electron | tauri"
             );
         }
     }

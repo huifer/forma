@@ -92,6 +92,8 @@ pub struct Targets {
     pub api: Option<TargetConfig>,
     /// 可视化 Adapter target（RFC-0010 V0.6）：`adapter: echarts|antv`，缺省 echarts（零变化）
     pub visualization: Option<TargetConfig>,
+    /// 桌面包装 target（`framework: electron|tauri`；无则零产物）
+    pub desktop: Option<TargetConfig>,
 }
 
 /// 部署产物配置（M11 / P1）：`deployment:` 段 opt-in，默认零产物。
@@ -328,6 +330,7 @@ fn normalize_manifest(
             ("frontend", &mut targets.frontend),
             ("visualization", &mut targets.visualization),
             ("api", &mut targets.api),
+            ("desktop", &mut targets.desktop),
         ] {
             if let Some(cfg) = t
                 .get(serde_yaml::Value::String(name.into()))
