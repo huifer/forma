@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **轨道 B 重新排期（第四批：前端与移动端）**：
+  - **SvelteKit / Angular**：`frontend.framework` → 路由 + 列表页 + 工程配置（最小骨架）。
+  - **SwiftUI / Jetpack Compose**：`mobile.framework` → Swift Package（URLSession）/ Gradle + Compose 列表页。
+  - **微信小程序 / uni-app**：`mobile.framework` → 小程序（app.json + wxml/js/wxss，wx.request）/
+    uni-app（pages.json + Vue3，uni.request）。
+  - 全部 opt-in，React / Flutter 默认零变化；回归 `tests/frontend_alt.rs`（3）/ `tests/mobile_native.rs`（4）。
+
+### Added
 - **轨道 B 重新排期（第三批：后端全栈）**：
   - **Spring Boot**：`java` + `framework: spring` → Maven 工程 + JPA Entity/DTO/Repository/Controller。
   - **Go / Gin + GORM**：`go` + `framework: gin` → go.mod / main.go（Gin CRUD）/ models.go；

@@ -292,7 +292,17 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
         .as_ref()
         .and_then(|t| t.framework.clone())
         .unwrap_or_else(|| "react".into());
-    if frontend_framework == "vue" || frontend_framework == "vue3" {
+    if frontend_framework == "sveltekit" || frontend_framework == "svelte" {
+        push(
+            "frontend-sveltekit",
+            crate::emit::frontend_alt::emit_sveltekit(&dir, &program, &web_out),
+        )?;
+    } else if frontend_framework == "angular" {
+        push(
+            "frontend-angular",
+            crate::emit::frontend_alt::emit_angular(&dir, &program, &web_out),
+        )?;
+    } else if frontend_framework == "vue" || frontend_framework == "vue3" {
         push(
             "frontend-vue",
             crate::emit::vue::emit_vue(&dir, &program, &web_out, &app_name),
@@ -466,7 +476,27 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
     }
     if let Some(mobile) = targets.mobile.as_ref() {
         let mobile_framework = mobile.framework.as_deref().unwrap_or("flutter");
-        if mobile_framework == "expo" {
+        if mobile_framework == "swiftui" {
+            push(
+                "mobile-swiftui",
+                crate::emit::mobile_native::emit_swiftui(&dir, &program, &mobile_out),
+            )?;
+        } else if mobile_framework == "compose" || mobile_framework == "jetpack" {
+            push(
+                "mobile-compose",
+                crate::emit::mobile_native::emit_compose(&dir, &program, &mobile_out),
+            )?;
+        } else if mobile_framework == "miniprogram" || mobile_framework == "wechat" {
+            push(
+                "mobile-miniprogram",
+                crate::emit::mobile_native::emit_miniprogram(&dir, &program, &mobile_out),
+            )?;
+        } else if mobile_framework == "uniapp" || mobile_framework == "uni-app" {
+            push(
+                "mobile-uniapp",
+                crate::emit::mobile_native::emit_uniapp(&dir, &program, &mobile_out),
+            )?;
+        } else if mobile_framework == "expo" {
             push(
                 "mobile-expo",
                 crate::emit::expo::emit_expo(&dir, &program, &mobile_out, &app_name),

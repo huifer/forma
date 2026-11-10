@@ -84,7 +84,7 @@ P2 余项 Closure（轨道 A 8/8 完成，轨道 B 撤销）→ P3 治理收尾�
 | ✅ 已完成 | 状态管理生成（Zustand） | M9 | `usesZustand` opt-in；store 从列表页数据依赖派生（filters/search），setter 签名兼容（P1-#6）。Pinia（Vue）已跟进（2026-11-09）：Vue 列表页引入 filters/search/分页依赖面后生成 `src/stores/{page}.ts` Pinia store |
 | ✅ 已完成 | **Vue 3 + Vue Router + Pinia + Element Plus** | M10 | `frontend.framework: vue` → 复用 React 契约；auth/命令/角色感知双端对齐 |
 | ✅ 已完成 | **Next.js（App Router / SSR 变体）** | M10 | `frontend.framework: nextjs`（或 `next`）→ `frontend-nextjs` 构建步骤；复用 web_react 的 `types_ts`/`validators_ts`/`api_ts`/`format_ts`；列表页 = Server Component（`src/api-server.ts` + `API_BASE` env + `force-dynamic`）；变更/命令 = Server Actions（`app/actions.ts` + `revalidatePath`）；表单 = client 组件复用 validators 同源校验 + **关系选择器**（options 查询 + `{rel}_id` → 裸名初始值）；根布局 `app/providers.tsx` 提供 QueryClientProvider（`@tanstack/react-query` 依赖）；new/[id] 页按 api operations 裁剪；`next.config.mjs` rewrites `/api/*`；自带 CI（tsc + next build，无 vitest）；`tsc --noEmit` + `next build` 通过；默认（react）零变化 |
-| 👁 P2 | SvelteKit / Angular | M11 | |
+| ✅ 已完成 | **SvelteKit / Angular** | 轨道 B（重排期） | `frontend.framework: sveltekit\|angular` → `frontend-sveltekit` / `frontend-angular`：DSL 表格页 → 路由 + 列表页（fetch / HttpClient）+ 工程配置；最小骨架（无表单/图表/auth UI）；回归 `tests/frontend_alt.rs`（3 项） |
 | ✅ 已完成 | **桌面：Tauri / Electron** | 轨道 B（重排期） | `targets.desktop.framework: electron|tauri` → `desktop-wrapper` 步骤：Electron BrowserWindow 壳（FORMA_DIST/FORMA_URL + preload）/ Tauri 2 标准 `src-tauri` 脚手架（conf/Cargo/build.rs/main.rs）；回归 `tests/desktop.rs`（3 项） |
 
 ### 2.4a 可视化（RFC-0001）
@@ -110,8 +110,8 @@ P2 余项 Closure（轨道 A 8/8 完成，轨道 B 撤销）→ P3 治理收尾�
 |---|---|---|---|
 | ✅ 已完成 | **Expo（React Native）** | M10 | `targets.mobile.framework: expo` → `mobile-expo` 构建步骤；复用 web_react 的 `types_ts`/`validators_ts`/`api_ts`/`format_ts`/`access_ts`（react-query 在 RN 可用）；React Native 侧 `View/Text/FlatList/TextInput` 渲染 + 轻量手写栈导航（无 react-navigation）；auth（`Login.tsx` + `setAuthToken`）+ 列表页内嵌编辑视图；`tsc --noEmit` 通过；默认（无 framework）仍生成 Flutter，产物零变化 |
 | ✅ 已交付（提前于 M11） | Flutter | gen-flutter：models/api/validators/pages 四件套，与 Rust 后端 serde 契约严格对齐；school 案例 app_mobile/ 已入库 |
-| 👁 P2 | 原生 SwiftUI / Jetpack Compose | M11 | |
-| 👁 P2 | 微信小程序 / uni-app | M11 | 国内场景 |
+| ✅ 已完成 | **原生 SwiftUI / Jetpack Compose** | 轨道 B（重排期） | `mobile.framework: swiftui\|compose` → `mobile-swiftui`（Package.swift + URLSession 列表页）/ `mobile-compose`（Gradle + Compose 列表页） |
+| ✅ 已完成 | **微信小程序 / uni-app** | 轨道 B（重排期） | `mobile.framework: miniprogram\|uniapp` → `mobile-miniprogram`（app.json + wxml/js/wxss，wx.request）/ `mobile-uniapp`（pages.json + Vue3 页面，uni.request）；仅列表页骨架 |
 
 ### 2.6 能力模块（全部双端生成）
 
