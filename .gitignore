@@ -8,6 +8,8 @@ generated/
 target/
 .memory/
 # school 快照目录的本地构建产物（种子数据链已提升至 school/db/seed/ 入库）
+# seed_0_3_0.sql 由 `forma build examples/school` 每次重新生成，不入库（本机状态）
+examples/school/db/seed/seed_0_3_0.sql
 examples/school/v1/db/
 examples/school/v2/db/
 .dart_tool/

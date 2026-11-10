@@ -17,9 +17,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org/)
-[![Tests](https://img.shields.io/badge/tests-506%20passing-brightgreen.svg)](#开发)
+[![Tests](https://img.shields.io/badge/tests-561%20passing-brightgreen.svg)](#开发)
 [![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet.svg)](#AI-接入mcp)
-[![Status](https://img.shields.io/badge/status-v0.3%20%E8%AE%BE%E8%AE%A1%20%2B%20M1-blue.svg)](docs/roadmap.zh-CN.md)
+[![Status](https://img.shields.io/badge/status-v0.3%20%2B%20%E5%85%A8%E9%87%8F%E7%9F%A9%E9%98%B5-blue.svg)](docs/roadmap.zh-CN.md)
 
 [English](README.md) | **简体中文**
 
@@ -173,7 +173,7 @@ v0.1.0（CRUD 基线）→ v0.2.0（竞选功能：3 新表 + 外键）→ v0.3.
 ## 开发（当前原型）
 
 ```bash
-cargo test            # 506 项 / 77 个集成测试套件
+cargo test            # 561 项 / 92 个集成测试套件
 cargo build --release
 cargo run -- migrate examples/school status      # 数据库版本链
 cargo run -- migrate examples/school verify      # 链完整性 + 重放校验

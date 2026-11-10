@@ -8,7 +8,7 @@
 > 可视化 V0.4–V0.6（Dashboard 联动/下钻、AntV/G2Plot、legend/tooltip、size/label、GIS、
 > 工业监控阈值线、K 线）与 CLI 端到端回归已提交但尚未同步到治理叙事。
 > 本阶段只校准文档状态，不新增 target、不改 emitter 契约。
-> 当前实测：`cargo test` 506 项 / 77 套件；已同步到 `origin/main`（0 ahead / 0 behind）。
+> 当前实测：`cargo test` 561 项 / 92 套件；已同步到 `origin/main`（0 ahead / 0 behind）。
 
 > **全面收口（2026-11-09）**：治理层 5 项 RFC 未勾选项全部关闭（RFC-0003 §18 表达式级依赖、
 > RFC-0004 §16-3 未知 IR 扩展、RFC-0005 §16-4 Secret Provider、RFC-0008 §16-3 由

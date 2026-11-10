@@ -1,0 +1,20 @@
+app benchmark {
+  version = "0.1.0"
+}
+
+enum Status {
+  pending
+  approved
+}
+
+entity Order {
+  id Uuid @id @default(uuid)
+  name String(50) @required
+  required5 String(40) @required
+}
+
+api Orders {
+  entity Order
+  operations [list get create update delete]
+  list { filters [name] }
+}
