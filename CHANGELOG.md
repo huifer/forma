@@ -8,6 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **外部能力全部真实驱动（2026-11-09）**——「零新增依赖」从占位改为**条件依赖**（仅当对应声明存在时引入）：
+  - **xlsx 导出**：`rust_xlsxwriter` 真实生成（表头 + 数值/字符串/布尔单元格 + `.xlsx` media type）；
+    OpenAPI 同步为 200 + SpreadsheetML media type；CSV 与 XLSX 共用类型解码（同值）。
+  - **通知四渠道**：webhook（reqwest POST JSON，spawn 异步）、email（lettre SMTP，spawn_blocking）、
+    sms（通用 HTTP 网关 `SMS_GATEWAY_URL` / `SMS_GATEWAY_TOKEN`）、log（tracing）；
+    `fire` 的渠道驱动按声明条件生成，未声明的渠道保持占位。
+  - **存储三驱动**：local（原有）/ s3（aws-sdk-s3 + `AWS_REGION`/`AWS_*`，`S3_PUBLIC_BASE` 可覆盖直链）/
+    oss（OSS-HMAC-SHA1 v1 自实现签名 + `OSS_*`，hmac/sha1/base64 条件依赖）。
+  - **OTLP 导出**：opt-in feature（`cargo run --features otlp`）——gRPC 导出到 collector
+    （`OTEL_EXPORTER_OTLP_ENDPOINT` / `OTEL_SERVICE_NAME`）；默认构建零依赖。
+  - **外部搜索引擎**：`src/search.rs` 适配 Meilisearch / Elasticsearch（REST + reqwest，
+    运行时按 `SEARCH_ENGINE` 选择；索引名前缀可配）。写路径 create/update/delete 同步索引文档；
+    读路径 list 的 q 经引擎取 id 过滤（未配置/查询失败自动回退 SQL LIKE，行为零变化）。
+- **生成命令 handler 零警告**：`headers` / `row` 形参按需生成（仅审计/ pre 需要时）。
+
+### Fixed
+- **命令 handler 未使用参数警告**：无 pre / 无 audit 的命令不再生成未使用的 `headers` / `row`。
+
+### Added
 - **IR 扩展（RFC-0004 §9 / §16-3 收口）**：DSL `extensions { <namespace>.<key> = <value> }`
   构造落地——`Program.extensions`（点分路径拆 namespace/key；标量值；至少两段，否则
   `dsl-parse` fail-closed；重复键 `dsl-duplicate-extension`）；多文件合并保留来源；
