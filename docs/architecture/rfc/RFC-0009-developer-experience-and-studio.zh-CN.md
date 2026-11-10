@@ -205,7 +205,10 @@ pub struct Diagnostic {
 > **V3 收尾（2026-11-08）**：本地审阅面的「变更历史可视化且可回放」已交付——
 > `GET /api/patch-history` 读取 `.forma/audit.jsonl`（append-only 审计），展示 patchId /
 > 时间 / 操作 / 状态 / 改动文件 / 风险 / 重建规模；「回放」= 审计摘要 + patchId
-> 重新提交（补丁事务幂等，零二次变更）。多人实时协作仍明确排除（仅绑定 127.0.0.1）。
+> 重新提交（补丁事务幂等，零二次变更）。**V3 协作收尾（2026-11-09）**：SSE 实时事件
+> （`GET /api/events`：presence / patch / patch-conflict）+ 在线会话（`POST /api/presence`）+
+> Studio 协作面板（在线状态 + 实时事件 + 变更自动刷新）；冲突经补丁事务 `expected` 哈希检测并广播。
+> 定位为**本地审阅协作**（仅绑定 127.0.0.1）；跨主机实时协作仍不在范围。
 > 回归 `tests/studio.rs::studio_patch_history_is_visible_and_replayable`。
 
 > **明确排除**：Studio 不做运行时拖拽编排、不做可视化编程。页面由 `page` 块的抽象原语表达，视觉自由度由目标生态（shadcn 等）承担。

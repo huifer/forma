@@ -140,6 +140,16 @@ fn html_ui() -> String {
   .history-btn { position: fixed; right: 16px; bottom: 16px; padding: 8px 14px; border-radius: 999px; border: 1px solid #2563eb; background: #2563eb; color: #fff; cursor: pointer; font-size: 12px; }
   .history-panel { position: fixed; top: 0; right: -360px; width: 340px; height: 100vh; background: #fff; border-left: 1px solid #e2e8f0; transition: right .2s ease; padding: 12px; overflow: auto; z-index: 20; }
   .history-panel.open { right: 0; }
+  .collab-btn { position: fixed; right: 20px; bottom: 20px; padding: 10px 16px; border-radius: 999px; border: 1px solid #cbd5e1; background: #fff; cursor: pointer; z-index: 30; }
+  .collab-panel { position: fixed; right: 20px; bottom: 72px; width: 320px; max-height: 60vh; overflow: auto; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 10px 30px rgb(0 0 0 / 12%); display: none; z-index: 30; }
+  .collab-panel.open { display: block; }
+  .collab-section { padding: 10px 12px; border-top: 1px solid #f1f5f9; }
+  .collab-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+  .presence-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .presence-item .dot { width: 8px; height: 8px; border-radius: 50%; background: #16a34a; }
+  .event-item { font-size: 12px; padding: 4px 0; border-bottom: 1px dashed #f1f5f9; }
+  .event-patch-conflict { color: #dc2626; }
+  .event-patch { color: #16a34a; }
   .history-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
   .history-item { border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; margin-bottom: 8px; font-size: 12px; }
   .history-item .status { font-weight: 600; }
@@ -160,6 +170,12 @@ fn html_ui() -> String {
 <aside class="history-panel" id="history">
   <div class="history-head"><strong>变更历史</strong><button class="mini" onclick="toggleHistory()">关闭</button></div>
   <div id="history-list" class="history-list"><p class="empty">暂无审计记录</p></div>
+</aside>
+<button class="collab-btn" onclick="toggleCollab()">协作</button>
+<aside class="collab-panel" id="collab">
+  <div class="history-head"><strong>协作（实时）</strong><button class="mini" onclick="toggleCollab()">关闭</button></div>
+  <div class="collab-section"><strong>在线</strong><div id="presence-list" class="collab-list"><span class="empty">仅本机会话</span></div></div>
+  <div class="collab-section"><strong>实时事件</strong><div id="event-feed" class="collab-list"><span class="empty">暂无事件</span></div></div>
 </aside>
 <script>
 const nav = document.getElementById('nav');
@@ -264,6 +280,51 @@ async function loadHistory() {
   }).join('') + '<p class="empty">' + h.note + '</p>';
 }
 
+// ── 协作（V3+）：SSE 实时事件 + 在线会话 ──
+const presence = new Set();
+function renderPresence() {
+  const box = document.getElementById('presence-list');
+  box.innerHTML = presence.size === 0
+    ? '<span class="empty">仅本机会话</span>'
+    : Array.from(presence).map(n => '<div class="presence-item"><span class="dot"></span>' + n + '</div>').join('');
+}
+function refreshAll() {
+  fetch('/api/model').then(r => r.json()).then(m => { model = m; rebuildNav(m); });
+  if (document.getElementById('history').classList.contains('open')) loadHistory();
+}
+function pushEvent(ev) {
+  const feed = document.getElementById('event-feed');
+  const empty = feed.querySelector('.empty');
+  if (empty) empty.remove();
+  const div = document.createElement('div');
+  div.className = 'event-item event-' + ev.type;
+  const time = new Date().toLocaleTimeString();
+  if (ev.type === 'presence') {
+    presence.add(ev.name);
+    renderPresence();
+    div.textContent = time + ' ' + ev.name + ' 加入';
+  } else if (ev.type === 'patch') {
+    div.textContent = time + ' ✓ 变更已应用（' + (ev.operations || []).join(', ') + '）';
+    refreshAll();
+  } else if (ev.type === 'patch-conflict') {
+    const detail = ev.diagnostics ? ev.diagnostics.map(d => d.code).join(', ') : (ev.message || '');
+    div.textContent = time + ' ✗ 冲突/拒绝：' + detail;
+  } else {
+    div.textContent = time + ' ' + JSON.stringify(ev);
+  }
+  feed.prepend(div);
+}
+function toggleCollab() { document.getElementById('collab').classList.toggle('open'); }
+try {
+  const es = new EventSource('/api/events');
+  es.onmessage = (e) => { try { pushEvent(JSON.parse(e.data)); } catch (err) {} };
+} catch (err) {}
+fetch('/api/presence', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ name: '会话 ' + Math.floor(Math.random() * 1000) }),
+}).catch(() => {});
+
 (async () => {
   model = await fetch('/api/model').then(r => r.json());
   document.getElementById('meta').textContent =
@@ -285,7 +346,43 @@ fn response(status: &str, content_type: &str, body: String) -> String {
     )
 }
 
-fn handle(mut conn: TcpStream, dir: &Path) {
+/// Studio 协作总线（V3+）：SSE 客户端广播 + 在线会话列表。
+///
+/// 零新增依赖：`Arc<Mutex<Vec<Arc<Mutex<TcpStream>>>>>` 广播；
+/// 每个 SSE 连接由独立线程持有，写失败即移除（客户端断开）。
+#[derive(Clone, Default)]
+pub struct StudioBus {
+    sse: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<TcpStream>>>>>,
+    presence: std::sync::Arc<std::sync::Mutex<Vec<serde_json::Value>>>,
+}
+
+impl StudioBus {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// 广播一条 SSE 事件（JSON 字符串）。
+    fn broadcast(&self, event: &str) {
+        let msg = format!("data: {event}\n\n");
+        let mut clients = self.sse.lock().unwrap();
+        clients.retain(|c| {
+            let Ok(mut s) = c.lock() else { return false };
+            s.write_all(msg.as_bytes()).is_ok()
+        });
+    }
+
+    fn join_presence(&self, name: &str) {
+        let mut p = self.presence.lock().unwrap();
+        p.retain(|x| x.get("name").and_then(|n| n.as_str()) != Some(name));
+        p.push(json!({ "name": name }));
+    }
+
+    fn presence_list(&self) -> Vec<serde_json::Value> {
+        self.presence.lock().unwrap().clone()
+    }
+}
+
+fn handle(mut conn: TcpStream, dir: &Path, bus: &StudioBus) {
     // 读完整请求：headers 以 \r\n\r\n 结束，随后 Content-Length 字节 body
     let mut data = Vec::new();
     let mut chunk = [0u8; 2048];
@@ -357,17 +454,47 @@ fn handle(mut conn: TcpStream, dir: &Path) {
                 Ok(report) => {
                     let ok = report.diagnostics.iter().all(|d| d.severity != "error");
                     let status = if ok { "200 OK" } else { "409 Conflict" };
+                    // 协作（V3+）：广播变更事件（含冲突），其他会话实时可见
+                    let ev = if ok {
+                        json!({
+                            "type": "patch",
+                            "status": "applied",
+                            "patchId": report.patch_id,
+                            "operations": serde_json::from_str::<serde_json::Value>(&body)
+                                .ok()
+                                .and_then(|v| v.get("operations").and_then(|a| a.as_array()).cloned())
+                                .map(|a| {
+                                    a.iter()
+                                        .filter_map(|o| o.get("op").and_then(|x| x.as_str()).map(String::from))
+                                        .collect::<Vec<_>>()
+                                })
+                                .unwrap_or_default(),
+                        })
+                    } else {
+                        json!({
+                            "type": "patch-conflict",
+                            "status": "rejected",
+                            "diagnostics": report.diagnostics.iter().map(|d| json!({ "code": d.code, "message": d.message })).collect::<Vec<_>>(),
+                        })
+                    };
+                    bus.broadcast(&ev.to_string());
                     response(
                         status,
                         "application/json",
                         serde_json::to_string(&report).unwrap_or_default(),
                     )
                 }
-                Err(e) => response(
-                    "400 Bad Request",
-                    "application/json",
-                    json!({ "error": e.to_string() }).to_string(),
-                ),
+                Err(e) => {
+                    bus.broadcast(
+                        &json!({ "type": "patch-conflict", "status": "error", "message": e.to_string() })
+                            .to_string(),
+                    );
+                    response(
+                        "400 Bad Request",
+                        "application/json",
+                        json!({ "error": e.to_string() }).to_string(),
+                    )
+                }
             }
         }
         ("GET", "/") => response("200 OK", "text/html; charset=utf-8", html_ui()),
@@ -403,6 +530,40 @@ fn handle(mut conn: TcpStream, dir: &Path) {
                 ),
             }
         }
+        ("GET", "/api/events") => {
+            // 协作（V3+）：SSE 订阅变更 / 冲突 / 在线事件；15s keep-alive。
+            let head = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\n\r\n";
+            if conn.write_all(head.as_bytes()).is_err() {
+                return;
+            }
+            let sink = std::sync::Arc::new(std::sync::Mutex::new(conn));
+            bus.sse.lock().unwrap().push(sink.clone());
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(15));
+                let mut s = sink.lock().unwrap();
+                if s.write_all(b": keep-alive\n\n").is_err() {
+                    break;
+                }
+            }
+            bus.sse
+                .lock()
+                .unwrap()
+                .retain(|c| !std::sync::Arc::ptr_eq(c, &sink));
+            return;
+        }
+        ("POST", "/api/presence") => {
+            let name = serde_json::from_str::<serde_json::Value>(&body)
+                .ok()
+                .and_then(|v| v.get("name").and_then(|n| n.as_str()).map(String::from))
+                .unwrap_or_else(|| "匿名".to_string());
+            bus.join_presence(&name);
+            bus.broadcast(&json!({ "type": "presence", "name": name }).to_string());
+            response(
+                "200 OK",
+                "application/json",
+                json!({ "ok": true, "online": bus.presence_list() }).to_string(),
+            )
+        }
         ("GET", "/api/patch-history") => {
             // V3：变更历史可视化（本地审阅面；多人实时协作不在 v0.3 范围）
             let body = serde_json::to_string(&patch_history(dir)).unwrap_or_default();
@@ -423,10 +584,12 @@ pub fn run_studio(port: u16) -> std::io::Result<TcpListener> {
 }
 
 /// 服务循环（thread-per-conn；并发模型：模型读取按请求现读，改动见 v2）。
-pub fn serve(listener: TcpListener, dir: std::sync::Arc<Path>) {
+/// V3+：`bus` 承载 SSE 广播与在线会话（协作层）。
+pub fn serve(listener: TcpListener, dir: std::sync::Arc<Path>, bus: StudioBus) {
     for stream in listener.incoming().flatten() {
         let dir = dir.clone();
-        std::thread::spawn(move || handle(stream, &dir));
+        let bus = bus.clone();
+        std::thread::spawn(move || handle(stream, &dir, &bus));
     }
 }
 

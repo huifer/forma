@@ -159,9 +159,9 @@ P2 余项 Closure（轨道 A 8/8 完成，轨道 B 撤销）→ P3 治理收尾�
 
 **M11 — Studio v3（协作）**
 
-- ✅ **V3 本地收尾（2026-11-08）**：变更历史可视化与回放——`GET /api/patch-history`（读 `.forma/audit.jsonl`）+ UI 历史面板；回放 = 审计摘要 + patchId 幂等重提交。多人实时协作仍明确排除。
-- 原规划：多人实时协作、变更评审视图（DSL diff 的图形化）
-- 多人实时协作、变更评审视图（DSL diff 的图形化）
+- ✅ **V3 本地收尾（2026-11-08）**：变更历史可视化与回放——`GET /api/patch-history`（读 `.forma/audit.jsonl`）+ UI 历史面板；回放 = 审计摘要 + patchId 幂等重提交。
+- ✅ **V3 协作收尾（2026-11-09）**：SSE 实时事件（`GET /api/events`：presence / patch / patch-conflict）+ 在线会话列表（`POST /api/presence`）+ Studio UI 协作面板（在线状态 + 实时事件流 + 变更后自动刷新）。冲突经既有补丁事务的 `expected` 哈希检测并广播（`patch-conflict`），多会话可见。仅绑定 127.0.0.1（本地审阅定位）。
+- 原规划：变更评审视图（DSL diff 的图形化）——`forma diff` 已提供 HTML/JSON 报告（M1 交付），Studio 内嵌评审视图未做（可作为后续增强）。
 
 ## 4. 生态互通路线（与历史优质项目结合）
 

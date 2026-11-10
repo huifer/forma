@@ -505,7 +505,7 @@ fn cmd_studio(dir: &Path, flags: &std::collections::HashMap<String, String>) -> 
     };
     let actual = listener.local_addr().map(|a| a.port()).unwrap_or(port);
     println!("Forma Studio → http://127.0.0.1:{actual}  (Ctrl-C to stop)");
-    forma::studio::serve(listener, std::sync::Arc::from(dir));
+    forma::studio::serve(listener, std::sync::Arc::from(dir), forma::studio::StudioBus::new());
     0
 }
 

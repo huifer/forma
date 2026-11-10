@@ -111,7 +111,7 @@ fn studio_serves_model_graph_and_ui() {
     let listener = forma::studio::run_studio(0).unwrap();
     let port = listener.local_addr().unwrap().port();
     std::thread::spawn(move || {
-        forma::studio::serve(listener, Arc::from(dir.as_path()));
+        forma::studio::serve(listener, Arc::from(dir.as_path()), forma::studio::StudioBus::new());
     });
     std::thread::sleep(Duration::from_millis(200));
 
@@ -205,7 +205,7 @@ fn studio_v2_bidirectional_patch() {
     let port = listener.local_addr().unwrap().port();
     let dir_thread = dir.clone();
     std::thread::spawn(move || {
-        forma::studio::serve(listener, Arc::from(dir_thread.as_path()));
+        forma::studio::serve(listener, Arc::from(dir_thread.as_path()), forma::studio::StudioBus::new());
     });
     std::thread::sleep(Duration::from_millis(200));
 
@@ -287,7 +287,7 @@ fn studio_patch_history_is_visible_and_replayable() {
     let port = listener.local_addr().unwrap().port();
     let dir_thread = dir.clone();
     std::thread::spawn(move || {
-        forma::studio::serve(listener, Arc::from(dir_thread.as_path()));
+        forma::studio::serve(listener, Arc::from(dir_thread.as_path()), forma::studio::StudioBus::new());
     });
     std::thread::sleep(Duration::from_millis(200));
 
@@ -341,4 +341,60 @@ fn studio_patch_history_is_visible_and_replayable() {
     assert_eq!(report["idempotent"], true, "{report}");
     let fm = std::fs::read_to_string(dir.join("forma/app.fm")).unwrap();
     assert!(fm.contains("note Text"), "{fm}");
+}
+
+#[test]
+fn studio_collaboration_sse_broadcasts_patch_and_presence() {
+    // V3+ 协作：SSE 订阅者实时收到 presence / patch / patch-conflict 事件。
+    let dir = tmp_dir("collab");
+    write_project(&dir);
+    let listener = forma::studio::run_studio(0).unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let bus = forma::studio::StudioBus::new();
+    let bus_clone = bus.clone();
+    std::thread::spawn(move || {
+        forma::studio::serve(listener, Arc::from(dir.as_path()), bus_clone);
+    });
+    std::thread::sleep(Duration::from_millis(200));
+
+    // 订阅者 1：保持连接读取 SSE
+    let mut s1 = TcpStream::connect(("127.0.0.1", port)).unwrap();
+    s1.set_read_timeout(Some(Duration::from_secs(8))).unwrap();
+    s1.write_all(b"GET /api/events HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive\r\n\r\n")
+        .unwrap();
+    // 读掉响应头
+    let mut buf = [0u8; 1024];
+    let _ = s1.read(&mut buf);
+
+    // presence 事件
+    let (status, _) = post(port, "/api/presence", "{\"name\":\"会话 A\"}");
+    assert!(status.contains("200"), "{status}");
+
+    // patch 事件（真实补丁事务）
+    let (status, _) = post(
+        port,
+        "/api/patch",
+        "{\"patchId\":\"collab-1\",\"operations\":[{\"op\":\"add-entity-field\",\"entity\":\"Customer\",\"field\":{\"name\":\"note\",\"type\":\"Text\"}}]}",
+    );
+    assert!(status.contains("200") || status.contains("409"), "{status}");
+
+    // 订阅者应收到 presence + patch 两类事件
+    let mut acc = String::new();
+    let mut chunk = [0u8; 2048];
+    for _ in 0..20 {
+        match s1.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(n) => {
+                acc.push_str(&String::from_utf8_lossy(&chunk[..n]));
+                if acc.contains("presence") && acc.contains("patch") {
+                    break;
+                }
+            }
+            Err(_) => break,
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    assert!(acc.contains("\"type\":\"presence\""), "{acc}");
+    assert!(acc.contains("\"type\":\"patch\""), "{acc}");
+    assert!(acc.contains("会话 A"), "{acc}");
 }

@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Studio 协作（V3 收尾，2026-11-09）**：SSE 实时事件（`GET /api/events`：presence / patch /
+  patch-conflict）+ 在线会话（`POST /api/presence`）+ Studio 协作面板（在线状态、实时事件流、
+  变更后自动刷新）；冲突经补丁事务 `expected` 哈希检测并广播给所有会话。定位为本地审阅协作
+  （仅绑定 127.0.0.1）；跨主机实时协作不在范围。回归 `tests/studio.rs`（+1 项）。
+
+### Added
 - **关系图（V0.6+）**：`type graph` + `link { source <field> target <field> }`——边来自 source
   实体的行，节点由 source/target 值去重派生（标签优先 `{rel}_name`）。ECharts force 图
   （Runtime 绑定 nodes/links）+ AntV **G6** 渲染器（`@antv/g6` 条件依赖 + GraphView 组件）；
