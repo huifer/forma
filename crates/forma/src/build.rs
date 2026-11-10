@@ -184,6 +184,15 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
             "postgres-migrate",
             crate::emit::postgres::emit_postgres_migration(&dir, &program, &db_out),
         )?;
+    } else if db_engine == "mssql" || db_engine == "sqlserver" {
+        push(
+            "db-mssql",
+            crate::emit::mssql::emit_mssql(&dir, &program, &db_out),
+        )?;
+        push(
+            "mssql-migrate",
+            crate::emit::mssql::emit_mssql_migration(&dir, &program, &db_out),
+        )?;
     } else if db_engine == "sqlite" || db_engine == "sqlite3" {
         push(
             "db-sqlite",

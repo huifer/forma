@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **SQL Server 数据库目标（轨道 B 重新排期）**：`targets.db.engine: mssql`（或 `sqlserver`）→
+  T-SQL DDL（UNIQUEIDENTIFIER / NVARCHAR(n·MAX) / DATETIME2 / BIT / DECIMAL(p,s)）；
+  幂等建表（`IF OBJECT_ID(N'dbo.t', N'U') IS NULL`）+ 命名索引守卫 + FK 约束；
+  `db-mssql` / `mssql-migrate` 独立构建步骤；MySQL/PG/SQLite 默认零变化。
+  回归 `tests/mssql.rs`（4 项：类型映射、独立步骤与方言、关系 FK、默认 MySQL 零变化）。
+
+### Added
 - **Studio 协作（V3 收尾，2026-11-09）**：SSE 实时事件（`GET /api/events`：presence / patch /
   patch-conflict）+ 在线会话（`POST /api/presence`）+ Studio 协作面板（在线状态、实时事件流、
   变更后自动刷新）；冲突经补丁事务 `expected` 哈希检测并广播给所有会话。定位为本地审阅协作

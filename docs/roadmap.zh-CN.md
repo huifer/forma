@@ -48,7 +48,8 @@ P2 余项 Closure（轨道 A 8/8 完成，轨道 B 撤销）→ P3 治理收尾�
 | ✅ 已完成 | **PostgreSQL** | M10 | PostgreSQL 15+ DDL target：UUID / JSONB / BOOLEAN / TIMESTAMPTZ / NUMERIC；独立 `db-postgres` + `postgres-migrate` 构建步骤；与 MySQL 共享 DSL/拓扑语义但独立方言渲染，MySQL 产物零变化 |
 | ✅ 已完成 | **SQLite** | M10 | SQLite 3 DDL target：TEXT/NUMERIC/INTEGER 亲和性映射 + PRAGMA foreign_keys；独立 `db-sqlite` + `sqlite-migrate` 构建步骤；与 MySQL/PostgreSQL 共享表拓扑但独立方言渲染 |
 | ✅ 已完成 | **Redis**（键设计派生） | M9 | `targets.db.engine: redis` → 从 DSL 实体/索引/唯一/auth/jobs/live 派生键设计（`redis/key-design.md` + `.json`）；默认/关系型工程零产物（P1-#2） |
-| 👁 P2 | SQL Server / Oracle / MongoDB | M11 | 企业遗留 / 文档模型专项设计 |
+| ✅ 已完成 | **SQL Server** | 轨道 B（重排期） | `targets.db.engine: mssql`（或 `sqlserver`）→ T-SQL DDL：UNIQUEIDENTIFIER / NVARCHAR(n) / DATETIME2 / BIT / DECIMAL(p,s)；幂等建表 `IF OBJECT_ID(...)` + 索引守卫；`db-mssql` + `mssql-migrate` 独立构建步骤；回归 `tests/mssql.rs`（4 项） |
+| 👁 P2 | Oracle / MongoDB | 后续 | 企业遗留 / 文档模型专项设计 |
 
 ### 2.2 后端
 
