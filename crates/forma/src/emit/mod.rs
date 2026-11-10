@@ -34,6 +34,7 @@ pub mod spring;
 pub mod sqlite;
 pub mod trpc;
 pub mod visualization;
+pub mod workflow;
 pub mod vue;
 pub mod web_react;
 
@@ -75,6 +76,7 @@ pub use mssql::{emit_mssql, emit_mssql_migration, mssql_type};
 pub use spring::emit_spring;
 pub use sqlite::{emit_sqlite, emit_sqlite_migration, sqlite_type};
 pub use visualization::{emit_visualization, emit_visualization_with_adapter};
+pub use workflow::emit_workflow;
 pub use vue::emit_vue;
 pub use web_react::emit_web_react;
 

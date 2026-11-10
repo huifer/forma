@@ -459,6 +459,23 @@ pub fn run_build_with(project_dir: &Path, policy: OwnershipPolicy) -> Result<Bui
             );
         }
     }
+    // 工作流定义导出（opt-in：targets.workflow: json）
+    let workflow_framework = targets
+        .workflow
+        .as_ref()
+        .and_then(|t| t.framework.as_deref())
+        .unwrap_or("");
+    if workflow_framework == "json" || workflow_framework == "bpmn" {
+        let workflow_out = targets
+            .workflow
+            .as_ref()
+            .and_then(|t| t.out.clone())
+            .unwrap_or_else(|| "generated/workflow".into());
+        push(
+            "workflow-spec",
+            crate::emit::workflow::emit_workflow(&dir, &program, &workflow_out),
+        )?;
+    }
     // 桌面包装（opt-in：targets.desktop.framework: electron|tauri）
     if let Some(desktop) = targets.desktop.as_ref() {
         let desktop_framework = desktop.framework.as_deref().unwrap_or("");

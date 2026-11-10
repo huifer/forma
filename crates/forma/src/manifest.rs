@@ -94,6 +94,8 @@ pub struct Targets {
     pub visualization: Option<TargetConfig>,
     /// 桌面包装 target（`framework: electron|tauri`；无则零产物）
     pub desktop: Option<TargetConfig>,
+    /// 工作流定义导出（`framework: json|bpmn`；无则零产物）
+    pub workflow: Option<TargetConfig>,
 }
 
 /// 部署产物配置（M11 / P1）：`deployment:` 段 opt-in，默认零产物。
@@ -331,6 +333,7 @@ fn normalize_manifest(
             ("visualization", &mut targets.visualization),
             ("api", &mut targets.api),
             ("desktop", &mut targets.desktop),
+            ("workflow", &mut targets.workflow),
         ] {
             if let Some(cfg) = t
                 .get(serde_yaml::Value::String(name.into()))

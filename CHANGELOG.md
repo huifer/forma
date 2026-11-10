@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **工作流定义导出（轨道 B 重新排期）**：`targets.workflow: json` → `workflow-spec` 步骤生成
+  `workflow/workflow.json`（`forma-workflow/v1`：状态枚举 → states、命令 → transitions
+  含 pre/effect/audit）+ README；无命令 → 零产物；opt-in，默认零变化。
+  回归 `tests/workflow.rs`（2 项）。
+
+### Added
 - **轨道 B 重新排期（第四批：前端与移动端）**：
   - **SvelteKit / Angular**：`frontend.framework` → 路由 + 列表页 + 工程配置（最小骨架）。
   - **SwiftUI / Jetpack Compose**：`mobile.framework` → Swift Package（URLSession）/ Gradle + Compose 列表页。
