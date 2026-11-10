@@ -127,18 +127,30 @@ pub fn sql_ddl_to_dsl_with_report(sql_text: &str, file: &str) -> Result<(String,
     let mut skipped: Vec<LossItem> = Vec::new();
     let mut entities: Vec<(String, Vec<Field>)> = Vec::new();
     let mut indexes: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut searchables_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
     for t in &parsed.tables {
         let entity = entity_by_table[&norm(&t.name)].clone();
         // 表级 FOREIGN KEY 约束 → 列 → 目标表（列级 REFERENCES 优先）
         let mut fk_by_col: BTreeMap<String, String> = BTreeMap::new();
+        // 表级 UNIQUE KEY / KEY / FULLTEXT KEY（Forma 自产 MySQL DDL 的常态）
+        let mut table_unique_cols: Vec<Vec<String>> = Vec::new();
+        let mut table_index_cols: Vec<Vec<String>> = Vec::new();
+        let mut table_fulltext_cols: Vec<Vec<String>> = Vec::new();
         for c in &t.constraints {
-            if c.kind == "foreign-key" {
-                if let Some((target, _)) = &c.references {
-                    for col in &c.columns {
-                        fk_by_col.insert(norm(col), target.clone());
+            let kind: &str = c.kind;
+            match kind {
+                "foreign-key" => {
+                    if let Some((target, _)) = &c.references {
+                        for col in &c.columns {
+                            fk_by_col.insert(norm(col), target.clone());
+                        }
                     }
                 }
+                "unique" => table_unique_cols.push(c.columns.clone()),
+                "index" => table_index_cols.push(c.columns.clone()),
+                "fulltext" => table_fulltext_cols.push(c.columns.clone()),
+                _ => {}
             }
         }
         let mut fields: Vec<Field> = Vec::new();
@@ -222,8 +234,62 @@ pub fn sql_ddl_to_dsl_with_report(sql_text: &str, file: &str) -> Result<(String,
                 reason: "table had no primary key; synthesized Uuid @id".into(),
             });
         }
-        // CREATE INDEX → DSL index（跳过唯一索引，@unique 已承载）
+        // CREATE INDEX / 表内 KEY·INDEX → DSL index；表级 UNIQUE KEY → @unique；
+        // FULLTEXT KEY → searchable（MySQL ngram 语义与 Forma FULLTEXT 契约同形）
         let mut ix: Vec<String> = Vec::new();
+        let column_to_field = |raw: &str, fields: &[Field]| -> Option<String> {
+            let camel = to_camel(raw.strip_suffix("_id").unwrap_or(raw));
+            fields
+                .iter()
+                .find(|f| f.name == camel)
+                .map(|f| f.name.clone())
+        };
+        let mapped_index = |cols: &[String],
+                            fields: &[Field],
+                            skipped: &mut Vec<LossItem>,
+                            table: &str|
+         -> Vec<String> {
+            let mapped: Vec<String> = cols
+                .iter()
+                .filter_map(|c| column_to_field(c, fields))
+                .collect();
+            if mapped.len() != cols.len() {
+                skipped.push(LossItem {
+                    construct: format!("{table}.index({})", cols.join(", ")),
+                    reason: "index column has no matching DSL field".into(),
+                });
+            }
+            mapped
+        };
+        for cols in &table_index_cols {
+            let mapped = mapped_index(cols, &fields, &mut skipped, &t.name);
+            if !mapped.is_empty() {
+                ix.push(format!("index [{}]", mapped.join(", ")));
+            }
+        }
+        let mut searchables: Vec<String> = Vec::new();
+        for cols in &table_fulltext_cols {
+            let mapped = mapped_index(cols, &fields, &mut skipped, &t.name);
+            if mapped.len() == cols.len() && !mapped.is_empty() {
+                searchables.push(format!("searchable [{}]", mapped.join(", ")));
+            }
+        }
+        for cols in &table_unique_cols {
+            if cols.len() == 1 {
+                if let Some(name) = column_to_field(&cols[0], &fields) {
+                    for f in fields.iter_mut() {
+                        if f.name == name && !f.attrs.iter().any(|a| a == "@id" || a == "@unique") {
+                            f.attrs.push("@unique".into());
+                        }
+                    }
+                }
+            } else if !cols.is_empty() {
+                skipped.push(LossItem {
+                    construct: format!("{}.UNIQUE({})", t.name, cols.join(", ")),
+                    reason: "composite unique is not expressible as column @unique".into(),
+                });
+            }
+        }
         for i in &parsed.indexes {
             if !i.unique && norm(&i.table) == norm(&t.name) {
                 let cols: Vec<String> = i
@@ -244,6 +310,9 @@ pub fn sql_ddl_to_dsl_with_report(sql_text: &str, file: &str) -> Result<(String,
             }
         }
         indexes.insert(entity.clone(), ix);
+        if !searchables.is_empty() {
+            searchables_map.insert(entity.clone(), searchables);
+        }
         entities.push((entity, fields));
     }
 
@@ -273,6 +342,11 @@ pub fn sql_ddl_to_dsl_with_report(sql_text: &str, file: &str) -> Result<(String,
         }
         for line in indexes.get(name).into_iter().flatten() {
             out.push_str(&format!("\n  {line}\n"));
+        }
+        if let Some(searchable) = searchables_map.get(name) {
+            for line in searchable {
+                out.push_str(&format!("\n  {line}\n"));
+            }
         }
         out.push_str("}\n\n");
     }

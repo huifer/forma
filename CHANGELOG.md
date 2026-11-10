@@ -20,6 +20,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   与 `forma artifacts verify <dir>` 等价；两种写法由 `tests/cli_contract.rs` 断言同形输出。
 - **全工程 `cargo fmt --all`**：修正 38 个文件 / 122 处格式差异（轨道 B emitter 与测试），
   CI `lint` job 的 fmt 门恢复通过（clippy 原本已 0 警告）。
+- **AntV runtime 无 graph 图表时的悬空 `GraphView` 引用**：graph 调用分支曾是无条件文本，
+  而组件 / G6 import 按 `has_graph` 条件注入——无 graph 的工程（如 `examples/viz-antv`）
+  生成工程 `tsc --noEmit` 报 TS2304。现在 import / 组件 / 调用分支三者同源注入；
+  回归 `tests/visualization_graph.rs::antv_without_graph_has_no_dangling_graphview_reference`，
+  `viz-antv` 生成工程 tsc 实测通过。
+- **`forma import sql` 对 Forma 自产 MySQL DDL 硬错误**：每表的 `UNIQUE KEY uq_*` /
+  `KEY idx_*` / `FULLTEXT KEY ft_* WITH PARSER ngram` 表内约束曾使解析器报
+  `expected "(" got KEY`。现在三者可保守映射（单列 UNIQUE→`@unique`、KEY/INDEX→`index`、
+  FULLTEXT→`searchable`，列名经 `_id`→关系字段映射）；组合 UNIQUE 显式进 LossReport 不静默丢弃。
+  school 自产 DDL 端到端导入 → `forma check` 0 错误；回归 `tests/import_reverse.rs`（+2 项）。
 
 ### Added
 - **L3 扩栈目标编译门**：`scripts/l3-smoke.sh` + CI `l3-smoke` job——为 Go/Gin、PHP/Laravel、

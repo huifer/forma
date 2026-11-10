@@ -110,10 +110,63 @@ fn graph_chart_antv_adapter_injects_g6() {
         "{runtime}"
     );
     assert!(runtime.contains("function GraphView("), "{runtime}");
+    // 调用分支与组件同源注入（曾因无条件文本在无 graph 工程报 TS2304）
+    assert!(
+        runtime.contains("spec.chartType === \"graph\""),
+        "{runtime}"
+    );
     assert!(runtime.contains("shapeGraph"), "{runtime}");
     let pkg = fs::read_to_string(dir.join("generated/web/package.json")).unwrap();
     assert!(pkg.contains("@antv/g6"), "{pkg}");
     assert!(!pkg.contains("\"echarts\""), "{pkg}");
+}
+
+#[test]
+fn antv_without_graph_has_no_dangling_graphview_reference() {
+    // 回归：AntV runtime 的 graph 调用分支曾是无条件文本，无 graph 图表的工程
+    // （如 examples/viz-antv）生成对 GraphView 的悬空引用 → 生成工程 `tsc --noEmit`
+    // 报 TS2304。组件定义 / import / 调用分支三者必须同源注入。
+    let dir = tmp("antv-nograph");
+    fs::write(
+        dir.join("forma.yaml"),
+        "project:\n  name: antvnograph\n  version: 0.1.0\nsource: [\"forma/**/*.fm\"]\ntargets:\n  web:\n    framework: react\n    out: generated/web\n  visualization:\n    adapter: antv\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app antvnograph { version = "0.1.0" }
+entity Order {
+  id     Uuid          @id @default(uuid)
+  status String(20)    @required
+  amount Decimal(10,2)
+}
+api Orders { entity Order operations [list get create update delete] }
+chart ByStatus {
+  type bar
+  title { en "Orders by status" }
+  source Orders.list
+  encoding {
+    x { field status type nominal }
+    y { field amount type quantitative }
+  }
+}
+page Dashboard {
+  title { en "Dashboard" }
+  chart ByStatus
+}
+"#,
+    )
+    .unwrap();
+    forma::build::run_build(&dir).unwrap();
+    let runtime = fs::read_to_string(dir.join("generated/web/src/viz/runtime.tsx")).unwrap();
+    assert!(
+        !runtime.contains("GraphView"),
+        "no-graph antv runtime must not reference GraphView: {runtime}"
+    );
+    assert!(!runtime.contains("@antv/g6"), "{runtime}");
+    let pkg = fs::read_to_string(dir.join("generated/web/package.json")).unwrap();
+    assert!(!pkg.contains("@antv/g6"), "{pkg}");
 }
 
 #[test]

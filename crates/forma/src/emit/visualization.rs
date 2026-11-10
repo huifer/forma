@@ -168,9 +168,17 @@ pub fn emit_visualization_with_adapter(
             ""
         };
         let graph_component = if has_graph { GRAPH_COMPONENT_TSX } else { "" };
+        // 调用分支与组件定义同源注入：无 graph 图表的工程不得残留对 GraphView 的引用，
+        // 否则 tsc 报 TS2304（曾由 viz-antv 示例工程的真实 tsc 抓出）。
+        let graph_branch = if has_graph {
+            "  // V0.6+ 关系图：G6 渲染（与 G2Plot 不同的渲染器，独立分支）\n  if (spec.chartType === \"graph\") {\n    return <GraphView spec={spec} source={source} height={height} ariaLabel={ariaLabel} />;\n  }\n"
+        } else {
+            ""
+        };
         ANTV_RUNTIME_TSX
             .replace("__G6_IMPORT__", g6_import)
             .replace("__GRAPH_COMPONENT__", graph_component)
+            .replace("__GRAPH_BRANCH__", graph_branch)
     } else {
         RUNTIME_TSX.to_string()
     };

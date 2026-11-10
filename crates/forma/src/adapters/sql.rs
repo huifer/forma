@@ -1,5 +1,6 @@
 //! SQLite DDL 子集解析器。
-//! 覆盖：CREATE TABLE（列、类型、PRIMARY KEY / NOT NULL / UNIQUE / DEFAULT / CHECK /
+//! 覆盖：CREATE TABLE（列、类型、PRIMARY KEY / NOT NULL / UNIQUE [KEY name] / DEFAULT / CHECK /
+//! KEY·INDEX / FULLTEXT KEY [WITH PARSER] /
 //! REFERENCES、表级约束）、CREATE [UNIQUE] INDEX。
 
 #[derive(Debug, Clone, PartialEq)]
@@ -19,11 +20,12 @@ pub struct Token {
     pub offset: usize,
 }
 
-const KEYWORDS: [&str; 55] = [
+const KEYWORDS: [&str; 56] = [
     "CREATE",
     "TABLE",
     "INDEX",
     "UNIQUE",
+    "FULLTEXT",
     "IF",
     "NOT",
     "EXISTS",
@@ -602,6 +604,11 @@ impl Parser {
                     });
                 } else if self.is_kw("UNIQUE") {
                     self.next();
+                    // MySQL: `UNIQUE KEY name (cols)`；标准/SQLite: `UNIQUE (cols)`
+                    if self.is_kw("KEY") {
+                        self.next();
+                        let _ = self.read_name()?;
+                    }
                     self.expect_punct("(")?;
                     let mut cols = Vec::new();
                     while !self.is_punct(")") {
@@ -646,6 +653,51 @@ impl Parser {
                         kind: "foreign-key",
                         columns: cols,
                         references: Some((ref_table, ref_cols)),
+                    });
+                } else if self.is_kw("KEY") || self.is_kw("INDEX") {
+                    // MySQL 表内二级索引：`KEY name (cols)` / `INDEX name (cols)`
+                    //（Forma 自产 DDL 每表都有 `KEY idx_*`；曾导致 import sql 硬错误）
+                    self.next();
+                    let _ = self.read_name()?;
+                    self.expect_punct("(")?;
+                    let mut cols = Vec::new();
+                    while !self.is_punct(")") {
+                        cols.push(self.read_name()?.0);
+                        if self.is_punct(",") {
+                            self.next();
+                        }
+                    }
+                    self.next(); // )
+                    constraints.push(SqlTableConstraint {
+                        kind: "index",
+                        columns: cols,
+                        references: None,
+                    });
+                } else if self.is_kw("FULLTEXT") {
+                    // MySQL: `FULLTEXT KEY name (cols) [WITH PARSER parser]` → searchable
+                    self.next();
+                    self.expect_kw("KEY")?;
+                    let _ = self.read_name()?;
+                    self.expect_punct("(")?;
+                    let mut cols = Vec::new();
+                    while !self.is_punct(")") {
+                        cols.push(self.read_name()?.0);
+                        if self.is_punct(",") {
+                            self.next();
+                        }
+                    }
+                    self.next(); // )
+                                 // 消费 WITH PARSER ngram 等尾部选项，直到逗号 / 右括号
+                    while let Some(t) = self.peek() {
+                        if t.kind == TokKind::Punct && (t.value == "," || t.value == ")") {
+                            break;
+                        }
+                        self.next();
+                    }
+                    constraints.push(SqlTableConstraint {
+                        kind: "fulltext",
+                        columns: cols,
+                        references: None,
                     });
                 } else if self.is_kw("CHECK") {
                     self.next();

@@ -38,11 +38,7 @@ export function FormaChart({
   const [rows, setRows] = useState<Row[]>([]);
   const [failed, setFailed] = useState<string | null>(null);
 
-  // V0.6+ 关系图：G6 渲染（与 G2Plot 不同的渲染器，独立分支）
-  if (spec.chartType === "graph" && GraphView) {
-    return <GraphView spec={spec} source={source} height={height} ariaLabel={ariaLabel} />;
-  }
-
+__GRAPH_BRANCH__
   useEffect(() => {
     let alive = true;
     source

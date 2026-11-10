@@ -146,3 +146,89 @@ fn prisma_import_generates_valid_dsl_with_enum_and_relation() {
 fn prisma_import_rejects_schema_without_models() {
     assert!(forma::adapters::prisma_import::prisma_to_dsl("datasource db {}", "x.prisma").is_err());
 }
+
+#[test]
+fn mysql_table_key_constraints_roundtrip_from_forma_own_ddl() {
+    // 回归（2026-11-10 验证实跑抓出）：Forma 自产 MySQL DDL 每表都带
+    // `UNIQUE KEY uq_*` / `KEY idx_*` / `FULLTEXT KEY ft_* WITH PARSER ngram`，
+    // 表内 KEY 约束曾让 `forma import sql` 直接硬错误（expected "(" got KEY）。
+    // 现在三种约束必须可保守映射：UNIQUE(单列)→@unique、KEY→index、FULLTEXT→searchable。
+    let ddl = r#"CREATE TABLE articles (
+  id CHAR(36) NOT NULL,
+  school_id CHAR(36) NOT NULL,
+  title VARCHAR(200) NOT NULL,
+  slug VARCHAR(120) NOT NULL,
+  body TEXT,
+  views BIGINT,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_articles_slug (slug),
+  KEY idx_articles_school_id_title (school_id, title),
+  FULLTEXT KEY ft_articles_title_body (title, body) WITH PARSER ngram,
+  CONSTRAINT fk_articles_school_id FOREIGN KEY (school_id) REFERENCES schools (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE schools (
+  id CHAR(36) NOT NULL PRIMARY KEY,
+  name VARCHAR(100) NOT NULL
+);
+"#;
+    let (dsl, report) =
+        forma::adapters::sql_import::sql_ddl_to_dsl_with_report(ddl, "0001_init.sql").unwrap();
+    // UNIQUE KEY（单列）→ @unique
+    assert!(dsl.contains("slug String(120) @required @unique"), "{dsl}");
+    // 表内 KEY → index（school_id 经关系映射为字段 school）
+    assert!(dsl.contains("index [school, title]"), "{dsl}");
+    // FULLTEXT KEY → searchable（与 Forma searchable 契约同形）
+    assert!(dsl.contains("searchable [title, body]"), "{dsl}");
+    // CONSTRAINT ... FOREIGN KEY → 关系字段
+    assert!(dsl.contains("school School @required"), "{dsl}");
+    // 全部构造可表达 → 零损失
+    assert!(
+        report.items.is_empty(),
+        "unexpected losses: {:?}",
+        report.items
+    );
+    // 生成物必须通过语义检查（不产生孤儿 index / 非法 searchable）
+    let dir = std::env::temp_dir().join(format!(
+        "forma-sqlimport-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("forma")).unwrap();
+    std::fs::write(
+        dir.join("forma.yaml"),
+        "project:\n  name: sqlrt\n  version: 0.1.0\nsource: [\"forma/**/*.fm\"]\n",
+    )
+    .unwrap();
+    std::fs::write(dir.join("forma/app.fm"), &dsl).unwrap();
+    let (program, diags) = forma::dsl::load_program(&dir, &["forma/**/*.fm".to_string()]).unwrap();
+    assert!(
+        diags.iter().all(|d| d.severity != "error"),
+        "imported DSL has semantic errors: {diags:?}"
+    );
+    assert_eq!(program.entities.len(), 2);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn mysql_composite_unique_key_is_reported_not_dropped() {
+    let ddl = r#"CREATE TABLE enrollments (
+  id CHAR(36) NOT NULL PRIMARY KEY,
+  student_id CHAR(36) NOT NULL,
+  term VARCHAR(20) NOT NULL,
+  UNIQUE KEY uq_enrollments_student_term (student_id, term)
+);
+"#;
+    let (_, report) =
+        forma::adapters::sql_import::sql_ddl_to_dsl_with_report(ddl, "x.sql").unwrap();
+    assert!(
+        report
+            .items
+            .iter()
+            .any(|i| i.construct.contains("UNIQUE(student_id, term)")),
+        "{report:?}"
+    );
+}
