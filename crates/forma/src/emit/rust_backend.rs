@@ -4958,8 +4958,8 @@ pub struct UploadQuery {
     pub field: Option<String>,
 }
 
-/// 驱动策略：local 真实落盘；s3 经 aws-sdk-s3 上传（AWS_* 环境变量 + 条件依赖）；
-/// oss 为外部集成点（显式 501，不静默降级）。
+/// 驱动策略：local 落盘；s3/oss 为条件依赖的真实驱动（凭据经环境变量注入；
+/// 未声明的 provider 零产物、零依赖）。
 async fn save_upload(
     field: &StorageField,
     filename: &str,

@@ -152,3 +152,48 @@ fn artifacts_accepts_dir_as_first_positional() {
     assert!(a.contains("manifest hash"), "{a}");
     assert_eq!(a, b, "the two forms must be equivalent");
 }
+
+/// 回归（2026-11-11 验证实跑抓出）：文档与 CHANGELOG 使用的标量 target 写法
+/// （`targets.workflow: json` / `targets.db: redis` / `targets.mobile: expo`）
+/// 曾被清单解析器静默忽略（只接受映射）→ 产物缺失且没有任何提示。
+/// 现在标量按 framework / engine 解析，且无法识别的形态给出显式告警。
+#[test]
+fn scalar_target_shorthand_is_honoured() {
+    let dir = tmp_dir("scalar");
+    fs::create_dir_all(dir.join("forma")).unwrap();
+    fs::write(
+        dir.join("forma.yaml"),
+        "project:\n  name: scalar\n  version: 0.1.0\nsource: [\"forma/**/*.fm\"]\ntargets:\n  db: redis\n  workflow: json\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app scalar { version = "0.1.0" }
+enum OrderStatus { draft paid }
+entity Order {
+  id     Uuid        @id @default(uuid)
+  status OrderStatus @default(draft)
+}
+api Orders { entity Order operations [list get create update delete] }
+api OrderPay {
+  POST "/orders/{id}/pay"
+  pre  { status == "draft" }
+  effect { set Order.status = "paid" }
+  audit { action "order.pay" }
+}
+"#,
+    )
+    .unwrap();
+    forma::build::run_build(&dir).unwrap();
+    // db: redis → 键设计产物
+    assert!(
+        dir.join("generated/db/redis/key-design.json").exists(),
+        "scalar `db: redis` must be honoured"
+    );
+    // workflow: json → 工作流定义
+    assert!(
+        dir.join("generated/workflow/workflow.json").exists(),
+        "scalar `workflow: json` must be honoured"
+    );
+}

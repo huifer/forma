@@ -30,6 +30,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `expected "(" got KEY`。现在三者可保守映射（单列 UNIQUE→`@unique`、KEY/INDEX→`index`、
   FULLTEXT→`searchable`，列名经 `_id`→关系字段映射）；组合 UNIQUE 显式进 LossReport 不静默丢弃。
   school 自产 DDL 端到端导入 → `forma check` 0 错误；回归 `tests/import_reverse.rs`（+2 项）。
+- **扩栈 target 的真实工具链验证（2026-11-11）**：新增 `scripts/l3-verify-targets.sh`，
+  对 NestJS / GraphQL / Vue / Next.js / Expo / SvelteKit / Angular / SwiftUI / Redis / Workflow
+  逐个生成工程并用真实工具链编译（tsc / vue-tsc / svelte-check / swift build / SDL parse），
+  CI `l3-smoke` job 强制执行。该门抓出并修复 5 个产物缺陷：
+  - **NestJS**：枚举 TS 类型未声明（TS2304）+ 可选性写成 `status?: OrderStatus?`
+    （`T?` 非法 TS 语法 → TS17019）。现在生成 `src/enums.ts`（与 web_react 同形的字面量联合）
+    并在 entity / DTO 导入；可选标记只落在属性名上。回归 `tests/nestjs.rs`（+1 项）。
+  - **Expo**：form 页靠「字段路径 `Entity.field` 前缀」猜实体，而 DSL 的 form 字段是裸名
+    → 永远匹配不上，页面退化为 `// unknown entity`（非合法 TS 模块 → TS2306）。
+    改用 `FormCfg.entity`（与 web_react / flutter / vue 一致）。回归 `tests/expo.rs`（+1 项）。
+  - **Angular**：`src/main.ts` 导入 `./app.component` / `./app.routes`，但文件在 `src/app/`
+    → TS2307。修正导入路径。回归 `tests/frontend_alt.rs`（+1 项）。
+  - **SvelteKit**：依赖未锁 `@sveltejs/vite-plugin-svelte`，npm 解析到 v7（要求 svelte 5）
+    而工程声明 svelte ^4 → `npm install` ERESOLVE 失败；同时 tsconfig 缺 `module`
+    （`moduleResolution: bundler` 要求 module ≥ es2015）。两者均已修。回归（+1 项）。
+  - **SwiftUI**：`Package.swift` 只声明 `.iOS(.v17)`，macOS 上部署目标回落 10.13 →
+    `NavigationStack` / `.navigationTitle` 不可用 → 编译失败。补 `.macOS(.v13)`。
+    回归 `tests/mobile_native.rs`（+1 项）。
+- **清单标量 target 简写被静默忽略**：文档与 CHANGELOG 使用的 `targets.workflow: json` /
+  `targets.db: redis` / `targets.mobile: expo` 只被映射形式接受，标量写法**静默无效**
+  （产物缺失、无任何提示）。现在标量按 framework / engine 解析（backend 标量按已知语言表
+  区分 language / framework），无法识别的形态给出显式告警。回归 `tests/cli_contract.rs`（+1 项）。
+- **上传 / 导出的过时 501 契约**：`/api/uploads` 的 OpenAPI 仍声明 `501 Storage driver not
+  configured`，而 local / s3 / oss 三驱动均已真实实现；`export` 的 xlsx 亦同。已移除误导性
+  契约与注释（`dsl/parser.rs` / `emit/openapi.rs` / `emit/rust_backend.rs`）。
 
 ### Added
 - **L3 扩栈目标编译门**：`scripts/l3-smoke.sh` + CI `l3-smoke` job——为 Go/Gin、PHP/Laravel、

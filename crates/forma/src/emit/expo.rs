@@ -343,11 +343,10 @@ fn edit_page_rn(
     page: &crate::dsl::PageDecl,
     cfg: &crate::dsl::FormCfg,
 ) -> String {
-    let Some(entity) = program.entities.iter().find(|e| {
-        cfg.fields
-            .iter()
-            .any(|f| f.path.starts_with(&format!("{}.", e.name)))
-    }) else {
+    // 实体识别必须用 FormCfg.entity（与 web_react / flutter / vue 一致）：
+    // 旧实现靠字段路径 `Entity.field` 前缀猜实体，而 DSL 的 form 字段是裸名
+    // （`title Input`），永远匹配不上 → 页面退化为 `// unknown entity`（非合法 TS 模块）。
+    let Some(entity) = super::find_entity(program, &cfg.entity) else {
         return "// unknown entity".into();
     };
     let snake = to_snake_case(&page.name);

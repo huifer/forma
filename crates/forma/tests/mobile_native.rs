@@ -108,3 +108,20 @@ fn uniapp_target_generates_vue_pages_and_default_flutter_unchanged() {
     assert!(n.contains(&"mobile-flutter"), "{n:?}");
     assert!(!n.contains(&"mobile-uniapp"), "{n:?}");
 }
+
+/// 回归（2026-11-11 验证实跑抓出）：SwiftUI 的 `Package.swift` 只声明了
+/// `.iOS(.v17)`，macOS 上 `swift build` 的部署目标回落到默认（10.13）→
+/// `NavigationStack` / `.navigationTitle` 不可用 → 编译失败。
+/// 必须显式声明 macOS 平台。
+#[test]
+fn swiftui_package_declares_macos_platform() {
+    let dir = tmp_dir("swiftplatform");
+    write_project(&dir, "swiftui");
+    forma::build::run_build(&dir).unwrap();
+    let pkg = fs::read_to_string(dir.join("generated/mobile/Package.swift")).unwrap();
+    assert!(
+        pkg.contains(".macOS("),
+        "Package.swift must declare macOS: {pkg}"
+    );
+    assert!(pkg.contains(".iOS("), "{pkg}");
+}

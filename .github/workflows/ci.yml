@@ -286,6 +286,10 @@ jobs:
         run: cargo build --locked
       - name: Compile generated opt-in targets
         run: bash scripts/l3-smoke.sh
+      - name: Verify every locally-buildable opt-in target compiles
+        # 扩栈目标的真实工具链验证（NestJS/GraphQL/Vue/Next/Expo/SvelteKit/Angular/
+        # SwiftUI/Redis/Workflow）。本机工具链缺失的 target 标记 SKIP（CI 不允许）。
+        run: bash scripts/l3-verify-targets.sh
       - name: Verify no benchmark fixtures leaked into the workspace
         run: |
           if [ -n "$(ls -d F008-* 2>/dev/null)" ]; then

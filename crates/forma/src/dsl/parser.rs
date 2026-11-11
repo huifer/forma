@@ -424,8 +424,8 @@ pub struct JobDecl {
 
 /// 数据导出声明（M9/P1）：`export <Api> as csv|xlsx`。
 ///
-/// 语义：从所引用 api 的 list 读取**全量**行输出 CSV；xlsx 在 v1 显式 501
-/// （外部驱动集成点，零新增依赖宪法）。名称由 (api, format) 自动派生。
+/// 语义：从所引用 api 的 list 读取**全量**行输出 CSV；xlsx 经 rust_xlsxwriter 真实生成
+/// （条件依赖，仅当声明 xlsx 时引入）。名称由 (api, format) 自动派生。
 #[derive(Debug, Clone)]
 pub struct ExportDecl {
     pub name: String,

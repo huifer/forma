@@ -90,3 +90,43 @@ fn default_react_target_remains_unchanged() {
     assert!(!names.contains(&"frontend-sveltekit"), "{names:?}");
     assert!(!names.contains(&"frontend-angular"), "{names:?}");
 }
+
+/// 回归（2026-11-11 验证实跑抓出）：
+/// ① Angular `src/main.ts` 曾导入 `./app.component` / `./app.routes`，但文件在
+///    `src/app/` → 生成工程 `tsc` 报 TS2307（模块找不到）。
+/// ② SvelteKit 的依赖区间未锁 `@sveltejs/vite-plugin-svelte`，npm 解析到 v7
+///    （要求 svelte 5）而工程声明 svelte ^4 → `npm install` 直接 ERESOLVE 失败。
+/// ③ SvelteKit tsconfig 缺 `module`（`moduleResolution: bundler` 要求 module ≥ es2015）。
+#[test]
+fn angular_main_imports_app_scoped_modules() {
+    let dir = tmp_dir("angularimport");
+    write_project(&dir, "angular");
+    forma::build::run_build(&dir).unwrap();
+    let main = fs::read_to_string(dir.join("generated/web/src/main.ts")).unwrap();
+    assert!(
+        main.contains("from './app/app.component'"),
+        "angular main.ts must import the app-scoped component: {main}"
+    );
+    assert!(main.contains("from './app/app.routes'"), "{main}");
+    assert!(!main.contains("from './app.component'"), "{main}");
+    // 文件确实在 src/app/ 下
+    assert!(dir.join("generated/web/src/app/app.component.ts").exists());
+    assert!(dir.join("generated/web/src/app/app.routes.ts").exists());
+}
+
+#[test]
+fn sveltekit_pins_compatible_plugin_and_declares_module() {
+    let dir = tmp_dir("sveltekitdeps");
+    write_project(&dir, "sveltekit");
+    forma::build::run_build(&dir).unwrap();
+    let pkg = fs::read_to_string(dir.join("generated/web/package.json")).unwrap();
+    assert!(
+        pkg.contains("\"@sveltejs/vite-plugin-svelte\""),
+        "sveltekit must pin vite-plugin-svelte (npm resolves v7 → needs svelte 5): {pkg}"
+    );
+    let tsconfig = fs::read_to_string(dir.join("generated/web/tsconfig.json")).unwrap();
+    assert!(
+        tsconfig.contains("\"module\""),
+        "sveltekit tsconfig must declare module (bundler resolution requires it): {tsconfig}"
+    );
+}

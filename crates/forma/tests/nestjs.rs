@@ -89,3 +89,56 @@ fn nestjs_target_rejects_unimplemented_security_semantics() {
     assert!(msg.contains("unsupported DSL features"), "{msg}");
     assert!(msg.contains("auth module"), "{msg}");
 }
+
+/// 回归（2026-11-11 验证实跑抓出）：NestJS 产物在含枚举 / 可选字段时编译不过——
+/// ① 枚举 TS 类型未声明（TS2304 `Cannot find name 'OrderStatus'`）；
+/// ② 可选性写成了 `status?: OrderStatus?`（`T?` 是非法 TS 语法 → TS17019）。
+#[test]
+fn nestjs_declares_enum_types_and_keeps_optional_marker_on_property() {
+    let dir = tmp_dir("enum");
+    fs::write(
+        dir.join("forma.yaml"),
+        "project:\n  name: nest\n  version: 0.1.0\nsource: [\"forma/**/*.fm\"]\n\ntargets:\n  backend:\n    language: typescript\n    framework: nestjs\n    out: generated/backend\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app nest { version = "0.1.0" }
+enum OrderStatus { draft paid }
+entity Order {
+  id     Uuid        @id @default(uuid)
+  title  String(80)  @required
+  status OrderStatus @default(draft)
+  note   String(50)?
+}
+api Orders { entity Order operations [list get create update delete] }
+"#,
+    )
+    .unwrap();
+    forma::build::run_build(&dir).unwrap();
+    // 枚举类型声明文件
+    let enums = fs::read_to_string(dir.join("generated/backend/src/enums.ts")).unwrap();
+    assert!(
+        enums.contains(r#"export type OrderStatus = "draft" | "paid";"#),
+        "{enums}"
+    );
+    let entity =
+        fs::read_to_string(dir.join("generated/backend/src/order/order.entity.ts")).unwrap();
+    assert!(
+        entity.contains(r#"import { OrderStatus } from "../enums";"#),
+        "{entity}"
+    );
+    // 可选性只能落在属性名上：类型不得带 `?`
+    assert!(entity.contains("status?: OrderStatus;"), "{entity}");
+    assert!(entity.contains("note?: string;"), "{entity}");
+    assert!(!entity.contains("OrderStatus?"), "{entity}");
+    assert!(!entity.contains("string?"), "{entity}");
+    let dto = fs::read_to_string(dir.join("generated/backend/src/order/order.dto.ts")).unwrap();
+    assert!(
+        dto.contains(r#"import { OrderStatus } from "../enums";"#),
+        "{dto}"
+    );
+    assert!(dto.contains("status?: OrderStatus;"), "{dto}");
+    assert!(!dto.contains("OrderStatus?"), "{dto}");
+}

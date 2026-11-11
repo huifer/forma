@@ -62,6 +62,17 @@ pub struct IdentityBinding {
     pub table: String,
 }
 
+/// 后端 target 已知语言（标量简写 `targets.backend: rust` 时按语言解析）。
+const BACKEND_LANGUAGES: [&str; 7] = [
+    "rust",
+    "typescript",
+    "python",
+    "java",
+    "go",
+    "php",
+    "csharp",
+];
+
 #[derive(Debug, Clone, Default)]
 pub struct TargetConfig {
     pub framework: Option<String>,
@@ -337,32 +348,56 @@ fn normalize_manifest(
             ("desktop", &mut targets.desktop),
             ("workflow", &mut targets.workflow),
         ] {
-            if let Some(cfg) = t
-                .get(serde_yaml::Value::String(name.into()))
-                .and_then(|v| v.as_mapping())
-            {
+            let Some(value) = t.get(serde_yaml::Value::String(name.into())) else {
+                continue;
+            };
+            if let Some(cfg) = value.as_mapping() {
                 *slot = Some(parse_target_config(cfg));
+            } else if let Some(scalar) = value.as_str() {
+                // 标量简写：`targets.workflow: json` / `targets.api: graphql` 等价于
+                // `{ framework: <scalar> }`（文档与 CHANGELOG 采用的正是这种形式；
+                // 旧实现只接受映射，标量写法被静默忽略 → 产物缺失且无任何提示）。
+                let mut cfg = TargetConfig::default();
+                if name == "backend" && BACKEND_LANGUAGES.contains(&scalar) {
+                    // 后端标量：语言名（rust / typescript / python / java / go / php / csharp）
+                    cfg.language = Some(scalar.to_string());
+                } else {
+                    cfg.framework = Some(scalar.to_string());
+                }
+                *slot = Some(cfg);
+            } else {
+                issues.push(ManifestIssue {
+                    severity: "warning".into(),
+                    message: format!(
+                        "target `{name}` must be a mapping (or a framework shorthand string); ignored"
+                    ),
+                });
             }
         }
         // 别名：db == database，web == frontend（同名键后写优先，此处别名仅在前者缺失时生效）
-        if let Some(cfg) = ["database", "db"].iter().find_map(|n| {
-            t.get(serde_yaml::Value::String((*n).into()))
-                .and_then(|v| v.as_mapping())
-        }) {
-            targets.database = Some(parse_target_config(cfg));
-        }
-        if let Some(cfg) = ["frontend", "web"].iter().find_map(|n| {
-            t.get(serde_yaml::Value::String((*n).into()))
-                .and_then(|v| v.as_mapping())
-        }) {
-            targets.frontend = Some(parse_target_config(cfg));
-        }
-        // 别名：mobile == flutter
-        if let Some(cfg) = ["mobile", "flutter"].iter().find_map(|n| {
-            t.get(serde_yaml::Value::String((*n).into()))
-                .and_then(|v| v.as_mapping())
-        }) {
-            targets.mobile = Some(parse_target_config(cfg));
+        // 标量简写：`targets.db: redis` → engine=redis；`targets.mobile: expo` → framework=expo。
+        for (names, slot, is_engine) in [
+            (["database", "db"].as_slice(), &mut targets.database, true),
+            (["frontend", "web"].as_slice(), &mut targets.frontend, false),
+            (["mobile", "flutter"].as_slice(), &mut targets.mobile, false),
+        ] {
+            let Some(value) = names
+                .iter()
+                .find_map(|n| t.get(serde_yaml::Value::String((*n).into())))
+            else {
+                continue;
+            };
+            if let Some(cfg) = value.as_mapping() {
+                *slot = Some(parse_target_config(cfg));
+            } else if let Some(scalar) = value.as_str() {
+                let mut cfg = TargetConfig::default();
+                if is_engine {
+                    cfg.engine = Some(scalar.to_string());
+                } else {
+                    cfg.framework = Some(scalar.to_string());
+                }
+                *slot = Some(cfg);
+            }
         }
     }
 

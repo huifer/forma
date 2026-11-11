@@ -104,3 +104,53 @@ fn expo_target_keeps_default_flutter_mobile_unchanged() {
     assert!(names.contains(&"mobile-flutter"), "{names:?}");
     assert!(!names.contains(&"mobile-expo"), "{names:?}");
 }
+
+/// 回归（2026-11-11 验证实跑抓出）：Expo 的 form 页曾用「字段路径 `Entity.field`
+/// 前缀」猜实体，而 DSL 的 form 字段是裸名（`title Input`）→ 永远匹配不上，
+/// 页面退化为 `// unknown entity`（非合法 TS 模块）→ 生成工程 `tsc` 报 TS2306。
+/// 实体识别必须用 `FormCfg.entity`（与 web_react / flutter / vue 一致）。
+#[test]
+fn expo_form_page_resolves_entity_from_form_cfg() {
+    let dir = tmp_dir("formentity");
+    fs::write(
+        dir.join("forma.yaml"),
+        "project:\n  name: expo\n  version: 0.1.0\nsource: [\"forma/**/*.fm\"]\n\ntargets:\n  mobile:\n    framework: expo\n    out: generated/mobile\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("forma/app.fm"),
+        r#"
+app expo { version = "0.1.0" }
+entity Item {
+  id Uuid @id @default(uuid)
+  name String(50) @required
+}
+api Items { entity Item operations [list get create update delete] }
+page ItemList {
+  route "/items"
+  title { en "Items" }
+  table { query Items.list columns [name] }
+}
+page ItemEdit {
+  route "/items/{id}"
+  title { en "Edit Item" }
+  form Item {
+    layout stack {
+      name Input @required
+    }
+    submit → Items.update redirect "/items"
+    submit create → Items.create redirect "/items"
+  }
+}
+"#,
+    )
+    .unwrap();
+    forma::build::run_build(&dir).unwrap();
+    let edit = fs::read_to_string(dir.join("generated/mobile/src/pages/item_edit.tsx")).unwrap();
+    assert!(
+        !edit.trim_start().starts_with("// unknown entity"),
+        "expo form page fell back to unknown entity: {edit}"
+    );
+    assert!(edit.contains("export default function ItemEdit"), "{edit}");
+    assert!(edit.contains("ItemApi"), "{edit}");
+}

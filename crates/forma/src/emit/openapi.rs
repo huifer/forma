@@ -238,8 +238,7 @@ pub fn emit_openapi(
                     "parameters": [ { "name": "field", "in": "query", "required": false, "schema": { "type": "string" }, "description": "Entity.field selector for per-field @storage config" } ],
                     "requestBody": { "required": true, "content": { "multipart/form-data": { "schema": { "type": "object", "properties": { "file": { "type": "string", "format": "binary" } }, "required": ["file"] } } } },
                     "responses": with_error_responses(serde_json::json!({
-                        "200": { "description": "Stored", "content": { "application/json": { "schema": { "type": "object", "properties": { "url": { "type": "string" }, "provider": { "type": "string" }, "bytes": { "type": "integer" } } } } } },
-                        "501": { "description": "Storage driver not configured (s3/oss integration point)" }
+                        "200": { "description": "Stored", "content": { "application/json": { "schema": { "type": "object", "properties": { "url": { "type": "string" }, "provider": { "type": "string" }, "bytes": { "type": "integer" } } } } } }
                     }))
                 }
             }),
