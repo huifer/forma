@@ -251,13 +251,14 @@ The migration engine provides:
 cargo run -- migrate examples/school status
 cargo run -- migrate examples/school history
 
-# Move forward
+# Move forward — --execute really runs the SQL via the mysql client (DATABASE_URL);
+# --mark-applied only marks the ledger, for SQL already applied by another tool.
 cargo run -- migrate examples/school up --to 0.2.0
-cargo run -- migrate examples/school up --apply
+DATABASE_URL="mysql://root:***@127.0.0.1:3306/school" \
+  cargo run -- migrate examples/school up --execute
 
 # Roll back
 cargo run -- migrate examples/school down --steps 1
-cargo run -- migrate examples/school down --to 0.1.0 --apply
 
 # Verify numbering, pairing, hashes, replay, and schema consistency
 cargo run -- migrate examples/school verify

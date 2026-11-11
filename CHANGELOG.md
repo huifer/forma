@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **生产全流程冒烟门禁**：`scripts/prod-smoke.sh` + CI `prod-smoke` job。
+  脚本生成一个完整业务项目（认证 RBAC + 命令状态机 + 审计 + 定时任务 + SSE + 通知 +
+  全文搜索 + 图表 + K8s/Helm/Terraform 部署清单），跑完
+  `forma build` → `forma migrate up --execute`（真 MySQL 8）→ Docker 镜像与 entrypoint
+  部署 → 业务 API 断言：角色分配、401/403、命令状态机与守卫、partial update 保留缺省字段、
+  校验 400、中文 FULLTEXT 搜索、SSE 事件、审计落库、job 自注册、CORS、体限 413、
+  限速 429、容器重启幂等、CLI 与容器共享迁移台账。
+  这道门专门抓「结构断言 + cargo test 看不到」的产物缺陷——2026-11-11 一次手工实测
+  即抓出 6 个（见下）。支持 `PROD_SMOKE_IMAGE` 复用已构建镜像以加速本地运行。
+  脚本固化的同时再抓出第 7 个（见下 Dockerfile 二进制名）。本地与 CI 模式均
+  **39/39 断言通过**。
+
+### Changed
+- 迁移 CLI 文档与 README 双语同步到新语义：`up --execute`（真执行 SQL）与
+  `--mark-applied`（仅标记台账并显式警告）；移除旧 `--apply` 的误导性描述。
+- `docs/verification.zh-CN.md` 的 L3/L4 映射补上 prod-smoke 与 l3-smoke 的
+  live+Bool default 后端编译门。
+
 ### Fixed
 - **生产项目实跑抓出的 6 个真实缺陷（2026-11-11）**：用一个完整订单系统项目
   （认证 RBAC + 命令状态机 + 审计 + 定时任务 + SSE + 通知 + 全文搜索 + 图表 + K8s/Helm/Terraform
@@ -31,6 +50,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **容器迁移不可重入**：基线 CREATE TABLE 非幂等 → 容器重启或与 CLI `--execute` 双入口时
     ERROR 1050 启动失败。现在 CLI 与容器 entrypoint 共享数据库内台账 `forma_migrations`
     （已应用则跳过并对齐本地台账），重启与双入口均幂等。
+  - **Dockerfile 二进制名与 Cargo 包名不一致（prod-smoke 脚本固化时抓出）**：
+    Cargo.toml 用 `app_name.to_lowercase()`（`shopProd` → `shopprod-backend`），
+    Dockerfile 却用 `to_snake_case(...).replace('_',"-")`（`shop-prod-backend`）
+    → `cp target/release/...` 找不到文件，docker build 失败。抽出唯一命名来源
+    `emit_rust_backend::backend_package_name()`，两边共用；回归 `tests/docker.rs`。
 - **SSE / jobs / Bool default / partial update / 伪迁移** 各补回归（`tests/live.rs`、
   `tests/jobs.rs`、`tests/backend_contract.rs`、`tests/searchable.rs`）；`scripts/l3-smoke.sh`
   新增「带 live + Bool default 的生成后端真 cargo check」门（此前结构断言漏掉了 live.rs 的括号错误）。

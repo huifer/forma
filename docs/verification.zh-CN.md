@@ -93,7 +93,8 @@ L5 变更安全   Change Safety   这次变更能不能安全交付？
 - **Flutter**：生成 Dart 工程，`flutter analyze` 零 issue（`flutter build web` 生产编译）。
 - **扩栈目标（轨道 B / M10 opt-in）**：`scripts/l3-smoke.sh` 为 Go/Gin、PHP/Laravel、FastAPI、
   gRPC/proto、tRPC、Playwright e2e、MongoDB JSON 各生成一个临时工程并用目标工具链真实编译/解析；
-  CI `l3-smoke` job 强制 7/7 通过且不允许 SKIP。脚本显式列出无法在 CI 验证的范围
+  CI `l3-smoke` job 强制 8/8 通过且不允许 SKIP（含「带 live + Bool default 的生成后端
+  真 `cargo check`」门，此前结构断言漏掉了 live.rs 的括号语法错误）。脚本显式列出无法在 CI 验证的范围
   （Spring / .NET / SwiftUI / Compose / 小程序 / uni-app / SvelteKit / Angular / Electron / Tauri /
   需要真库的 SQL Server / Oracle DDL），这些目标仍由 `tests/*.rs` 的结构断言覆盖——
   **不把「未验证」写成「已验证」**。
@@ -102,9 +103,17 @@ L5 变更安全   Change Safety   这次变更能不能安全交付？
 
 规则是 Forma 的一等公民，但「Rust 与 TypeScript 能生成相同的表达式」不代表两端执行结果一定相同（Decimal 精度、Null 处理、时区、日期边界、除零等）。因此 Forma **已落地**跨语言共享的测试向量（F-004）：同一组 `(输入, 期望)` 在 Rust、TypeScript、Dart 三端得到一致结果（见 [next-milestone.zh-CN.md](next-milestone.zh-CN.md) 的 F-004；回归 `tests/rule_vectors.rs`、生成 Web `validators.test.ts`、Dart `rule_vector_test.dart`，CI 执行 `npx vitest run` + `flutter test`）。
 
+**生产全流程冒烟（L3/L4 之间）**：`scripts/prod-smoke.sh` 在 CI `prod-smoke` job 中
+生成一个完整业务项目（认证 RBAC + 命令状态机 + 审计 + 定时任务 + SSE + 通知 + 全文搜索 +
+图表 + 部署清单），走完 `forma build` → 真 MySQL 8 迁移执行（`up --execute`）→ Docker 镜像
+与 entrypoint 部署 → 业务 API 断言（角色分配 / 403 权限 / 状态机 / 守卫 / partial update /
+校验 / 搜索 / SSE 事件 / 审计 / job 自注册 / 限速 429 / 体限 413 / CORS / 容器重启幂等 /
+CLI 与容器共享迁移台账）。这道门专门抓「结构断言 + cargo test 看不到」的产物缺陷：
+2026-11-11 一次手工实测即抓出 6 个（详见 `CHANGELOG.md` 与 `scripts/prod-smoke.sh` 头部）。
+
 ### L5 — 变更安全与迁移风险
 
-每一次 schema 变更都要能回答「安不安全、能不能回滚」。详见 [migration-safety.zh-CN.md](migration-safety.zh-CN.md)：`forma migrate risk` 把每条迁移操作按破坏性分级（Low / Medium / High / Extreme），删列 / 删表 / 改类型等高风险变更在执行 `up --apply` 前必须经过人工审批。
+每一次 schema 变更都要能回答「安不安全、能不能回滚」。详见 [migration-safety.zh-CN.md](migration-safety.zh-CN.md)：`forma migrate risk` 把每条迁移操作按破坏性分级（Low / Medium / High / Extreme），删列 / 删表 / 改类型等高风险变更在执行 `up --execute` 前必须经过人工审批。
 
 ## 4. 与「普通代码生成器」的差异化
 

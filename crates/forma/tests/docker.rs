@@ -178,3 +178,38 @@ fn no_entities_means_no_docker_artifacts() {
         .unwrap()
         .is_empty());
 }
+
+/// 回归（生产项目实跑抓出）：Dockerfile 里的二进制名必须与 Cargo.toml 的包名一致。
+/// 此前 Dockerfile 用 `to_snake_case(app).replace('_',"-")`，而 Cargo.toml 用
+/// `app.to_lowercase()`——camelCase 项目名（如 `shopProd`）会得到
+/// `shop-prod-backend` vs `shopprod-backend`，docker build 因 cp 不到文件而失败。
+#[test]
+fn dockerfile_binary_name_matches_cargo_package_name() {
+    let dir = tmp_dir("binaryname");
+    fs::create_dir_all(dir.join("forma")).unwrap();
+    fs::write(
+        dir.join("forma.yaml"),
+        "project:\n  name: shopProd\n  version: 0.1.0\nsource: [\"forma/**/*.fm\"]\n\ntargets:\n  backend:\n    language: rust\n    framework: axum\n    database: sqlx\n    out: generated/backend\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("forma/app.fm"),
+        "app shopProd { version = \"0.1.0\" }\nentity Item {\n id Uuid @id @default(uuid)\n name String(50) @required\n}\napi Items {\n entity Item\n operations [list get create update delete]\n}\n",
+    )
+    .unwrap();
+    forma::build::run_build(&dir).unwrap();
+    let cargo = fs::read_to_string(dir.join("generated/backend/Cargo.toml")).unwrap();
+    let pkg = cargo
+        .lines()
+        .find(|l| l.starts_with("name = "))
+        .unwrap()
+        .trim_start_matches("name = ")
+        .trim_matches('"')
+        .to_string();
+    let dockerfile = fs::read_to_string(dir.join("generated/backend/Dockerfile")).unwrap();
+    assert!(
+        dockerfile.contains(&format!("cp target/release/{pkg} /app/server")),
+        "binary name must match Cargo package `{pkg}`: {dockerfile}"
+    );
+    assert_eq!(pkg, "shopprod-backend", "{cargo}");
+}

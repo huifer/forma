@@ -24,7 +24,7 @@ ALTER TABLE orders ADD COLUMN customer_email VARCHAR(255);
 
 ## 1. 风险分级（L5 变更安全的核心）
 
-每条迁移操作按破坏性分为四级。分级是 `forma migrate risk` 与 `up --apply` 前置门禁的依据。
+每条迁移操作按破坏性分为四级。分级是 `forma migrate risk` 与 `up --execute` 前置门禁的依据。
 
 | 变更 | 风险 | 回滚语义 | 建议 |
 |---|---|---|---|
@@ -54,7 +54,7 @@ ALTER TABLE orders ADD COLUMN customer_email VARCHAR(255);
 
 ## 2. `forma migrate risk` — 应用前先评估破坏性
 
-在 `up --apply` 之前，先运行：
+在 `up --execute` 之前，先运行：
 
 ```bash
 cargo run -- migrate examples/school risk

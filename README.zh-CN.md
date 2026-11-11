@@ -130,7 +130,7 @@ CLI 管理整条版本链：
 ```bash
 forma migrate [dir] status            # 每个版本的 applied / pending 状态
 forma migrate [dir] history           # 完整版本历史
-forma migrate [dir] up [--to v]       # 前进到指定版本；--apply 标记已应用
+forma migrate [dir] up [--to v]       # 前进到指定版本；--execute 真执行（需 DATABASE_URL）/ --mark-applied 仅标记台账
 forma migrate [dir] down [--steps N] [--to v]   # 回滚 N 步 / 回滚到目标版本之上
 forma migrate [dir] verify            # 链完整性 + 前向重放一致性（可直接进 CI）
 forma migrate [dir] risk             # 按破坏性给待执行变更分级（Low/Medium/High/Extreme）

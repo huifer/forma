@@ -6,6 +6,13 @@ use crate::util::{sha256_hex, write_text};
 use anyhow::Result;
 use std::path::Path;
 
+/// 生成后端的 Cargo 包名 / 二进制名——**唯一**命名来源。
+/// Dockerfile 的 `cp target/release/<binary>` 必须与此处一致，否则
+/// camelCase 项目名（如 `shopProd`）会因 to_snake_case 与 to_lowercase 不一致而构建失败。
+pub fn backend_package_name(app_name: &str) -> String {
+    format!("{}-backend", app_name.to_lowercase())
+}
+
 pub fn emit_rust_backend(
     project_dir: &Path,
     program: &Program,
@@ -82,7 +89,7 @@ pub fn emit_rust_backend(
             }
         }
     }
-    let pkg = format!("{}-backend", app_name.to_lowercase());
+    let pkg = backend_package_name(app_name);
     let mut files: Vec<crate::generators::GeneratedFile> = Vec::new();
 
     // 命令类操作（spec §10）：有命令 → 生成输入模型/校验器/仓储/路由/审计钩子
