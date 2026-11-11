@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **生产项目实跑抓出的 6 个真实缺陷（2026-11-11）**：用一个完整订单系统项目
+  （认证 RBAC + 命令状态机 + 审计 + 定时任务 + SSE + 通知 + 全文搜索 + 图表 + K8s/Helm/Terraform
+  部署清单）走完「构建 → 迁移真执行 → 容器部署 → 业务 API」全流程时暴露：
+  - **迁移链产生废迁移**（最严重）：重放模拟器不认表内 `FULLTEXT KEY`，把它当成名为 FULLTEXT
+    的幽灵列 → 基线与当前 schema 不一致 → 生成 `DROP COLUMN FULLTEXT` + 重复 `ADD FULLTEXT ft_*`
+    的废迁移，真库执行必炸（ERROR 1061 Duplicate key name）。同时修正 `sim_to_plans` 与
+    `plan_tables` 的表示不一致（ft_ 索引通道、单列 UNIQUE 的列级/表级），并对已入库旧快照做
+    归一化（旧快照是表级单列 uniques → 归一为列级 unique，否则与新 plan 产生 DROP+ADD 同名伪迁移）。
+    现在：含 searchable 的工程首次构建只生成基线，二次构建零新增迁移。
+  - **SSE 端点 500**：为每个通道挂静态路径却用 `Path<String>` 提取器
+    （Wrong number of path arguments）；且 axum 0.7 的路径参数语法是 `:name`（`{name}` 是 0.8）。
+    现在挂 `/api/live/:name` 动态段，未知通道返回空流。
+  - **`Bool` 字段 `@default(true)` 编译不过**：字面量按数值解析（parse::<f64>() → 0.0）→
+    生成 `unwrap_or_else(|| 0)`，与 `Option<bool>` 不匹配（E0308）。现在按布尔字面量渲染。
+  - **定时任务在生产从不执行**：job 行只存在于 seed.sql（案例数据），生产镜像不导入 →
+    `forma_jobs` 表为空 → 调度器读不到 enabled job。现在后端启动时按静态 `JOB_SPECS`
+    `INSERT IGNORE` 自注册（重启/多副本安全），管理端点与调度器都能看到任务。
+  - **partial update 会把缺省字段写成 NULL**：输入体里 optional/@default/readonly 字段是 Option，
+    直接 `col = ?` → NOT NULL 列报 MySQL 1048 Column cannot be null。现在用
+    `col = COALESCE(?, col)`（缺省即保持原值）。
+  - **容器迁移不可重入**：基线 CREATE TABLE 非幂等 → 容器重启或与 CLI `--execute` 双入口时
+    ERROR 1050 启动失败。现在 CLI 与容器 entrypoint 共享数据库内台账 `forma_migrations`
+    （已应用则跳过并对齐本地台账），重启与双入口均幂等。
+- **SSE / jobs / Bool default / partial update / 伪迁移** 各补回归（`tests/live.rs`、
+  `tests/jobs.rs`、`tests/backend_contract.rs`、`tests/searchable.rs`）；`scripts/l3-smoke.sh`
+  新增「带 live + Bool default 的生成后端真 cargo check」门（此前结构断言漏掉了 live.rs 的括号错误）。
+
 ### Changed
 - **生产加固（2026-11-11，投产门槛）**：生成 Rust 后端从「开发默认」切换为「生产安全默认」——
   实测真库 E2E + Docker 镜像 + 9 项行为验证：

@@ -146,3 +146,16 @@ fn job_ir_bridge_has_nodes_and_edges() {
         "job→command edge missing: {edges:?}"
     );
 }
+
+/// 回归（生产项目实跑抓出）：seed 是案例数据、生产镜像不导入；
+/// job 行必须由运行时静态表 INSERT IGNORE 自注册，否则调度器读到空表、定时任务从不执行。
+#[test]
+fn jobs_self_register_at_startup() {
+    let dir = tmp_dir("selfreg");
+    setup(&dir);
+    forma::build::run_build(&dir).unwrap();
+    let jobs = fs::read_to_string(dir.join("generated/backend/src/jobs.rs")).unwrap();
+    assert!(jobs.contains("static JOB_SPECS"), "{jobs}");
+    assert!(jobs.contains("INSERT IGNORE INTO forma_jobs"), "{jobs}");
+    assert!(jobs.contains("\"cleanup\""), "{jobs}");
+}

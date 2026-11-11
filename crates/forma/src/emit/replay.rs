@@ -203,6 +203,16 @@ fn apply_create_table(schema: &mut SimSchema, body: &str) -> anyhow::Result<()> 
         } else if let Some(rest) = line.strip_prefix("KEY ") {
             let (n, cols) = parse_key_def(rest)?;
             t.indexes.push((n, cols));
+        } else if let Some(rest) = line.strip_prefix("FULLTEXT KEY ") {
+            // FULLTEXT KEY ft_t_cols (cols) [WITH PARSER ngram] → 归入 ft_ 前缀索引通道
+            //（与 plan→sim 转换一致；此前未识别，被当成名为 FULLTEXT 的幽灵列，
+            //  导致 0002 生成 DROP COLUMN FULLTEXT + 重复 ADD FULLTEXT——真实迁移执行必炸）
+            let rest = match rest.split_once(" WITH PARSER ") {
+                Some((head, _)) => head,
+                None => rest,
+            };
+            let (n, cols) = parse_key_def(rest)?;
+            t.indexes.push((n, cols));
         } else if let Some(rest) = line.strip_prefix("CONSTRAINT ") {
             let rest = rest.strip_prefix("fk_").map(|_| rest).unwrap_or(rest);
             // CONSTRAINT fk_{t}_{col} FOREIGN KEY (col) REFERENCES ref (id)

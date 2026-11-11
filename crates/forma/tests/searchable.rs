@@ -105,3 +105,44 @@ fn no_searchable_zero_fulltext_change() {
     let ddl = fs::read_to_string(dir.join("generated/db/migrations/0001_init.sql")).unwrap();
     assert!(!ddl.contains("FULLTEXT"), "{ddl}");
 }
+
+/// 回归（生产项目实跑抓出）：含 `searchable` 的工程**首次**构建后不得再产生
+/// 增量迁移（0002）。此前重放模拟器不认表内 `FULLTEXT KEY`，把它当成名为 FULLTEXT
+/// 的幽灵列 → 基线与当前 schema 不一致 → 生成
+/// 「DROP COLUMN FULLTEXT + 重复 ADD FULLTEXT ft_*」的废迁移，真库执行必炸
+/// （ERROR 1061 Duplicate key name）。
+#[test]
+fn searchable_does_not_produce_phantom_incremental_migration() {
+    let dir = tmp_dir("phantom");
+    write_project(
+        &dir,
+        "app search { version = \"0.1.0\" }\nentity Article {\n id Uuid @id @default(uuid)\n title String(200) @required\n body Text?\n searchable [title, body]\n}\n",
+    );
+    forma::build::run_build(&dir).unwrap();
+    // 首次构建：只有基线
+    assert!(
+        !dir.join("generated/db/migrations/0002_upgrade.sql")
+            .exists(),
+        "phantom incremental migration was generated"
+    );
+    // 二次构建：零新增（幂等）
+    forma::build::run_build(&dir).unwrap();
+    assert!(
+        !dir.join("generated/db/migrations/0002_upgrade.sql")
+            .exists(),
+        "second build must not create a migration"
+    );
+    // 基线里 FULLTEXT 只出现一次，且不含幽灵列
+    let init = fs::read_to_string(dir.join("generated/db/migrations/0001_init.sql")).unwrap();
+    assert_eq!(
+        init.matches("FULLTEXT KEY").count(),
+        1,
+        "duplicate fulltext key: {init}"
+    );
+    // 幽灵列形态：名为 FULLTEXT 的**列定义行**（不是合法的 FULLTEXT KEY 约束）
+    let ghost = init.lines().any(|l| {
+        let t = l.trim_start();
+        t.starts_with("FULLTEXT") && !t.starts_with("FULLTEXT KEY")
+    });
+    assert!(!ghost, "ghost column FULLTEXT: {init}");
+}

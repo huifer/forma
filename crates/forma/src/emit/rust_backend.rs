@@ -1489,14 +1489,17 @@ __JOINS__        {base_where}{search_filter}
                         "input.{col}.unwrap_or_else(|| Uuid::new_v4().to_string())"
                     )),
                     Some(lit) => {
-                        let fallback =
-                            if matches!(field.type_name.as_str(), "String" | "Email" | "Text")
-                                || super::is_enum(program, &field.type_name)
-                            {
-                                format!("\"{}\".to_string()", lit)
-                            } else {
-                                literal_for(&rust_type(program, field), lit.parse().unwrap_or(0.0))
-                            };
+                        let fallback = if field.type_name == "Bool" {
+                            // @default(true|false)：字面量不是数值，parse::<f64>() 会得到 0.0，
+                            // 渲染成整数 0 与 Option<bool> 类型不匹配（真库编译抓出）。
+                            lit.eq_ignore_ascii_case("true").to_string()
+                        } else if matches!(field.type_name.as_str(), "String" | "Email" | "Text")
+                            || super::is_enum(program, &field.type_name)
+                        {
+                            format!("\"{}\".to_string()", lit)
+                        } else {
+                            literal_for(&rust_type(program, field), lit.parse().unwrap_or(0.0))
+                        };
                         insert_binds
                             .push(format!("input.{col}.clone().unwrap_or_else(|| {fallback})"));
                     }
@@ -1566,6 +1569,9 @@ __JOINS__        {base_where}{search_filter}
         }
 
         // update
+        // 输入体里 optional / @default / readonly 字段是 Option → 调用方可能不提供。
+        // 直接 `col = ?` 会把缺省字段写成 NULL（NOT NULL 列 → 1048 Column cannot be null；
+        // 有默认值的列则被默认值抹掉）。partial update 语义：缺省即「保持原值」。
         let set_clause = writable
             .iter()
             .map(|f| {
@@ -1574,7 +1580,13 @@ __JOINS__        {base_where}{search_filter}
                 } else {
                     snake(&f.name)
                 };
-                format!("{col} = ?")
+                let optional_input =
+                    f.optional || super::has_attr(f, "default") || super::has_attr(f, "readonly");
+                if optional_input {
+                    format!("{col} = COALESCE(?, {col})")
+                } else {
+                    format!("{col} = ?")
+                }
             })
             .collect::<Vec<_>>()
             .join(", ");
@@ -3151,6 +3163,24 @@ fn jobs_rs(program: &Program) -> String {
     s.push_str("fn command_targets() -> Vec<CommandTarget> {\n    vec![\n");
     s.push_str(&target_items);
     s.push_str("    ]\n}\n\n");
+    // DSL job 声明的静态登记（name, cron, label, op）：启动时 INSERT IGNORE 自注册。
+    // 此前 job 行只存在于 seed.sql，而生产镜像不导入 seed → forma_jobs 表为空、
+    // 调度器读不到任何 enabled job，声明了定时任务却从不执行（假绿）。
+    let mut job_specs = String::new();
+    for job in &program.jobs {
+        let label = super::pick_message(&job.label, &job.name);
+        job_specs.push_str(&format!(
+            "        ({}, {}, {}, {}),\n",
+            rust_string_lit(&job.name),
+            rust_string_lit(&job.cron),
+            rust_string_lit(&label),
+            rust_string_lit(&job.op),
+        ));
+    }
+    s.push_str("/// DSL 声明的定时任务（运行时自注册到 forma_jobs，避免依赖 seed 数据）。\n");
+    s.push_str("static JOB_SPECS: &[(&str, &str, &str, &str)] = &[\n");
+    s.push_str(&job_specs);
+    s.push_str("];\n\n");
     s.push_str("/// cron 5 字段求值（minute hour dom month dow；支持 `*` `,` `-`）。\n");
     s.push_str("pub fn cron_matches(cron: &str, now: chrono::DateTime<chrono::Local>) -> bool {\n");
     s.push_str("    let fields: Vec<&str> = cron.split_whitespace().collect();\n");
@@ -3183,7 +3213,7 @@ fn jobs_rs(program: &Program) -> String {
     );
     s.push_str("        .bind(id)\n        .execute(pool)\n        .await;\n}\n\n");
     s.push_str("/// 每 30s tick：检查 enabled job 的 cron 是否命中当前分钟。\n");
-    s.push_str("pub fn spawn_scheduler(pool: MySqlPool) {\n    tokio::spawn(async move {\n        loop {\n");
+    s.push_str("pub fn spawn_scheduler(pool: MySqlPool) {\n    tokio::spawn(async move {\n        // 自注册：seed 属于案例数据，生产镜像不导入；job 行必须随服务启动幂等写入，\n        // 否则调度器永远读到空表（INSERT IGNORE + name 唯一键，重启/多副本均安全）。\n        for (name, cron, label, op) in JOB_SPECS {\n            let id = uuid::Uuid::new_v4().to_string();\n            let _ = sqlx::query(\n                \"INSERT IGNORE INTO forma_jobs (id, name, cron, label, op, status) VALUES (?, ?, ?, ?, ?, 'enabled')\",\n            )\n            .bind(&id)\n            .bind(name)\n            .bind(cron)\n            .bind(label)\n            .bind(op)\n            .execute(&pool)\n            .await;\n        }\n        loop {\n");
     s.push_str("            tokio::time::sleep(std::time::Duration::from_secs(30)).await;\n");
     s.push_str("            let rows = sqlx::query_as::<_, (String, String, String, String)>(\n");
     s.push_str(
@@ -3749,19 +3779,19 @@ fn live_rs(program: &Program) -> String {
     s.push_str("        .filter_map(|msg| match msg {\n");
     s.push_str("                Ok(data) => Some(Ok::<_, std::convert::Infallible>(Event::default().data(data))),\n");
     s.push_str("                Err(_) => None,\n");
-    s.push_str("            }\n        });\n");
+    s.push_str("            }\n        );\n");
     s.push_str("    Sse::new(stream).keep_alive(KeepAlive::default())\n}\n\n");
 
     // router
     s.push_str("pub fn router() -> Router<Pool> {\n");
-    s.push_str("    let mut r = Router::new();\n");
-    for live in &program.lives {
-        s.push_str(&format!(
-            "    r = r.route(\"/api/live/{name}\", axum::routing::get(subscribe));\n",
-            name = live.name,
-        ));
-    }
-    s.push_str("    r\n}\n");
+    // 动态路径段：handler 用 Path<String> 提取通道名并在 channel_specs 里查表。
+    // 两个已修的真实缺陷：
+    // ① 为每个通道挂静态路径却仍用 Path 提取器 → axum 500
+    //    (Wrong number of path arguments for Path)；
+    // ② axum 0.7 的路径参数语法是 `:name`（`{name}` 是 axum 0.8；写错 → 404）。
+    // 未知通道在 handler 内返回空流（不 500）。
+    s.push_str("    Router::new().route(\"/api/live/:name\", axum::routing::get(subscribe))\n");
+    s.push_str("}\n");
     s
 }
 

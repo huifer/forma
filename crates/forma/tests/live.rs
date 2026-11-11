@@ -50,7 +50,8 @@ fn live_generates_sse_module_and_publish_hooks() {
     assert!(live.contains("ItemFeed"), "{live}");
     assert!(live.contains("pub fn publish"), "{live}");
     assert!(live.contains("Sse"), "{live}");
-    assert!(live.contains("/api/live/ItemFeed"), "{live}");
+    // 订阅路由是动态段（handler 用 Path<String> 取通道名）——静态路径 + Path 提取器 = 500
+    assert!(live.contains("/api/live/:name"), "{live}");
 
     // main.rs mod 声明
     let main = fs::read_to_string(dir.join("generated/backend/src/main.rs")).unwrap();
@@ -106,4 +107,28 @@ fn live_check_rejects_unknown_api_and_event() {
     let msg = format!("{err:#}");
     assert!(msg.contains("dsl-live-unknown-api"), "{msg}");
     assert!(msg.contains("dsl-live-unknown-event"), "{msg}");
+}
+
+/// 回归（生产项目实跑抓出）：live SSE 路由必须带 `{name}` 动态段，且 handler 的
+/// filter_map 闭包括号必须自洽。结构断言 + 生成后端真实 cargo check 双门。
+#[test]
+fn live_router_uses_dynamic_name_segment_and_handler_is_balanced() {
+    let dir = tmp_dir("route");
+    setup(&dir);
+    forma::build::run_build(&dir).unwrap();
+    let live = fs::read_to_string(dir.join("generated/backend/src/live.rs")).unwrap();
+    assert!(
+        live.contains("\"/api/live/:name\""),
+        "static route with Path extractor → 500; axum 0.7 needs `:name`: {live}"
+    );
+    assert!(
+        !live.contains("\"/api/live/ItemFeed\""),
+        "static route must be gone: {live}"
+    );
+    // match 表达式作为闭包体：只需一个 } 收尾，多余 } 是 Rust 语法错误
+    assert!(
+        !live.contains("            }\n        });"),
+        "filter_map has an extra closing brace: {live}"
+    );
+    assert!(live.contains("            }\n        );"), "{live}");
 }

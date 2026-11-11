@@ -99,13 +99,15 @@ fn users_plan() -> TablePlan {
         fulltext: vec![],
         columns: vec![
             col("id", "CHAR(36)", false, false),
-            col("username", "VARCHAR(64)", false, false),
+            // 单列唯一约束用列级 unique 表示：与迁移链重放基线（sim_to_plans）一致。
+            // 若放表级 uniques，diff 会同时产生 DROP+ADD 同名伪迁移（真库实测）。
+            col("username", "VARCHAR(64)", false, true),
             col("password_hash", "VARCHAR(255)", false, false),
             col("role", "VARCHAR(64)", false, false),
             col("created_at", "DATETIME(3)", false, false),
         ],
         primary_key: "id".into(),
-        uniques: vec![vec!["username".into()]],
+        uniques: vec![],
         indexes: vec![],
         fks: vec![],
     }
@@ -194,7 +196,8 @@ fn job_table_plan() -> TablePlan {
         fulltext: vec![],
         columns: vec![
             col("id", "CHAR(36)", false, false),
-            col("name", "VARCHAR(100)", false, false),
+            // 同 users_plan：单列唯一用列级标记，避免重放基线产生伪 diff
+            col("name", "VARCHAR(100)", false, true),
             col("cron", "VARCHAR(50)", false, false),
             col("label", "VARCHAR(200)", true, false),
             col("op", "VARCHAR(100)", false, false),
@@ -203,7 +206,7 @@ fn job_table_plan() -> TablePlan {
             col("next_run_at", "DATETIME", true, false),
         ],
         primary_key: "id".into(),
-        uniques: vec![vec!["name".into()]],
+        uniques: vec![],
         indexes: vec![vec!["status".into()]],
         fks: vec![],
     }

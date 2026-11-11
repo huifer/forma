@@ -115,19 +115,36 @@ echo "[entrypoint] database is ready"
 mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASS" \
   -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
 
-# ── 按序执行迁移（upgrade 脚本；CREATE TABLE IF NOT EXISTS / INSERT IGNORE 幂等）──
-# 迁移失败必须让容器启动失败（吞掉错误会让 schema 不完整却照常启动）。
+# ── 数据库内迁移台账（与 `forma migrate up --execute` 共享）──
+# 基线 CREATE TABLE 非幂等：容器重启或 CLI 已执行过时必须跳过，否则 ERROR 1050。
+MIGRATION_DDL="CREATE TABLE IF NOT EXISTS forma_migrations (
+  name VARCHAR(191) NOT NULL PRIMARY KEY,
+  applied_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "$MIGRATION_DDL"
+
+# ── 按序执行尚未应用的迁移 ──
+# 任一失败必须让容器启动失败（吞错会让 schema 不完整却照常启动）。
 echo "[entrypoint] running migrations..."
 for f in /app/migrations/*_init.sql /app/migrations/*_upgrade.sql; do
   [ -f "$f" ] || continue
-  echo "  → $(basename "$f")"
+  name=$(basename "$f")
+  done_count=$(mysql -N -B -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" \
+    -e "SELECT COUNT(*) FROM forma_migrations WHERE name = '$name'" 2>/dev/null)
+  if [ "$done_count" != "0" ]; then
+    echo "  → $name (already applied, skip)"
+    continue
+  fi
+  echo "  → $name"
   if ! mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" < "$f"; then
     echo "[entrypoint] migration failed: $f" >&2
     exit 1
   fi
+  mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" \
+    -e "INSERT IGNORE INTO forma_migrations (name) VALUES ('$name')"
 done
 
-# ── 种子数据（可选；失败只告警不阻断）──
+# ── 种子数据（可选；INSERT IGNORE 幂等，失败只告警不阻断）──
 if [ -d /app/migrations/../seed ]; then
   for f in /app/migrations/../seed/*.sql; do
     [ -f "$f" ] || continue

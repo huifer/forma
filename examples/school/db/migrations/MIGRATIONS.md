@@ -9,7 +9,7 @@
 | 2 | 0.2.0 | 0002_upgrade.sql | 0002_rollback.sql | ⏳ pending | 迁移 #2 已入库 |
 | 3 | 0.3.0 | 0003_upgrade.sql | 0003_rollback.sql | ⏳ pending | 迁移 #3 已入库 |
 | 4 | 0.3.0 | 0004_upgrade.sql | 0004_rollback.sql | ⏳ pending | 迁移 #4 已入库 |
-| 5 | 0.3.0 | 0005_upgrade.sql | 0005_rollback.sql | ⏳ pending | audit_logs: 新增列 idempotency_key CHAR(36)（可空，便于存量回填） |
+| 5 | 0.3.0 | 0005_upgrade.sql | 0005_rollback.sql | ⏳ pending | 迁移 #5 已入库 |
 
 ---
 
@@ -173,7 +173,7 @@ DROP TABLE IF EXISTS users;
 ## #5 — upgrade to v0.3.0
 
 变更：
-- audit_logs: 新增列 idempotency_key CHAR(36)（可空，便于存量回填）
+- 迁移 #5 已入库
 
 ```sql
 -- UP

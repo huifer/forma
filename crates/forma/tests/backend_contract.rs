@@ -102,9 +102,10 @@ fn relation_columns_use_id_suffix_in_sql_but_bare_name_in_input() {
         repo.contains(".bind(input.school.clone())"),
         "绑定值取自输入体的裸关系名 school"
     );
+    // partial update 语义：可选列（phone/age）缺省保持原值 → COALESCE(?, col)
     assert!(
-        repo.contains("UPDATE students SET school_id = ?, name = ?, email = ?, phone = ?, age = ? WHERE id = ?"),
-        "UPDATE SET 列名必须是 school_id"
+        repo.contains("UPDATE students SET school_id = ?, name = ?, email = ?, phone = COALESCE(?, phone), age = COALESCE(?, age) WHERE id = ?"),
+        "UPDATE SET 列名必须是 school_id（可选列用 COALESCE 保持原值）: {repo}"
     );
 }
 
@@ -529,4 +530,78 @@ auth module {
     );
     assert!(!routes.contains("use crate::models"), "{routes}");
     assert!(!routes.contains("use crate::repo"), "{routes}");
+}
+
+/// 回归（生产项目实跑抓出）：`Bool` 字段的 `@default(true|false)` 必须渲染成布尔字面量。
+/// 此前按数值解析（parse::<f64>() → 0.0）→ 生成 `unwrap_or_else(|| 0)`，
+/// 与 `Option<bool>` 类型不匹配（E0308），生成后端编译不过。
+#[test]
+fn bool_default_renders_boolean_literal() {
+    let dir = std::env::temp_dir().join(format!(
+        "forma-booldef-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("forma")).unwrap();
+    std::fs::write(
+        dir.join("forma.yaml"),
+        "project:\n  name: booldef\n  version: 0.1.0\nsource: [\"forma/**/*.fm\"]\n\ntargets:\n  backend:\n    language: rust\n    framework: axum\n    database: sqlx\n    out: generated/backend\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("forma/app.fm"),
+        "app booldef { version = \"0.1.0\" }\nentity Item {\n id Uuid @id @default(uuid)\n name String(50) @required\n active Bool @default(true)\n}\napi Items {\n entity Item\n operations [list get create update delete]\n}\n",
+    )
+    .unwrap();
+    forma::build::run_build(&dir).unwrap();
+    let repo = std::fs::read_to_string(dir.join("generated/backend/src/repo.rs")).unwrap();
+    assert!(
+        repo.contains("unwrap_or_else(|| true)"),
+        "bool default must be a boolean literal: {repo}"
+    );
+    assert!(!repo.contains("unwrap_or_else(|| 0)"), "{repo}");
+}
+
+/// 回归（生产项目实跑抓出）：partial update 语义——输入体里 optional / @default /
+/// readonly 字段是 Option，调用方可能不提供。生成 `col = ?` 会把缺省字段写成 NULL
+/// （NOT NULL 列 → MySQL 1048 Column cannot be null）。缺省必须保持原值。
+#[test]
+fn update_uses_coalesce_for_optional_input_fields() {
+    let dir = std::env::temp_dir().join(format!(
+        "forma-partial-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("forma")).unwrap();
+    std::fs::write(
+        dir.join("forma.yaml"),
+        "project:\n  name: partial\n  version: 0.1.0\nsource: [\"forma/**/*.fm\"]\n\ntargets:\n  backend:\n    language: rust\n    framework: axum\n    database: sqlx\n    out: generated/backend\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("forma/app.fm"),
+        "app partial { version = \"0.1.0\" }\nenum ItemStatus { draft done }\nentity Item {\n id Uuid @id @default(uuid)\n name String(50) @required\n status ItemStatus @default(draft)\n note String(50)?\n}\napi Items {\n entity Item\n operations [list get create update delete]\n}\n",
+    )
+    .unwrap();
+    forma::build::run_build(&dir).unwrap();
+    let repo = std::fs::read_to_string(dir.join("generated/backend/src/repo.rs")).unwrap();
+    // status（@default → Option）与 note（optional → Option）必须用 COALESCE 保持原值
+    assert!(
+        repo.contains("status = COALESCE(?, status)"),
+        "default-valued field must not be nulled by update: {repo}"
+    );
+    assert!(
+        repo.contains("note = COALESCE(?, note)"),
+        "optional field must not be nulled by update: {repo}"
+    );
+    // 必填字段仍是直接赋值
+    assert!(repo.contains("name = ?"), "{repo}");
 }

@@ -130,7 +130,15 @@ fn sim_to_plans(schema: &crate::emit::replay::SimSchema) -> Vec<TablePlan> {
         .map(|t| TablePlan {
             entity: t.name.clone(),
             table: t.name.clone(),
-            fulltext: vec![],
+            // 重放把 ft_ 前缀的 FULLTEXT 索引也计入 indexes（名字保留）——按名字分流回
+            // fulltext 通道，否则 diff 会把已存在的 FULLTEXT 误判为「普通索引被删 + 全文索引新增」，
+            // 生成 DROP INDEX idx_* / 重复 ADD FULLTEXT 的伪迁移（真库执行必炸）。
+            fulltext: t
+                .indexes
+                .iter()
+                .filter(|(name, _)| name.starts_with("ft_"))
+                .map(|(_, cols)| cols.clone())
+                .collect(),
             columns: t
                 .columns
                 .iter()
@@ -153,7 +161,12 @@ fn sim_to_plans(schema: &crate::emit::replay::SimSchema) -> Vec<TablePlan> {
                 .filter(|(_, cols)| cols.len() > 1)
                 .map(|(_, cols)| cols.clone())
                 .collect(),
-            indexes: t.indexes.iter().map(|(_, cols)| cols.clone()).collect(),
+            indexes: t
+                .indexes
+                .iter()
+                .filter(|(name, _)| !name.starts_with("ft_"))
+                .map(|(_, cols)| cols.clone())
+                .collect(),
             fks: t
                 .fks
                 .iter()
@@ -210,12 +223,35 @@ fn snapshot_path(project_dir: &Path, out_dir: &str) -> PathBuf {
         .join("ir-snapshot.json")
 }
 
+/// 归一化唯一约束的表示：**单列唯一一律用列级 unique**。
+///
+/// plan 侧统一为列级（DSL `@unique` 与内建 users/jobs 表一致）；旧快照是表级
+/// `uniques: [["col"]]` 表示——不归一化就会与 plan 产生 DROP+ADD 同名伪迁移
+/// （真库执行时 DROP 一个不存在的约束、ADD 一个已存在的 → 迁移失败）。
+fn normalize_snapshot(mut snap: IrSnapshot) -> IrSnapshot {
+    for t in &mut snap.tables {
+        let singles: Vec<String> = t
+            .uniques
+            .iter()
+            .filter(|c| c.len() == 1)
+            .map(|c| c[0].clone())
+            .collect();
+        t.uniques.retain(|c| c.len() > 1);
+        for name in singles {
+            if let Some(col) = t.columns.iter_mut().find(|c| c.name == name) {
+                col.unique = true;
+            }
+        }
+    }
+    snap
+}
+
 fn read_snapshot(project_dir: &Path, out_dir: &str) -> Option<IrSnapshot> {
     let p = snapshot_path(project_dir, out_dir);
     let text = crate::util::read_text(&p).ok()?;
     let snap: IrSnapshot = serde_json::from_str(&text).ok()?;
     if snap.version == SNAPSHOT_VERSION {
-        Some(snap)
+        Some(normalize_snapshot(snap))
     } else {
         None
     }
@@ -1043,14 +1079,6 @@ pub fn emit_migration(
     };
 
     let ops = diff_ops(&old_snapshot.tables, &new_plans);
-    for t in &new_plans {
-        if t.table == "users" {
-            let oldu = old_snapshot.tables.iter().find(|x| x.table == "users");
-            let old_col = oldu.and_then(|o| o.columns.iter().find(|c| c.name == "username"));
-            let new_col = t.columns.iter().find(|c| c.name == "username");
-            eprintln!("DBG users username old_unique={:?} new_unique={:?} old_uniques={:?} new_uniques={:?} ops={}", old_col.map(|c| c.unique), new_col.map(|c| c.unique), oldu.map(|o| &o.uniques), Some(&t.uniques), ops.len());
-        }
-    }
     if ops.is_empty() {
         // schema 未变：仅刷新台账文档（applied 状态可能被 CLI 更新过）
         write_migration_docs(project_dir, out_dir, &ledger)?;
@@ -1192,10 +1220,24 @@ pub fn execute_up(
         return Ok(Vec::new());
     }
     let parsed = parse_mysql_url(database_url)?;
+    // 数据库内共享台账：与容器 entrypoint.sh 同一张表。否则 `--execute` 与容器入口
+    // 各自重放基线（CREATE TABLE 非幂等）→ 容器启动 ERROR 1050。
+    ensure_db_ledger(&parsed)?;
     let mut applied = Vec::new();
     let mut ledger = read_ledger(project_dir);
     for ((file, sql), idx) in pending.items.iter().zip(&pending.indexes) {
+        let name = Path::new(file)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| file.clone());
+        if db_ledger_has(&parsed, &name)? {
+            // 已由另一入口（容器）执行 → 只对齐本地台账，不重复执行 SQL
+            ledger.entries[*idx].applied = true;
+            save_ledger(project_dir, &ledger)?;
+            continue;
+        }
         run_mysql(&parsed, &ledger.entries[*idx].version, sql)?;
+        db_ledger_mark(&parsed, &name)?;
         ledger.entries[*idx].applied = true;
         applied.push(file.clone());
         // 逐条落盘：中断后台账仍是已完成部分的真实状态
@@ -1203,6 +1245,63 @@ pub fn execute_up(
     }
     write_migration_docs(project_dir, out_dir, &ledger)?;
     Ok(applied)
+}
+
+/// 数据库内迁移台账（跨入口共享；DDL 幂等）。
+fn ensure_db_ledger(target: &MySqlTarget) -> Result<()> {
+    run_mysql_sql(
+        target,
+        "CREATE TABLE IF NOT EXISTS forma_migrations (\n  name VARCHAR(191) NOT NULL PRIMARY KEY,\n  applied_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n",
+    )
+}
+
+fn db_ledger_has(target: &MySqlTarget, name: &str) -> Result<bool> {
+    let safe = name.replace('\'', "''");
+    let out = mysql_query(
+        target,
+        &format!("SELECT COUNT(*) FROM forma_migrations WHERE name = '{safe}'"),
+    )?;
+    Ok(out.trim() != "0" && !out.trim().is_empty())
+}
+
+fn db_ledger_mark(target: &MySqlTarget, name: &str) -> Result<()> {
+    let safe = name.replace('\'', "''");
+    run_mysql_sql(
+        target,
+        &format!("INSERT IGNORE INTO forma_migrations (name) VALUES ('{safe}');\n"),
+    )
+}
+
+/// 执行一段 SQL 文本（复用 run_mysql 的客户端调用，但不绑定业务版本）。
+fn run_mysql_sql(target: &MySqlTarget, sql: &str) -> Result<()> {
+    run_mysql(target, "forma_migrations", sql)
+}
+
+/// 执行查询并返回 stdout（用于检查共享台账）。
+fn mysql_query(target: &MySqlTarget, sql: &str) -> Result<String> {
+    use std::process::Command;
+    let out = Command::new("mysql")
+        .arg("-N")
+        .arg("-B")
+        .arg("-h")
+        .arg(&target.host)
+        .arg("-P")
+        .arg(target.port.to_string())
+        .arg("-u")
+        .arg(&target.user)
+        .arg(format!("-p{}", target.password))
+        .arg(&target.database)
+        .arg("-e")
+        .arg(sql)
+        .output()
+        .map_err(|e| anyhow::anyhow!("failed to spawn mysql client: {e}"))?;
+    if !out.status.success() {
+        return Err(anyhow::anyhow!(
+            "mysql query failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).to_string())
 }
 
 /// 仅把待应用迁移标记为 applied（不执行任何 SQL）。

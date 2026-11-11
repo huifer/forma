@@ -43,7 +43,7 @@ FAIL=0
 SKIP=0
 
 mkcase() {
-  local name="$1" targets="$2" d="$WORK/$1"
+  local name="$1" targets="$2" extra="${3:-}" d="$WORK/$1"
   mkdir -p "$d/forma"
   {
     echo 'project:'
@@ -53,7 +53,11 @@ mkcase() {
     echo 'targets:'
     printf '%s\n' "$targets"
   } > "$d/forma.yaml"
-  printf '%s\n' "$FM" > "$d/forma/app.fm"
+  if [ -n "$extra" ]; then
+    printf '%s\n' "$extra" > "$d/forma/app.fm"
+  else
+    printf '%s\n' "$FM" > "$d/forma/app.fm"
+  fi
   if ! "$FORMA" build "$d" > "$d/build.log" 2>&1; then
     echo "  forma build failed:"; sed -n '1,25p' "$d/build.log"
     return 1
@@ -68,8 +72,8 @@ need() {
 }
 
 run_case() {
-  local name="$1" targets="$2" checker="$3" d="$WORK/$1" rc
-  if ! mkcase "$name" "$targets"; then
+  local name="$1" targets="$2" checker="$3" extra="${4:-}" d="$WORK/$1" rc
+  if ! mkcase "$name" "$targets" "$extra"; then
     echo "FAIL $name (generation)"; FAIL=$((FAIL + 1)); return
   fi
   "$checker" "$d" "$name"
@@ -176,6 +180,35 @@ run_case mongodb "$(cat <<'YAML'
     out: generated/db
 YAML
 )" check_mongodb_json
+
+# live SSE 通道：结构断言曾漏掉生成 Rust 的括号语法错误（filter_map 多一个 }），
+# 只有真实 cargo check 能抓。
+check_live_backend() {
+  command -v cargo >/dev/null || return 2
+  (cd "$1/generated/backend" && cargo check) > "$1/cargo.log" 2>&1 \
+    || { tail -25 "$1/cargo.log"; return 1; }
+}
+run_case live-backend "$(cat <<'YAML'
+  backend:
+    language: rust
+    framework: axum
+    database: sqlx
+    out: generated/backend
+YAML
+)" check_live_backend "$(cat <<'DSL'
+app l3smoke { version = "0.1.0" }
+entity Order {
+  id Uuid @id @default(uuid)
+  title String(80) @required
+  active Bool @default(true)
+}
+api Orders { entity Order operations [list get create update delete] }
+live OrderFeed {
+  api Orders.list
+  events [create update delete]
+}
+DSL
+)"
 
 echo
 echo "Explicitly NOT verifiable in this smoke run (structural assertions in tests/ only):"
