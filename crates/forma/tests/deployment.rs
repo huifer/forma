@@ -101,11 +101,27 @@ fn kubernetes_provider_generates_valid_manifests() {
         Some("registry.example.test/forma-backend:1.0.0")
     );
     assert_eq!(dep["metadata"]["namespace"].as_str(), Some("forma"));
+    // 探针用应用真实的 HTTP 端点（/ready /health），不再是 tcpSocket
     assert_eq!(
-        dep["spec"]["template"]["spec"]["containers"][0]["readinessProbe"]["tcpSocket"]["port"]
+        dep["spec"]["template"]["spec"]["containers"][0]["readinessProbe"]["httpGet"]["path"]
+            .as_str(),
+        Some("/ready")
+    );
+    assert_eq!(
+        dep["spec"]["template"]["spec"]["containers"][0]["readinessProbe"]["httpGet"]["port"]
             .as_u64(),
         Some(8080)
     );
+    assert_eq!(
+        dep["spec"]["template"]["spec"]["containers"][0]["livenessProbe"]["httpGet"]["path"]
+            .as_str(),
+        Some("/health")
+    );
+    // 最小权限：非 root、禁提权、丢弃全部 capabilities
+    let sc = &dep["spec"]["template"]["spec"]["containers"][0]["securityContext"];
+    assert_eq!(sc["runAsNonRoot"].as_bool(), Some(true));
+    assert_eq!(sc["runAsUser"].as_u64(), Some(10001));
+    assert_eq!(sc["allowPrivilegeEscalation"].as_bool(), Some(false));
     let svc = yaml(&dir.join("k8s/service.yaml"));
     assert_eq!(svc["spec"]["ports"][0]["port"].as_u64(), Some(8080));
     let ing = yaml(&dir.join("k8s/ingress.yaml"));

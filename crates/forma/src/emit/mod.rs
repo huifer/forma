@@ -54,10 +54,10 @@ pub use graphql::emit_graphql;
 pub use grpc::emit_grpc;
 pub use hono::emit_hono;
 pub use migrate::{
-    classify_op, diff_down_sql, diff_ops, emit_migration, ledger_from_committed_chain,
-    migration_down, migration_risk_lines, migration_status, migration_up, migration_verify,
-    pending_migration_ops, read_ledger_lenient_public, MigrationEntry, MigrationLedger,
-    MigrationOp, MigrationRisk, MigrationRiskReport,
+    classify_op, diff_down_sql, diff_ops, emit_migration, execute_up, ledger_from_committed_chain,
+    mark_up_applied, migration_down, migration_risk_lines, migration_status, migration_up,
+    migration_verify, pending_migration_ops, plan_pending_up, read_ledger_lenient_public,
+    MigrationEntry, MigrationLedger, MigrationOp, MigrationRisk, MigrationRiskReport,
 };
 pub use mobile_native::{emit_compose, emit_miniprogram, emit_swiftui, emit_uniapp};
 pub use mongodb::emit_mongodb;

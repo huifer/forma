@@ -18,7 +18,8 @@ Usage:
   forma diagrams [dir]       Generate Mermaid diagrams
   forma seed [dir]           生成确定性案例数据（db/seed/*.sql + fixtures/*.json，--verify）
   forma migrate [dir]        数据库迁移：status/history/verify/up/down/risk/export
-                              [--sql] [--apply] [--to v] [--steps N] [--format flyway|liquibase|golang-migrate]
+                              [--sql] [--execute | --mark-applied] [--to v] [--steps N] [--format flyway|liquibase|golang-migrate]
+                              up --execute：经 mysql 客户端真实执行（需 DATABASE_URL）；--mark-applied 仅标记台账
   forma import sql|prisma|openapi <file> [--out <path>] [--loss-report <path>]
   forma patch [dir] <file>   Apply a semantic patch (transactional)
   forma artifacts [verify|conflicts] [dir]   产物清单 / 冲突验证（--strict）
@@ -359,7 +360,7 @@ fn run(argv: &[String]) -> Result<i32> {
         }
         "bench" => Ok(cmd_bench(&positional, &flags)),
         "migrate" => {
-            // forma migrate [status|history|verify|up|down] [dir] [--sql] [--apply] [--to v] [--steps N]
+            // forma migrate [status|history|verify|up|down] [dir] [--sql] [--execute|--mark-applied] [--to v] [--steps N]
             // 子命令与项目目录顺序无关：已知子命令取一个，其余第一个当作项目目录
             let subs = ["status", "history", "verify", "up", "down", "export"];
             let mut sub = "status".to_string();
@@ -381,12 +382,13 @@ fn run(argv: &[String]) -> Result<i32> {
                 &dir,
                 &sub,
                 flags.contains_key("sql"),
-                flags.contains_key("apply"),
+                flags.contains_key("apply") || flags.contains_key("mark-applied"),
                 flags.get("to").map(String::as_str),
                 flags
                     .get("steps")
                     .and_then(|s| s.parse::<usize>().ok())
                     .unwrap_or(1),
+                flags.contains_key("execute"),
             ))
         }
         "docs" => Ok(cmd_docs(&positional, &flags)),
@@ -1091,9 +1093,10 @@ fn cmd_migrate(
     project_dir: &std::path::Path,
     sub: &str,
     sql_only: bool,
-    apply: bool,
+    mark: bool,
     target: Option<&str>,
     steps: usize,
+    execute: bool,
 ) -> i32 {
     let manifest = match forma::manifest::load_manifest(project_dir) {
         Ok(m) => m,
@@ -1196,39 +1199,77 @@ fn cmd_migrate(
             0
         }
         "up" => {
-            let pending = match forma::emit::migration_up(project_dir, &out_dir, apply, target) {
-                Ok(v) => v,
-                Err(err) => {
-                    eprintln!("✗ {err:#}");
+            // --execute：通过 mysql 客户端真实执行 SQL（成功才逐条标记台账）。
+            // --apply / --mark-applied：仅标记台账（SQL 须已由 entrypoint / 外部工具执行）。
+            let database_url = std::env::var("DATABASE_URL").ok();
+            if mark && execute {
+                eprintln!("✗ --execute and --mark-applied are mutually exclusive");
+                return 1;
+            }
+            if execute {
+                let Some(url) = database_url.as_deref().filter(|u| !u.trim().is_empty()) else {
+                    eprintln!("✗ --execute requires DATABASE_URL (mysql://user:pass@host:3306/db)");
                     return 1;
-                }
-            };
-            if pending.is_empty() {
-                if !sql_only {
+                };
+                let pending = match forma::emit::plan_pending_up(project_dir, target) {
+                    Ok(v) => v,
+                    Err(err) => {
+                        eprintln!("✗ {err:#}");
+                        return 1;
+                    }
+                };
+                if pending.items.is_empty() {
                     println!("✓ database is up to date — no pending migrations");
+                    return 0;
                 }
-                return 0;
-            }
-            for (file, sql) in &pending {
-                if !sql_only {
-                    println!("── {} ──", file.rsplit('/').next().unwrap_or(file));
+                match forma::emit::execute_up(project_dir, &out_dir, url, &pending) {
+                    Ok(applied) => {
+                        println!("✓ executed {} migration(s)", applied.len());
+                        0
+                    }
+                    Err(err) => {
+                        eprintln!("✗ {err:#}");
+                        1
+                    }
                 }
-                println!("{sql}");
-            }
-            if sql_only {
-                return 0;
-            }
-            if apply {
-                println!("✓ applied {} migration(s)", pending.len());
             } else {
-                println!(
-                    "⏳ {} pending migration(s) (dry run) — use --apply to mark applied",
-                    pending.len()
-                );
+                let pending = match forma::emit::migration_up(project_dir, &out_dir, mark, target) {
+                    Ok(v) => v,
+                    Err(err) => {
+                        eprintln!("✗ {err:#}");
+                        return 1;
+                    }
+                };
+                if pending.is_empty() {
+                    if !sql_only {
+                        println!("✓ database is up to date — no pending migrations");
+                    }
+                    return 0;
+                }
+                for (file, sql) in &pending {
+                    if !sql_only {
+                        println!("── {} ──", file.rsplit('/').next().unwrap_or(file));
+                    }
+                    println!("{sql}");
+                }
+                if sql_only {
+                    return 0;
+                }
+                if mark {
+                    println!(
+                        "⚠ marked {} migration(s) as applied WITHOUT executing SQL.\n  Only use this if the SQL was already applied by another tool (entrypoint.sh / CI mysql).\n  Verify with: mysql < db -e \"SHOW TABLES\"",
+                        pending.len()
+                    );
+                } else {
+                    println!(
+                        "⏳ {} pending migration(s) (dry run) — use --execute to run them via mysql client, or --mark-applied if already applied",
+                        pending.len()
+                    );
+                }
+                0
             }
-            0
         }
-        "down" => match forma::emit::migration_down(project_dir, &out_dir, apply, steps, target) {
+        "down" => match forma::emit::migration_down(project_dir, &out_dir, mark, steps, target) {
             Ok(rolled) if rolled.is_empty() => {
                 println!("✓ nothing to roll back");
                 0
@@ -1243,7 +1284,7 @@ fn cmd_migrate(
                 if sql_only {
                     return 0;
                 }
-                if apply {
+                if mark {
                     println!("✓ rolled back {} migration(s)", rolled.len());
                 } else {
                     println!(

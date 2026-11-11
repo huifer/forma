@@ -5,7 +5,7 @@ services:
   db:
     image: mysql:8
     environment:
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD (compose 不内嵌默认口令)}
       MYSQL_DATABASE: school
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     ports:
@@ -25,10 +25,10 @@ services:
     ports:
       - "8080:8080"
     environment:
-      DATABASE_URL: mysql://root:root@db:3306/school
+      DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD}@db:3306/school
       DB_HOST: db
       DB_USER: root
-      DB_PASS: root
+      DB_PASS: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD}
       DB_NAME: school
     depends_on:
       db:

@@ -688,3 +688,91 @@ auth module { provider jwt
         "must not move out of the row:\n{update_fn}"
     );
 }
+
+// ── 生产加固契约（2026-11-11）：默认密钥/角色分配/限速 ──────────
+
+/// 安全契约：JWT 密钥不再有内置默认值——未配置时 fail-closed（进程拒绝启动），
+/// 仅显式 FORMA_DEV_INSECURE_JWT=1 的本地开发可用开发密钥。
+#[test]
+fn jwt_secret_fails_closed_without_env() {
+    let dir = tmp_dir("jwtclose");
+    write_project(&dir, &fm_with_auth("", true));
+    forma::build::run_build(&dir).unwrap();
+    let auth = fs::read_to_string(dir.join("generated/backend/src/auth.rs")).unwrap();
+    // 没有"未配置 → 默认密钥"的回落分支
+    assert!(
+        !auth.contains("dev-secret-change-me\")\n        } else {\n        \"dev-secret"),
+        "stale fallback branch: {auth}"
+    );
+    assert!(
+        auth.contains("FORMA_DEV_INSECURE_JWT"),
+        "dev opt-in must be explicit: {auth}"
+    );
+    assert!(
+        auth.contains("refusing to start with a development secret"),
+        "{auth}"
+    );
+    assert!(
+        auth.contains("pub fn assert_secret_configured"),
+        "startup check must exist: {auth}"
+    );
+    // main.rs 启动期调用
+    let main = fs::read_to_string(dir.join("generated/backend/src/main.rs")).unwrap();
+    assert!(
+        main.contains("crate::auth::assert_secret_configured()"),
+        "{main}"
+    );
+}
+
+/// 安全契约：注册角色由服务端分配——首个用户 = 引导角色（admin），
+/// 后续用户 = 默认角色（最低权限，最后一个声明角色）；客户端传入的 role 被忽略。
+#[test]
+fn register_roles_are_server_assigned() {
+    let dir = tmp_dir("roleany");
+    write_project(&dir, &fm_with_auth("", true));
+    forma::build::run_build(&dir).unwrap();
+    let auth = fs::read_to_string(dir.join("generated/backend/src/auth.rs")).unwrap();
+    assert!(
+        auth.contains("pub const BOOTSTRAP_ROLE: &str = \"admin\";"),
+        "{auth}"
+    );
+    assert!(
+        auth.contains("pub const DEFAULT_ROLE: &str = \"user\";"),
+        "{auth}"
+    );
+    // role 从 users 表计数推导，不再取自请求体
+    assert!(auth.contains("SELECT COUNT(*) FROM users"), "{auth}");
+    assert!(auth.contains("if user_count == 0 {"), "{auth}");
+    assert!(
+        !auth.contains("let role = input.role.clone()"),
+        "client-controlled role must be gone: {auth}"
+    );
+}
+
+/// 安全契约：认证端点内建失败限速（按用户名固定窗口，环境变量可调），
+/// 触发时返回新增稳定错误码 FORMA_RATE_LIMITED（429）。
+#[test]
+fn auth_endpoints_have_failure_rate_limit() {
+    let dir = tmp_dir("ratelimit");
+    write_project(&dir, &fm_with_auth("", true));
+    forma::build::run_build(&dir).unwrap();
+    let auth = fs::read_to_string(dir.join("generated/backend/src/auth.rs")).unwrap();
+    assert!(auth.contains("fn allow_attempt"), "{auth}");
+    assert!(auth.contains("fn record_failure"), "{auth}");
+    assert!(auth.contains("AUTH_RATE_LIMIT_PER_MIN"), "{auth}");
+    assert!(auth.contains("AppError::RateLimited"), "{auth}");
+    // login / register 都在限速保护之下
+    let login_fn = auth
+        .split("pub async fn login")
+        .nth(1)
+        .expect("login fn")
+        .to_string();
+    assert!(
+        login_fn.contains("allow_attempt(&input.username)"),
+        "{login_fn}"
+    );
+    // 错误契约：稳定码 + 429
+    let error = fs::read_to_string(dir.join("generated/backend/src/error.rs")).unwrap();
+    assert!(error.contains("FORMA_RATE_LIMITED"), "{error}");
+    assert!(error.contains("TOO_MANY_REQUESTS"), "{error}");
+}

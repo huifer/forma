@@ -342,7 +342,7 @@ sqlx = {{ version = "0.8", features = ["runtime-tokio", "mysql", "uuid", "chrono
 uuid = {{ version = "1", features = ["v4", "serde"] }}{tracing_deps}{auth_deps}{live_deps}{extra_deps}
 chrono = {{ version = "0.4", features = ["serde"] }}
 rust_decimal = {{ version = "1", features = ["serde"] }}
-tower-http = {{ version = "0.5", features = ["cors"] }}
+tower-http = {{ version = "0.5", features = ["cors", "timeout"] }}
 opentelemetry = {{ version = "0.28", optional = true }}
 opentelemetry_sdk = {{ version = "0.28", features = ["rt-tokio"], optional = true }}
 opentelemetry-otlp = {{ version = "0.28", features = ["grpc-tonic"], optional = true }}
@@ -642,6 +642,8 @@ pub mod error_code {
     pub const UNAUTHORIZED: &str = "FORMA_UNAUTHORIZED";
     pub const FORBIDDEN: &str = "FORMA_FORBIDDEN";
     pub const INTERNAL: &str = "FORMA_INTERNAL";
+    /// 认证端点限速触发（RFC-0005 E1 新增稳定码；429 + Retry-After）
+    pub const RATE_LIMITED: &str = "FORMA_RATE_LIMITED";
 }
 
 /// 错误码 → HTTP 状态码（Runtime Contract · RFC-0005 E3：映射只在此处声明）。
@@ -652,6 +654,7 @@ pub fn status_for(code: &str) -> StatusCode {
         error_code::FORBIDDEN => StatusCode::FORBIDDEN,
         error_code::NOT_FOUND => StatusCode::NOT_FOUND,
         error_code::CONFLICT => StatusCode::CONFLICT,
+        error_code::RATE_LIMITED => StatusCode::TOO_MANY_REQUESTS,
         _ => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
@@ -662,6 +665,8 @@ pub enum AppError {
     //CONFLICT_VARIANT
     //AUTH_VARIANT
     //FORBIDDEN_VARIANT
+    /// 认证失败限速（429）：客户端应在 Retry-After 秒后重试
+    RateLimited(u64),
     Db(sqlx::Error),
     /// 序列化失败（P0-2 字段裁剪；细节只写日志）
     Internal(String),
@@ -683,6 +688,10 @@ impl IntoResponse for AppError {
             AppError::Internal(msg) => {
                 tracing::error!(error = %msg, "internal error");
                 (error_code::INTERNAL, "internal server error".to_string(), None)
+            }
+            AppError::RateLimited(retry_after) => {
+                tracing::warn!(retry_after_secs = retry_after, "auth rate limited");
+                (error_code::RATE_LIMITED, "too many attempts".to_string(), None)
             }
             AppError::Db(e) => {
                 if matches!(e, sqlx::Error::RowNotFound) {
@@ -2367,8 +2376,13 @@ fn routes_rs(program: &Program) -> String {
     // merge 之后才加（axum 的 layer 只作用于调用时已挂载的路由）。
     out.push_str("    app = app.merge(protected);\n");
     out.push_str(
-        "    app.layer(axum::middleware::from_fn(crate::request_id::attach_request_id))
-            .layer(tower_http::cors::CorsLayer::permissive())\n}\n",
+        "    app.layer(axum::middleware::from_fn(crate::request_id::attach_request_id))\n        .layer(cors_layer())\n        .layer(tower_http::timeout::TimeoutLayer::new(std::time::Duration::from_secs(\n            crate::env_u64(\"REQUEST_TIMEOUT_SECS\", 30),\n        )))\n        .layer(axum::extract::DefaultBodyLimit::max(\n            crate::env_u64(\"MAX_BODY_BYTES\", 2_097_152) as usize,\n        ))\n}\n\n\
+/// CORS 策略（生产安全默认）：\n\
+/// - 未设置 `CORS_ORIGINS` → 不允许任何跨域来源（同源部署的默认形态）；\n\
+/// - `CORS_ORIGINS=*` → 允许全部（**仅限本地开发**）；\n\
+/// - `CORS_ORIGINS=https://a.com,https://b.com` → 精确允许这些来源。\n\
+/// 绝不默认 `permissive()`——那会让任意站点都能读取 API 响应。\n\
+fn cors_layer() -> tower_http::cors::CorsLayer {\n    use tower_http::cors::{AllowOrigin, CorsLayer};\n    let origins = std::env::var(\"CORS_ORIGINS\").unwrap_or_default();\n    let allow_origin = if origins.trim() == \"*\" {\n        AllowOrigin::any()\n    } else if origins.trim().is_empty() {\n        AllowOrigin::predicate(|_, _| false)\n    } else {\n        let list: Vec<_> = origins\n            .split(',')\n            .map(|s| s.trim())\n            .filter(|s| !s.is_empty())\n            .filter_map(|s| s.parse().ok())\n            .collect();\n        AllowOrigin::list(list)\n    };\n    CorsLayer::new()\n        .allow_origin(allow_origin)\n        .allow_methods(tower_http::cors::Any)\n        .allow_headers(tower_http::cors::Any)\n}\n",
     );
     out
 }
@@ -2425,7 +2439,11 @@ fn main_rs(program: &Program, _has_commands: bool, has_audit: bool) -> String {
         }
     };
     let db = match sqlx::mysql::MySqlPoolOptions::new()
-        .max_connections(8)
+        .max_connections(env_u64("DB_MAX_CONNECTIONS", 8) as u32)
+        .acquire_timeout(std::time::Duration::from_secs(env_u64(
+            "DB_ACQUIRE_TIMEOUT_SECS",
+            10,
+        )))
         .connect(&database_url)
         .await
     {
@@ -2471,6 +2489,12 @@ fn main_rs(program: &Program, _has_commands: bool, has_audit: bool) -> String {
     };
     let auth_mod = if program.auth.is_some() {
         "\nmod auth;\nmod secret;"
+    } else {
+        ""
+    };
+    // auth 模块存在时，启动期校验 JWT 密钥已配置（缺失 → 进程拒绝启动，而非首个请求才 panic）
+    let auth_startup_check = if program.auth.is_some() {
+        "\n    crate::auth::assert_secret_configured();"
     } else {
         ""
     };
@@ -2544,9 +2568,40 @@ mod validators;{audit_mod}{auth_mod}{jobs_mod}{notify_mod}{live_mod}{storage_mod
 use routes::router;
 
 {tracing_init}
+/// 整数型环境变量（非法值回退到默认值）。
+fn env_u64(key: &str, default: u64) -> u64 {{
+    std::env::var(key)
+        .ok()
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(default)
+}}
+
+/// 优雅关闭：收到 SIGTERM / SIGINT 后停止接受新连接，等待在途请求完成。
+/// （容器编排滚动更新依赖它；否则每次发布会丢一批在途请求。）
+async fn shutdown_signal() {{
+    let ctrl_c = async {{
+        let _ = tokio::signal::ctrl_c().await;
+    }};
+    #[cfg(unix)]
+    let terminate = async {{
+        if let Ok(mut sig) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        {{
+            sig.recv().await;
+        }}
+    }};
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+    tokio::select! {{
+        _ = ctrl_c => {{}}
+        _ = terminate => {{}}
+    }}
+    tracing::info!("shutdown signal received — draining in-flight requests");
+}}
+
 #[tokio::main]
 async fn main() {{
-    init_tracing();{fail_closed_init}{jobs_spawn}
+    init_tracing();{fail_closed_init}{auth_startup_check}{jobs_spawn}
     let app = router(db);
 
     // 端口可用 PORT 环境变量覆盖（默认 8080，与 Web proxy / Flutter 默认 API_BASE 对齐）
@@ -2554,12 +2609,16 @@ async fn main() {{
     let addr = "0.0.0.0:".to_string() + &port;
     let listener = tokio::net::TcpListener::bind(addr.as_str()).await.expect("bind addr");
     println!("{app_name} backend listening on http://{{}}", addr);
-    axum::serve(listener, app).await.expect("serve");
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .expect("serve");
 }}
 "#,
         app_name = app_name,
         dead_code_attr = dead_code_attr,
         fail_closed_init = fail_closed_init,
+        auth_startup_check = auth_startup_check,
         audit_mod = audit_mod,
         auth_mod = auth_mod,
         jobs_mod = jobs_mod,
@@ -3895,6 +3954,8 @@ pub fn require(name: &str) -> Result<String, crate::error::AppError> {
 fn auth_rs(program: &Program, app_name: &str) -> String {
     let auth = program.auth.as_ref().unwrap();
     let first_role = auth.roles.first().cloned().unwrap_or_else(|| "user".into());
+    // 引导角色 = 第一个角色（管理员）；默认注册角色 = 最后一个角色（最低权限）。
+    let last_role = auth.roles.last().cloned().unwrap_or_else(|| "user".into());
     let token_hours = auth.token_hours.to_string();
     let n_roles = auth.roles.len().to_string();
     // 租户维度（M10 收尾）：@tenant 字段存在 → JWT claim / CurrentUser / users 表 tenant 列
@@ -3954,10 +4015,19 @@ use crate::routes::Db;
 
 pub const ROLES: [&str; __N_ROLES__] = [__ROLES_LIST__];
 
+/// 角色由**服务端分配**（客户端传入的 `role` 一律忽略）：
+/// - 库中还没有任何用户 → 引导角色（默认 = DSL 声明的第一个角色，通常是管理员）；
+/// - 已有用户 → 默认角色（默认 = DSL 声明的最后一个角色，即最低权限）。
+/// 管理员创建其他账号应走管理流程，不靠开放注册。
+pub const BOOTSTRAP_ROLE: &str = "__BOOTSTRAP_ROLE__";
+pub const DEFAULT_ROLE: &str = "__DEFAULT_ROLE__";
+
 #[derive(Debug, Deserialize)]
 pub struct RegisterInput {
     pub username: String,
     pub password: String,
+    /// 兼容旧客户端保留字段：服务端分配角色，此值一律忽略
+    #[allow(dead_code)]
     #[serde(default)]
     pub role: Option<String>,
 __TENANT_REGISTER_FIELD__
@@ -3988,14 +4058,131 @@ __TENANT_USERROW__
 }
 
 fn jwt_secret() -> String {
-    // Secret Provider（RFC-0005 §18）：缺失时用开发默认值（非生产凭据）；
-    // 已配置但不可读（如 JWT_SECRET_FILE 指向不存在的文件）→ 显式失败，不回显值。
+    // Secret Provider（RFC-0005 §18）：
+    // - 已配置（JWT_SECRET / JWT_SECRET_FILE）→ 使用配置值；
+    // - 已配置但不可读 → 显式失败，不回显值；
+    // - 未配置 → **fail-closed**：不使用任何内置默认密钥——产物源码里的公开默认值
+    //   一旦成为生产签名密钥，任何读过源码的人都能伪造任意角色的 token。
+    //   仅本地开发可显式设 FORMA_DEV_INSECURE_JWT=1 使用开发密钥。
     match crate::secret::resolve("JWT_SECRET") {
         Ok(Some(v)) => v,
-        Ok(None) => "__APP__-dev-secret-change-me".into(),
+        Ok(None) => {
+            if std::env::var("FORMA_DEV_INSECURE_JWT").as_deref() == Ok("1") {
+                "__APP__-dev-secret-change-me".into()
+            } else {
+                panic!(
+                    "JWT_SECRET is not configured — refusing to start with a development secret. \
+                     Set JWT_SECRET (or JWT_SECRET_FILE); for local development only set \
+                     FORMA_DEV_INSECURE_JWT=1."
+                );
+            }
+        }
         Err(msg) => panic!("{msg}"),
     }
 }
+
+/// 启动期校验（main 在 auth 模块存在时调用）：没有签名密钥就拒绝启动，
+/// 而不是等到第一个请求才 panic。
+pub fn assert_secret_configured() {
+    let _ = jwt_secret();
+}
+
+/// 口令最小长度（生产默认 8；可用 AUTH_MIN_PASSWORD_LEN 覆盖，下限 6）。
+/// 6 位下限对生产过弱（离线爆破成本极低），故默认收紧到 8。
+fn min_password_len() -> usize {
+    std::env::var("AUTH_MIN_PASSWORD_LEN")
+        .ok()
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .filter(|n| *n >= 6)
+        .unwrap_or(8)
+}
+
+// ── 认证失败限速（按用户名 + 进程全局固定窗口；无额外依赖）──────────
+// 多副本部署时为「每副本」独立计数——全局限速应在网关层做。
+struct AttemptWindow {
+    started: std::time::Instant,
+    failures: u32,
+}
+
+static ATTEMPTS: std::sync::OnceLock<
+    std::sync::Mutex<std::collections::HashMap<String, AttemptWindow>>,
+> = std::sync::OnceLock::new();
+
+fn attempts_map() -> &'static std::sync::Mutex<std::collections::HashMap<String, AttemptWindow>> {
+    ATTEMPTS.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+fn rate_limit_per_min() -> u32 {
+    std::env::var("AUTH_RATE_LIMIT_PER_MIN")
+        .ok()
+        .and_then(|v| v.trim().parse::<u32>().ok())
+        .unwrap_or(20)
+}
+
+fn rate_limit_total() -> u32 {
+    std::env::var("AUTH_RATE_LIMIT_TOTAL")
+        .ok()
+        .and_then(|v| v.trim().parse::<u32>().ok())
+        .unwrap_or(200)
+}
+
+fn rate_limit_window_secs() -> u64 {
+    std::env::var("AUTH_RATE_LIMIT_WINDOW_SECS")
+        .ok()
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(60)
+}
+
+/// 是否允许本次尝试（失败计数超限 → false；限速器自身故障时不阻断业务）。
+fn allow_attempt(username: &str) -> bool {
+    let per_min = rate_limit_per_min();
+    let total = rate_limit_total();
+    if per_min == 0 && total == 0 {
+        return true;
+    }
+    let Ok(mut map) = attempts_map().lock() else {
+        return true;
+    };
+    let now = std::time::Instant::now();
+    let window = std::time::Duration::from_secs(rate_limit_window_secs());
+    map.retain(|_, w| now.duration_since(w.started) < window);
+    let sum: u32 = map.values().map(|w| w.failures).sum();
+    if total > 0 && sum >= total {
+        return false;
+    }
+    let entry = map
+        .entry(username.to_string())
+        .or_insert(AttemptWindow { started: now, failures: 0 });
+    if now.duration_since(entry.started) >= window {
+        entry.started = now;
+        entry.failures = 0;
+    }
+    per_min == 0 || entry.failures < per_min
+}
+
+fn record_failure(username: &str) {
+    if let Ok(mut map) = attempts_map().lock() {
+        let now = std::time::Instant::now();
+        let entry = map
+            .entry(username.to_string())
+            .or_insert(AttemptWindow { started: now, failures: 0 });
+        if now.duration_since(entry.started)
+            >= std::time::Duration::from_secs(rate_limit_window_secs())
+        {
+            entry.started = now;
+            entry.failures = 0;
+        }
+        entry.failures += 1;
+    }
+}
+
+fn clear_failures(username: &str) {
+    if let Ok(mut map) = attempts_map().lock() {
+        map.remove(username);
+    }
+}
+// ── 限速结束 ──────────────────────────────────────────────
 
 fn issue_token(username: &str, role: &str, __TENANT_PARAM__: Option<&str>) -> String {
     use jsonwebtoken::{encode, EncodingKey, Header};
@@ -4066,17 +4253,30 @@ pub async fn register(
     State(db): State<Db>,
     Json(input): Json<RegisterInput>,
 ) -> AppResult<Json<TokenResponse>> {
-    if input.username.trim().is_empty() || input.password.len() < 6 {
+    if !allow_attempt(&input.username) {
+        return Err(AppError::RateLimited(rate_limit_window_secs()));
+    }
+    if input.username.trim().is_empty() || input.password.len() < min_password_len() {
+        record_failure(&input.username);
         return Err(AppError::Validation(vec![crate::error::FieldError::new(
             "password",
-            "用户名不能为空且密码至少 6 位",
+            "用户名不能为空且密码至少 ".to_string() + &min_password_len().to_string() + " 位",
         )]));
     }
-    let role = input.role.clone().unwrap_or_else(|| "__FIRST_ROLE__".into());
-    if !ROLES.contains(&role.as_str()) {
+    // 角色由服务端分配（客户端传值一律忽略）：无用户 → 引导角色；否则默认（最低权限）角色。
+    let user_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
+        .fetch_one(db.as_ref())
+        .await
+        .map_err(AppError::Db)?;
+    let role = if user_count == 0 { BOOTSTRAP_ROLE } else { DEFAULT_ROLE };
+    if !ROLES.contains(&role) {
         return Err(AppError::Validation(vec![crate::error::FieldError::new(
             "role",
-            format!("role 必须是 {}", ROLES.join("/")),
+            format!(
+                "configured roles must contain both bootstrap ({}) and default ({})",
+                BOOTSTRAP_ROLE,
+                DEFAULT_ROLE
+            ),
         )]));
     }
 __TENANT_LET__    let exists: Option<(String,)> =
@@ -4086,6 +4286,7 @@ __TENANT_LET__    let exists: Option<(String,)> =
             .await
             .map_err(AppError::Db)?;
     if exists.is_some() {
+        record_failure(&input.username);
         return Err(AppError::Conflict("用户名已存在".into()));
     }
     let id = uuid::Uuid::new_v4().to_string();
@@ -4099,13 +4300,20 @@ __TENANT_INSERT_BIND__
         .await
         .map_err(AppError::Db)?;
     let token = issue_token(&input.username, &role, tenant.as_deref());
-    Ok(Json(TokenResponse { token, username: input.username, role__TENANT_FIELD_TAIL__ }))
+    Ok(Json(TokenResponse {
+        token,
+        username: input.username,
+        role: role.to_string()__TENANT_FIELD_TAIL__,
+    }))
 }
 
 pub async fn login(
     State(db): State<Db>,
     Json(input): Json<LoginInput>,
 ) -> AppResult<Json<TokenResponse>> {
+    if !allow_attempt(&input.username) {
+        return Err(AppError::RateLimited(rate_limit_window_secs()));
+    }
     let row: Option<UserRow> = sqlx::query_as(
         "SELECT id, username, password_hash, role__TENANT_SELECT__ FROM users WHERE username = ?",
     )
@@ -4114,11 +4322,14 @@ pub async fn login(
     .await
     .map_err(AppError::Db)?;
     let Some(user) = row else {
+        record_failure(&input.username);
         return Err(AppError::Auth("用户名或密码错误".into()));
     };
     if !verify_password(&input.password, &user.password_hash) {
+        record_failure(&input.username);
         return Err(AppError::Auth("用户名或密码错误".into()));
     }
+    clear_failures(&input.username);
 __DISABLED_CHECK__    let token = issue_token(&user.username, &user.role, __TENANT_LOGIN_ARG__);
     Ok(Json(TokenResponse { token, username: user.username, role: user.role__TENANT_LOGIN_TAIL__ }))
 }
@@ -4137,6 +4348,8 @@ __TENANT_ME__
         .replace("__N_ROLES__", &n_roles)
         .replace("__ROLES_LIST__", &roles_list)
         .replace("__TOKEN_HOURS__", &token_hours)
+        .replace("__BOOTSTRAP_ROLE__", &first_role)
+        .replace("__DEFAULT_ROLE__", &last_role)
         .replace("__FIRST_ROLE__", &first_role)
         .replace("__APP__", app_name)
         .replace("//REQUIRE_ROLE_BLOCK\n", &require_role_block)

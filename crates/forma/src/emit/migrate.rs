@@ -1145,44 +1145,180 @@ pub fn migration_status(project_dir: &Path) -> Result<Vec<String>> {
     Ok(lines)
 }
 
-/// `migrate up [--to <version>]`：输出待应用迁移的升级 SQL；apply=true 时标记台账。
-/// target 指定时只应用版本 ≤ target 的 pending 迁移（多步前进到指定版本）。
-/// 返回 (文件, SQL) 列表。
-pub fn migration_up(
+/// `migrate up` 的待应用集。
+pub struct PendingUp {
+    /// (迁移文件, SQL)
+    pub items: Vec<(String, String)>,
+    /// 对应台账条目的 index（与 items 一一对应，执行成功后据此标记 applied）
+    pub indexes: Vec<usize>,
+}
+
+/// 计算 `migrate up [--to <version>]` 的待应用迁移（不改动任何状态）。
+pub fn plan_pending_up(project_dir: &Path, target: Option<&str>) -> Result<PendingUp> {
+    let ledger = read_ledger(project_dir);
+    let mut items = Vec::new();
+    let mut indexes = Vec::new();
+    for (i, e) in ledger.entries.iter().enumerate() {
+        if e.applied {
+            continue;
+        }
+        if let Some(t) = target {
+            if !version_le(&e.version, t) {
+                continue;
+            }
+        }
+        let abs = project_dir.join(&e.upgrade_file);
+        let sql = match extract_section(&abs, UP_MARKER) {
+            Some(sql) => sql,
+            // 基线 0001_init.sql 没有 UP 标记，整体即 SQL
+            None => read_text(&abs)?,
+        };
+        items.push((e.upgrade_file.clone(), sql));
+        indexes.push(i);
+    }
+    Ok(PendingUp { items, indexes })
+}
+
+/// 迁移 SQL 通过 `mysql` 客户端真实执行（零依赖宪法：编译器不内嵌 DB 驱动，
+/// 复用 Docker 镜像/CI 已有的 mysql client）。执行成功才逐条标记台账；
+/// 任一条失败 → 立即停止并返回错误（不标记，保证台账=库的真实状态）。
+pub fn execute_up(
     project_dir: &Path,
     out_dir: &str,
-    apply: bool,
-    target: Option<&str>,
-) -> Result<Vec<(String, String)>> {
-    let mut ledger = read_ledger(project_dir);
-    let selected: Vec<usize> = ledger
-        .entries
-        .iter()
-        .enumerate()
-        .filter(|(_, e)| !e.applied)
-        .filter(|(_, e)| target.map(|t| version_le(&e.version, t)).unwrap_or(true))
-        .map(|(i, _)| i)
-        .collect();
-    let mut out = Vec::new();
-    for i in &selected {
-        let e = &ledger.entries[*i];
-        let abs = project_dir.join(&e.upgrade_file);
-        let Some(sql) = extract_section(&abs, UP_MARKER) else {
-            // 基线 0001_init.sql 没有 UP 标记，整体即 SQL
-            let text = read_text(&abs)?;
-            out.push((e.upgrade_file.clone(), text));
-            continue;
-        };
-        out.push((e.upgrade_file.clone(), sql));
+    database_url: &str,
+    pending: &PendingUp,
+) -> Result<Vec<String>> {
+    if pending.items.is_empty() {
+        return Ok(Vec::new());
     }
-    if apply {
-        for i in &selected {
-            ledger.entries[*i].applied = true;
-        }
+    let parsed = parse_mysql_url(database_url)?;
+    let mut applied = Vec::new();
+    let mut ledger = read_ledger(project_dir);
+    for ((file, sql), idx) in pending.items.iter().zip(&pending.indexes) {
+        run_mysql(&parsed, &ledger.entries[*idx].version, sql)?;
+        ledger.entries[*idx].applied = true;
+        applied.push(file.clone());
+        // 逐条落盘：中断后台账仍是已完成部分的真实状态
+        save_ledger(project_dir, &ledger)?;
+    }
+    write_migration_docs(project_dir, out_dir, &ledger)?;
+    Ok(applied)
+}
+
+/// 仅把待应用迁移标记为 applied（不执行任何 SQL）。
+/// ⚠️ 仅供"SQL 已由外部工具（entrypoint/CI mysql）执行"的流程使用；
+/// 盲目运行会造成台账与库脱节（Schema 漂移且 `status` 永远显示 up to date）。
+pub fn mark_up_applied(
+    project_dir: &Path,
+    out_dir: &str,
+    target: Option<&str>,
+) -> Result<Vec<String>> {
+    let pending = plan_pending_up(project_dir, target)?;
+    let mut ledger = read_ledger(project_dir);
+    let mut marked = Vec::new();
+    for idx in &pending.indexes {
+        ledger.entries[*idx].applied = true;
+        marked.push(ledger.entries[*idx].upgrade_file.clone());
+    }
+    if !marked.is_empty() {
         save_ledger(project_dir, &ledger)?;
         write_migration_docs(project_dir, out_dir, &ledger)?;
     }
-    Ok(out)
+    Ok(marked)
+}
+
+/// 兼容旧签名的薄封装：输出待应用 SQL；mark=true 时标记台账（不执行）。
+pub fn migration_up(
+    project_dir: &Path,
+    out_dir: &str,
+    mark: bool,
+    target: Option<&str>,
+) -> Result<Vec<(String, String)>> {
+    let pending = plan_pending_up(project_dir, target)?;
+    if mark {
+        mark_up_applied(project_dir, out_dir, target)?;
+    }
+    Ok(pending.items)
+}
+
+/// mysql://user:pass@host:port/db（密码可含 URL 编码之外的字符按原样传递）。
+#[derive(Debug, Clone)]
+struct MySqlTarget {
+    host: String,
+    port: u16,
+    user: String,
+    password: String,
+    database: String,
+}
+
+fn parse_mysql_url(url: &str) -> Result<MySqlTarget> {
+    let rest = url
+        .strip_prefix("mysql://")
+        .ok_or_else(|| anyhow::anyhow!("DATABASE_URL must start with mysql://"))?;
+    let (creds, host_db) = rest
+        .split_once('@')
+        .ok_or_else(|| anyhow::anyhow!("DATABASE_URL missing user:password@host part"))?;
+    let (user, password) = creds
+        .split_once(':')
+        .ok_or_else(|| anyhow::anyhow!("DATABASE_URL credentials must be user:password"))?;
+    let (host_port, database) = host_db
+        .split_once('/')
+        .ok_or_else(|| anyhow::anyhow!("DATABASE_URL missing /database part"))?;
+    let database = database.split('?').next().unwrap_or(database);
+    let (host, port) = match host_port.rsplit_once(':') {
+        Some((h, p)) => (
+            h.to_string(),
+            p.parse::<u16>()
+                .map_err(|_| anyhow::anyhow!("invalid port in DATABASE_URL"))?,
+        ),
+        None => (host_port.to_string(), 3306),
+    };
+    Ok(MySqlTarget {
+        host,
+        port,
+        user: user.to_string(),
+        password: password.to_string(),
+        database: database.to_string(),
+    })
+}
+
+/// 通过 `mysql` 客户端执行一条迁移 SQL（密码经 argv 传入，与 entrypoint.sh 同法）。
+fn run_mysql(target: &MySqlTarget, version: &str, sql: &str) -> Result<()> {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    let mut child = Command::new("mysql")
+        .arg("-h")
+        .arg(&target.host)
+        .arg("-P")
+        .arg(target.port.to_string())
+        .arg("-u")
+        .arg(&target.user)
+        .arg(format!("-p{}", target.password))
+        .arg(&target.database)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "failed to spawn `mysql` client ({e}) — install mysql-client or apply the SQL manually, then use --mark-applied"
+            )
+        })?;
+    child
+        .stdin
+        .as_mut()
+        .expect("piped stdin")
+        .write_all(sql.as_bytes())
+        .map_err(|e| anyhow::anyhow!("failed to feed migration {version} to mysql: {e}"))?;
+    let status = child
+        .wait()
+        .map_err(|e| anyhow::anyhow!("mysql wait failed: {e}"))?;
+    if !status.success() {
+        return Err(anyhow::anyhow!(
+            "migration {version} failed (mysql exited non-zero) — ledger not updated"
+        ));
+    }
+    Ok(())
 }
 
 /// `migrate down [--steps N] [--to <version>]`：回滚最近 N 步（或回滚到目标版本之上）。

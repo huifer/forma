@@ -88,15 +88,23 @@ spec:
             - secretRef:
                 name: __APP__-secret
           readinessProbe:
-            tcpSocket:
+            httpGet:
+              path: /ready
               port: 8080
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
-            tcpSocket:
+            httpGet:
+              path: /health
               port: 8080
             initialDelaySeconds: 15
             periodSeconds: 20
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           resources:
             requests:
               cpu: 100m
@@ -224,8 +232,19 @@ spec:
             - name: DATABASE_URL
               value: {{ .Values.databaseUrl | quote }}
           readinessProbe:
-            tcpSocket:
+            httpGet:
+              path: /ready
               port: {{ .Values.service.port }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.service.port }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           resources:
             requests:
               cpu: 100m

@@ -105,12 +105,23 @@ fn docker_artifacts_are_deployable_and_path_consistent() {
         "{dockerfile}"
     );
     assert!(dockerfile.contains("ENV PORT=8080"), "{dockerfile}");
+    // 安全契约：镜像不内嵌任何默认凭据（DATABASE_URL 由部署方注入）
     assert!(
-        dockerfile.contains("ENV DATABASE_URL=mysql://root:root@db:3306/docker"),
-        "{dockerfile}"
+        !dockerfile.contains("DATABASE_URL="),
+        "image must not embed default credentials: {dockerfile}"
+    );
+    assert!(
+        dockerfile.contains("USER forma"),
+        "image must run as non-root: {dockerfile}"
     );
 
     assert!(compose.contains("image: mysql:8"), "{compose}");
+    // 安全契约：compose 不内嵌默认口令（MYSQL_ROOT_PASSWORD 必填）
+    assert!(
+        compose.contains("${MYSQL_ROOT_PASSWORD:?"),
+        "compose must require MYSQL_ROOT_PASSWORD: {compose}"
+    );
+    assert!(!compose.contains("MYSQL_ROOT_PASSWORD: root"), "{compose}");
     assert!(
         compose.contains("dockerfile: generated/backend/Dockerfile"),
         "{compose}"
@@ -123,6 +134,13 @@ fn docker_artifacts_are_deployable_and_path_consistent() {
     );
 
     assert!(entrypoint.contains("mysql -h"), "{entrypoint}");
+    // 安全契约：entrypoint 凭据 fail-closed + 迁移失败必须让容器退出
+    assert!(entrypoint.contains("DB_PASS is required"), "{entrypoint}");
+    assert!(
+        entrypoint.contains("migration failed"),
+        "migration failure must abort startup: {entrypoint}"
+    );
+    assert!(!entrypoint.contains("DB_PASS:-root"), "{entrypoint}");
     assert!(
         entrypoint.contains("/app/migrations/*_upgrade.sql"),
         "{entrypoint}"

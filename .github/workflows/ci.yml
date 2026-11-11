@@ -226,8 +226,10 @@ jobs:
         working-directory: examples/school/generated/backend
         run: |
           # generated/ 被 gitignore，emitter 不产出 Cargo.lock；--locked 在干净 checkout 上必然失败。
+          # JWT_SECRET 必须显式注入（生成后端 fail-closed：缺失时拒绝启动，杜绝公开默认密钥）。
           cargo build
           DATABASE_URL="mysql://root:forma123@127.0.0.1:3307/school" \
+            JWT_SECRET="ci-e2e-jwt-secret-not-a-production-credential" \
             ./target/debug/school-backend &> /tmp/backend.log &
           # /health 是公开探针；/api/* 实体路由在 require_auth 之后（无 token → 401）
           for i in $(seq 1 60); do

@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **生产加固（2026-11-11，投产门槛）**：生成 Rust 后端从「开发默认」切换为「生产安全默认」——
+  实测真库 E2E + Docker 镜像 + 9 项行为验证：
+  - **JWT 密钥 fail-closed**：不再回落内置开发密钥（`school-dev-secret-change-me` 曾使任何读过
+    源码的人可伪造任意角色 token）。未配置 `JWT_SECRET` → 进程拒绝启动（启动期校验，
+    不是首个请求才 panic）；仅本地开发可显式 `FORMA_DEV_INSECURE_JWT=1`。CI e2e 已同步注入。
+  - **注册角色由服务端分配**：客户端传入的 `role` 一律忽略——库中无用户 → 引导角色
+    （DSL 首个角色）；已有用户 → 默认角色（DSL 最后一个角色，最低权限）。
+    修复「任何人可自选 admin」（school 默认即含 admin 角色）。
+  - **CORS 默认拒绝跨域**：`permissive()` 改为 env 驱动（`CORS_ORIGINS`：缺省=同源、
+    `*`=仅本地开发、逗号列表=精确允许）。
+  - **认证失败限速**：按用户名 + 进程全局固定窗口（`AUTH_RATE_LIMIT_*`，默认 20/200/min），
+    触发返回新增稳定错误码 `FORMA_RATE_LIMITED`（429）；多副本场景全局限速仍应置于网关。
+  - **口令策略**：最小长度默认 6 → 8（`AUTH_MIN_PASSWORD_LEN` 可调，下限 6）。
+  - **运行时韧性**：优雅关闭（SIGTERM/SIGINT 排空在途请求）、请求体上限（`MAX_BODY_BYTES`，
+    默认 2 MiB）、请求超时（`REQUEST_TIMEOUT_SECS`，默认 30s）、连接池可配
+    （`DB_MAX_CONNECTIONS` / `DB_ACQUIRE_TIMEOUT_SECS`）。
+  - **Docker/容器**：镜像不再内嵌任何凭据（`DATABASE_URL`/`DB_*` 全部由部署方注入）；
+    非 root 用户（uid 10001）运行；entrypoint 凭据 fail-closed（无口令不启动）、
+    **迁移失败即容器退出**（原先 `2>/dev/null \\|\| true` 会吞错——schema 不完整也照常启动）；
+    compose 的 `MYSQL_ROOT_PASSWORD` 必填（不内嵌默认口令）。
+  - **K8s/Helm 探针与安全上下文**：`tcpSocket` → `httpGet /ready` `/health`（用应用真实端点）；
+    加 `runAsNonRoot` / 禁提权 / drop ALL capabilities。
+  - **`forma migrate up --execute`**（新增）：经 `mysql` 客户端真实执行迁移 SQL，
+    成功才逐条标记台账（任一失败即停，台账=库的真实状态）。原 `--apply` 改名
+    `--mark-applied`（仅标记台账，附显式警告——SQL 须已由 entrypoint/外部工具执行）。
+    此前 `--apply` 语义是「只标台账不执行」，部署流水线盲跑会造成静默 Schema 漂移。
+  - 回归 +7 项（`tests/api_auth.rs` ×3、`tests/docker.rs` 断言强化、`tests/deployment.rs`
+    探针/安全上下文），真库 E2E 9 项行为验证（拒绝启动 / dev 开关 / CORS 默认与显式 /
+    弱口令 400 / 首用户 admin / 次用户 student / 限速 429 / 优雅关闭）。
+
 ### Fixed
 - **bench 临时工程误入库（6f6d922 修正）**：F-008 benchmark 在 CWD 生成的 100 个 `F008-*`
   临时工程曾被 `git add -A` 误提交；现从 git 移除并加 `F008-*/` 忽略规则
