@@ -325,11 +325,32 @@ for _ in $(seq 1 30); do
 done
 assert_eq "宿主机 MySQL 端口可达" "1" "$PORT_OK"
 
-# CLI 迁移真执行（生产路径之一）
-if ! DATABASE_URL="$DB_URL" "$FORMA" migrate "$PROJ" up --execute > "$WORK/migrate.log" 2>&1; then
-  bad "forma migrate up --execute" "$(tail -5 "$WORK/migrate.log")"
-else
+# 真查询探测：mysqladmin ping 可能在初始化脚本完成前就通过（临时实例阶段）
+QUERY_OK=""
+for _ in $(seq 1 60); do
+  if docker exec "$DB_CONTAINER" mysql -uroot -p"$DB_PASS" -N -B "$DB_NAME" \
+      -e 'SELECT COUNT(*) FROM information_schema.tables' >/dev/null 2>&1; then
+    QUERY_OK=1; break
+  fi
+  sleep 2
+done
+assert_eq "MySQL 可接受真实查询（初始化完成）" "1" "$QUERY_OK"
+
+# CLI 迁移真执行（生产路径之一；初始化竞态自动重试最多 3 次）
+MIGRATE_OK=""
+for attempt in 1 2 3; do
+  if DATABASE_URL="$DB_URL" "$FORMA" migrate "$PROJ" up --execute > "$WORK/migrate.log" 2>&1; then
+    MIGRATE_OK=1; break
+  fi
+  # 失败后重置数据库（残留的半执行状态会让重试误判），并等初始化完成
+  docker exec "$DB_CONTAINER" mysql -uroot -p"$DB_PASS" -e \
+    "DROP DATABASE IF EXISTS ${DB_NAME}; CREATE DATABASE ${DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci" >/dev/null 2>&1
+  sleep 5
+done
+if [ "$MIGRATE_OK" = "1" ]; then
   ok "forma migrate up --execute（真执行）"
+else
+  bad "forma migrate up --execute" "$(tail -5 "$WORK/migrate.log")"
 fi
 assert_contains "迁移已落库（表存在）" "orders" \
   "$(docker exec "$DB_CONTAINER" mysql -uroot -p"$DB_PASS" -N -B "$DB_NAME" -e 'SHOW TABLES' 2>/dev/null | tr '\n' ' ')"
