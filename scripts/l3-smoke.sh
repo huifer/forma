@@ -99,9 +99,23 @@ check_php() {
   done < <(find "$1/generated/backend" -name '*.php' -print0)
 }
 
+# protoc 可执行名：系统包是 `protoc`，npm 的 grpc-tools 是 `grpc_tools_node_protoc`。
+# 逐个候选**实际探测可用性**（存在但损坏/不可执行时要能回退）。
+protoc_bin() {
+  local bin
+  for bin in protoc grpc_tools_node_protoc; do
+    if command -v "$bin" >/dev/null 2>&1 && "$bin" --version >/dev/null 2>&1; then
+      echo "$bin"
+      return 0
+    fi
+  done
+  return 1
+}
+
 check_grpc() {
-  need protoc || return 2
-  protoc --proto_path="$1/generated/grpc" \
+  local bin
+  bin="$(protoc_bin)" || return 2
+  "$bin" --proto_path="$1/generated/grpc" \
     --descriptor_set_out="$WORK/$2.pb" "$1/generated/grpc"/*.proto \
     > "$WORK/$2.log" 2>&1 || { sed -n '1,20p' "$WORK/$2.log"; return 1; }
 }
