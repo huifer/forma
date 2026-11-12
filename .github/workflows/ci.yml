@@ -84,11 +84,16 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # 钉住版本：Flutter 新版会把 package:flutter/material.dart 标记为弃用
+          # （3.47 起迁往 material_ui），跟随 stable 会让 analyze 因 info 级告警退出 1。
+          # 生成代码保持 material.dart（兼容旧版 Flutter），版本漂移由 CI 固定 + 下条兜底。
+          flutter-version: '3.44.1'
       - name: Analyze
         working-directory: examples/school/app_mobile
         run: |
           flutter pub get
-          flutter analyze
+          # info 级告警不阻断（error/warning 仍阻断）：上游 SDK 的新增弃用提示不该让流水线变红
+          flutter analyze --no-fatal-infos
       - name: Contract tests (offline roundtrips; live cases auto-skip)
         working-directory: examples/school/app_mobile
         run: flutter test
@@ -334,6 +339,20 @@ jobs:
             echo "::error::forma bench left F008-* case projects in the repository root"
             exit 1
           fi
+
+  # SwiftUI 编译门：SwiftUI 是 Apple 平台框架，Linux runner 上无该模块
+  # （"no such module 'SwiftUI'"）→ 该门只能且必须在 macOS 上跑。
+  l3-swiftui:
+    name: generated SwiftUI target (macOS compile gate)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build compiler
+        run: cargo build --locked
+      - name: Compile generated SwiftUI target
+        run: bash scripts/l3-verify-targets.sh swiftui
 
   # 生产全流程冒烟：一个完整业务项目从 DSL → 构建 → 真库迁移执行 → 容器部署 →
   # 业务 API 断言。2026-11-11 一次手工实测抓出 6 个结构断言/cargo test 看不到的缺陷，

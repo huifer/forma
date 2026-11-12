@@ -123,6 +123,9 @@ check_angular() {
     > "$1/tsc.log" 2>&1 || { tail -25 "$1/tsc.log"; return 1; }
 }
 check_swiftui() {
+  # SwiftUI 是 Apple 平台框架：Linux runner 上有 swift 工具链但没有 SwiftUI 模块
+  # （"no such module 'SwiftUI'"）→ 非 Darwin 只能 SKIP。
+  [ "$(uname -s)" = "Darwin" ] || return 2
   command -v swift >/dev/null || return 2
   (cd "$1/generated/mobile" && swift build 2>&1 | tail -30) > "$1/swift.log" 2>&1 \
     || { tail -25 "$1/swift.log"; return 1; }
@@ -137,8 +140,20 @@ check_workflow() {
     "$1/generated/workflow/workflow.json" > "$1/wf.log" 2>&1 || { tail -10 "$1/wf.log"; return 1; }
 }
 
+# 只跑指定 target（其余跳过）：bash scripts/l3-verify-targets.sh swiftui
+ONLY="${1:-}"
+
+want() { # want <name>
+  [ -z "$ONLY" ] && return 0
+  [ "$ONLY" = "$1" ]
+}
+
 run() { # run <name> <yaml> <checker> [extra-dsl]
   local name="$1" yaml="$2" checker="$3" extra="${4:-}" d rc
+  # 只跑指定 target（其余直接返回）：bash scripts/l3-verify-targets.sh swiftui
+  if [ -n "$ONLY" ] && [ "$ONLY" != "$name" ]; then
+    return 0
+  fi
   d="$(mk "$name" "$yaml" "$extra")"
   if ! "$FORMA" build "$d" > "$d/build.log" 2>&1; then
     echo "FAIL $name (generation)"; tail -12 "$d/build.log"; FAIL=$((FAIL+1)); FAILED_LIST="$FAILED_LIST $name"; return
